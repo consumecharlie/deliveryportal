@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Delivery {
+  id              String         @id @default(cuid())
+  taskId          String
+  projectName     String
+  clientName      String
+  deliverableType String
+  department      String
+  senderEmail     String
+  primaryEmail    String
+  ccEmails        String?
+  slackChannel    String?
+  emailSubject    String
+  emailContent    String         @db.Text
+  slackContent    String?        @db.Text
+  wasEdited       Boolean        @default(false)
+  sentBy          String
+  sentAt          DateTime       @default(now())
+  n8nExecutionId  String?
+  n8nStatus       String?
+  projectListId   String?
+  clientFolderId  String?
+  links           DeliveryLink[]
+  createdAt       DateTime       @default(now())
+
+  @@index([taskId])
+  @@index([projectListId])
+  @@index([clientFolderId])
+  @@index([sentAt])
+}
+
+model DeliveryLink {
+  id             String   @id @default(cuid())
+  deliveryId     String
+  delivery       Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  url            String
+  label          String
+  linkType       String
+  variableName   String?
+  projectListId  String
+  clientFolderId String
+
+  @@index([deliveryId])
+  @@index([projectListId])
+}
+
+model Draft {
+  id        String   @id @default(cuid())
+  taskId    String   @unique
+  formData  Json
+  savedBy   String
+  savedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model TemplateVersion {
+  id              String   @id @default(cuid())
+  templateTaskId  String
+  templateName    String
+  snippet         String   @db.Text
+  subjectLine     String
+  deliverableType String
+  department      String
+  sender          String
+  editedBy        String
+  editedAt        DateTime @default(now())
+  changeNote      String?
+
+  @@index([templateTaskId])
+  @@index([editedAt])
+}
