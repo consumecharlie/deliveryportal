@@ -70,7 +70,19 @@ export async function GET(req: Request) {
     const where = startDate ? { sentAt: { gte: startDate } } : {};
 
     // Fetch all deliveries in the period
-    const deliveries = await prisma.delivery.findMany({
+    const deliveries: Array<{
+      id: string;
+      deliverableType: string;
+      department: string;
+      clientName: string;
+      projectName: string;
+      senderEmail: string;
+      sentBy: string | null;
+      sentAt: Date;
+      wasEdited: boolean;
+      primaryEmail: string;
+      slackChannel: string | null;
+    }> = await prisma.delivery.findMany({
       where,
       orderBy: { sentAt: "desc" },
       select: {
