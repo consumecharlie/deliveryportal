@@ -383,8 +383,9 @@ export default function ProjectsPage() {
       )}
 
       {!isLoading && !error && totalProjects === 0 && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          No projects found in the Projects space.
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-1">
+          <p>No projects with delivery history yet.</p>
+          <p className="text-sm">Projects will appear here once deliveries have been sent.</p>
         </div>
       )}
 
