@@ -223,7 +223,8 @@ export async function POST(
 
     let communicationLog = "";
     try {
-      const priorDeliveries = await prisma.delivery.findMany({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const priorDeliveries: any[] = await prisma.delivery.findMany({
         where: { projectListId: listId || undefined },
         orderBy: { sentAt: "desc" },
         take: 20,

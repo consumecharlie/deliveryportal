@@ -15,7 +15,8 @@ export async function GET(
 
   try {
     // Fetch all deliveries for this project, including their links
-    const deliveries = await prisma.delivery.findMany({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deliveries: any[] = await prisma.delivery.findMany({
       where: { projectListId: listId },
       orderBy: { sentAt: "desc" },
       include: {
