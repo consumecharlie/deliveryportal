@@ -5,6 +5,7 @@ import {
   getFolderLists,
 } from "@/lib/clickup";
 import { SPACES } from "@/lib/custom-field-ids";
+import { prisma } from "@/lib/db";
 
 /**
  * GET /api/projects?archived=false
@@ -110,6 +111,31 @@ export async function GET(req: Request) {
       }
     }
 
+    // Query DB for project IDs that actually have deliveries.
+    // Only show projects with saved delivery data so the page isn't misleading.
+    let projectIdsWithDeliveries: Set<string> | null = null;
+    try {
+      const rows: Array<{ projectListId: string }> =
+        await prisma.$queryRaw`SELECT DISTINCT "projectListId" FROM "Delivery" WHERE "projectListId" IS NOT NULL`;
+      projectIdsWithDeliveries = new Set(rows.map((r) => r.projectListId));
+    } catch {
+      // DB not available — fall back to showing all projects
+      projectIdsWithDeliveries = null;
+    }
+
+    // Filter projects to only those with deliveries (if DB is available)
+    if (projectIdsWithDeliveries !== null) {
+      for (const client of clients) {
+        client.projects = client.projects.filter((p) =>
+          projectIdsWithDeliveries!.has(p.listId)
+        );
+      }
+      // Remove clients with no matching projects
+      const filteredClients = clients.filter((c) => c.projects.length > 0);
+      clients.length = 0;
+      clients.push(...filteredClients);
+    }
+
     // Sort: active first, then alphabetical
     clients.sort((a, b) => {
       if (a.archived !== b.archived) return a.archived ? 1 : -1;
@@ -125,13 +151,20 @@ export async function GET(req: Request) {
     }
 
     // Folderless projects
-    const folderlessProjects: ProjectSummary[] = activeFolderlessRes.lists.map(
+    let folderlessProjects: ProjectSummary[] = activeFolderlessRes.lists.map(
       (list: { id: string; name: string }) => ({
         listId: list.id,
         name: list.name,
-        archived: false, // We don't track this granularly for folderless
+        archived: false,
       })
     );
+
+    // Filter folderless projects too
+    if (projectIdsWithDeliveries !== null) {
+      folderlessProjects = folderlessProjects.filter((p) =>
+        projectIdsWithDeliveries!.has(p.listId)
+      );
+    }
 
     return NextResponse.json({
       clients,
