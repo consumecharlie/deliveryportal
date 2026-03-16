@@ -16,7 +16,20 @@ export const authOptions: NextAuthOptions = {
       }
       return false;
     },
-    async session({ session }) {
+    async jwt({ token, profile }) {
+      if (profile) {
+        token.picture = (profile as { picture?: string }).picture;
+        token.name = profile.name;
+        token.email = profile.email;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.name = (token.name as string) ?? session.user.name ?? null;
+        session.user.email = (token.email as string) ?? session.user.email ?? null;
+        session.user.image = (token.picture as string) ?? session.user.image ?? null;
+      }
       return session;
     },
   },
