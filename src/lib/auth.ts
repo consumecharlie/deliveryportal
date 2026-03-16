@@ -20,6 +20,18 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  cookies: {
+    sessionToken: {
+      name: "next-auth.session-token",
+      options: {
+        domain: ".consume-media.com",
+        path: "/",
+        httpOnly: true,
+        sameSite: "lax" as const,
+        secure: true,
+      },
+    },
+  },
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
