@@ -17,7 +17,7 @@ export function Sidebar() {
   const { data: session } = useSession();
 
   return (
-    <aside className="w-64 shrink-0 h-full bg-card/80 dark:bg-[#1E2424]/60 backdrop-blur-md border-r border-border/30 overflow-y-auto flex flex-col">
+    <aside className="w-64 shrink-0 h-full bg-background dark:bg-[#151919] border-r border-border/30 overflow-y-auto flex flex-col">
       {/* Navigation */}
       <nav className="flex-1 px-0 pt-2 space-y-0">
         {/* Section header */}
