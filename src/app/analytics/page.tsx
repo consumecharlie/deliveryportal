@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   BarChart,
   Bar,
@@ -143,9 +144,8 @@ export default function AnalyticsPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading analytics...
+        <div className="flex items-center justify-center py-24">
+          <PacmanLoader size={32} />
         </div>
       )}
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   Table,
   TableBody,
@@ -79,8 +80,8 @@ export function SentTable() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        Loading sent deliveries...
+      <div className="flex items-center justify-center py-12">
+        <PacmanLoader size={32} />
       </div>
     );
   }

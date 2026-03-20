@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   Table,
   TableBody,
@@ -60,8 +61,8 @@ export function DraftsTable() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        Loading drafts...
+      <div className="flex items-center justify-center py-12">
+        <PacmanLoader size={32} />
       </div>
     );
   }

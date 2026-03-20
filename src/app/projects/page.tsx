@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -371,8 +372,8 @@ export default function ProjectsPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          Loading projects...
+        <div className="flex items-center justify-center py-12">
+          <PacmanLoader size={32} />
         </div>
       )}
 

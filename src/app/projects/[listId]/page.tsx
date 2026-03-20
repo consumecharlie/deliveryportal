@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -130,9 +131,8 @@ export default function ProjectDetailPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading project data...
+        <div className="flex items-center justify-center py-12">
+          <PacmanLoader size={32} />
         </div>
       )}
 

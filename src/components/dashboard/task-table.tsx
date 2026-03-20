@@ -9,6 +9,7 @@ import {
   CalendarRange,
   CalendarOff,
 } from "lucide-react";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import { AssigneeFilter } from "./assignee-filter";
 import { TaskCard } from "./task-card";
 import type { DeliverableTask } from "@/lib/types";
@@ -98,8 +99,8 @@ export function TaskTable() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        Loading deliverables...
+      <div className="flex items-center justify-center py-12">
+        <PacmanLoader size={32} />
       </div>
     );
   }
