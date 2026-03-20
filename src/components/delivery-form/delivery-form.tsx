@@ -374,7 +374,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
   };
 
   // ── Auto-save (every 30s, no ClickUp write) ──
-  useAutoSave({ taskId: task.id, formState });
+  useAutoSave({ taskId: task.id, formState, savedBy: session?.user?.email ?? "portal-user" });
 
   // ── Restore draft on mount ──
   const [draftLoaded, setDraftLoaded] = useState(false);

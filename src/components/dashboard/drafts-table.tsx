@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   Table,
@@ -49,6 +50,7 @@ function formatRelativeTime(dateStr: string): string {
 
 export function DraftsTable() {
   const router = useRouter();
+  const { data: session } = useSession();
 
   const { data, isLoading, error } = useQuery<{ drafts: Draft[] }>({
     queryKey: ["drafts"],
@@ -106,7 +108,21 @@ export function DraftsTable() {
               <TableCell>
                 {(draft.formData as Record<string, string>)?.deliverableType || "—"}
               </TableCell>
-              <TableCell className="text-sm">{draft.savedBy}</TableCell>
+              <TableCell className="text-sm">
+                <span className="flex items-center gap-2">
+                  {session?.user?.image && (
+                    <img
+                      src={session.user.image}
+                      alt=""
+                      className="w-6 h-6 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  {draft.savedBy?.includes("@")
+                    ? draft.savedBy.split("@")[0].split(".").map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ")
+                    : draft.savedBy}
+                </span>
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {formatRelativeTime(draft.updatedAt)}
               </TableCell>

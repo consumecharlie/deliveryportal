@@ -97,7 +97,7 @@ export function AssigneeFilter({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[220px] justify-between"
+          className="w-[280px] justify-between"
         >
           <span className="flex items-center gap-2 truncate">
             {selected ? (

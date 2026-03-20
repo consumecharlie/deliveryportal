@@ -8,6 +8,7 @@ const AUTO_SAVE_INTERVAL = 30_000; // 30 seconds
 interface UseAutoSaveOptions {
   taskId: string;
   formState: DeliveryFormState;
+  savedBy?: string;
   enabled?: boolean;
 }
 
@@ -19,6 +20,7 @@ interface UseAutoSaveOptions {
 export function useAutoSave({
   taskId,
   formState,
+  savedBy = "portal-user",
   enabled = true,
 }: UseAutoSaveOptions) {
   const formStateRef = useRef(formState);
@@ -43,7 +45,7 @@ export function useAutoSave({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           formData: formStateRef.current,
-          savedBy: "portal-user",
+          savedBy,
         }),
       });
 
@@ -80,7 +82,7 @@ export function useAutoSave({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             formData: formStateRef.current,
-            savedBy: "portal-user",
+            savedBy,
           }),
         }).catch(() => {});
       }
