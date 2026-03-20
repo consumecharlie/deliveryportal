@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export const departmentColors: Record<string, string> = {
-  "Post": "bg-red-100 text-red-800 border-red-200",
-  "Post-Production": "bg-red-100 text-red-800 border-red-200",
-  "Pre-Pro": "bg-blue-100 text-blue-800 border-blue-200",
-  "Pre-Production": "bg-blue-100 text-blue-800 border-blue-200",
-  "Design": "bg-purple-100 text-purple-800 border-purple-200",
-  "Production": "bg-green-100 text-green-800 border-green-200",
-  "Project Management": "bg-amber-100 text-amber-800 border-amber-200",
+  "Post": "bg-[#D63638] text-[#FBBC05] border-[#D63638]",
+  "Post-Production": "bg-[#D63638] text-[#FBBC05] border-[#D63638]",
+  "Pre-Pro": "bg-[#4A7CB5] text-white border-[#4A7CB5]",
+  "Pre-Production": "bg-[#4A7CB5] text-white border-[#4A7CB5]",
+  "Design": "bg-[#9B6BCD] text-white border-[#9B6BCD]",
+  "Production": "bg-green-600 text-white border-green-600",
+  "Project Management": "bg-[#6B8399] text-white border-[#6B8399]",
 };
 
 /** Canonical display order for departments */
