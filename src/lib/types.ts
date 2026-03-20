@@ -165,6 +165,7 @@ export interface SendPayload {
   tasks_in_progress_count: number;
   tasks_upcoming_count: number;
   task_id: string;
+  skip_email_draft?: boolean;
 }
 
 export interface SlackChannel {

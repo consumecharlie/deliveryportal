@@ -632,6 +632,11 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
         listId={task.listId}
         testMode={testMode}
         testEmail={testEmail}
+        taskMeta={{
+          clientName: task.clientName,
+          projectName: task.projectName,
+          department: task.department,
+        }}
       />
     </div>
   );

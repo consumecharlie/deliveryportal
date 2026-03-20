@@ -164,7 +164,12 @@ export function convertToSlackFormat(markdown: string): string {
   result = result.replace(/^- /gm, "\u2003\u2003•\u2002");
 
   // ── 5. Headers: # text → *text* ──
-  result = result.replace(/^#{1,3}\s+(.+)$/gm, "*$1*");
+  // Strip any existing bold markers from header content to avoid double-wrapping
+  // (e.g. ## **⚡ text** → step 2 makes ## *⚡ text* → this step would make **⚡ text**)
+  result = result.replace(/^#{1,3}\s+(.+)$/gm, (_match, content: string) => {
+    const stripped = content.replace(/\*/g, "").trim();
+    return `*${stripped}*`;
+  });
 
   // ── 6. Emoji conversions (Unicode → Slack shortcodes) ──
   const emojiMap: Record<string, string> = {

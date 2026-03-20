@@ -31,6 +31,11 @@ interface SendBarProps {
   listId: string;
   testMode?: boolean;
   testEmail?: string;
+  taskMeta?: {
+    clientName?: string;
+    projectName?: string;
+    department?: string;
+  };
 }
 
 export function SendBar({
@@ -46,6 +51,7 @@ export function SendBar({
   listId,
   testMode,
   testEmail,
+  taskMeta,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -88,6 +94,7 @@ export function SendBar({
           slackChannelId,
           originalDeliverableType,
           listId,
+          taskMeta,
           ...(testMode ? { testMode: true, testEmail } : {}),
         }),
       });
@@ -108,8 +115,9 @@ export function SendBar({
         });
       } else {
         toast.success("Delivery sent!", {
-          description:
-            "The email draft has been created and Slack message posted.",
+          description: postToSlack
+            ? "Slack message posted and task marked complete."
+            : "Email draft created, Slack message posted, and task marked complete.",
         });
 
         const successParams = new URLSearchParams({
@@ -248,20 +256,26 @@ export function SendBar({
                     ) : (
                       <>
                         <p>
-                          This will create an email draft and post to Slack.
+                          {postToSlack
+                            ? "This will post a message to Slack."
+                            : "This will create an email draft and post to Slack."}
                         </p>
                         <div className="rounded border p-3 space-y-1">
-                          <div>
-                            <strong>To:</strong> {primaryEmail}
-                          </div>
-                          {ccEmails && (
-                            <div>
-                              <strong>CC:</strong> {ccEmails}
-                            </div>
+                          {!postToSlack && (
+                            <>
+                              <div>
+                                <strong>To:</strong> {primaryEmail}
+                              </div>
+                              {ccEmails && (
+                                <div>
+                                  <strong>CC:</strong> {ccEmails}
+                                </div>
+                              )}
+                              <div>
+                                <strong>From:</strong> {senderEmail}
+                              </div>
+                            </>
                           )}
-                          <div>
-                            <strong>From:</strong> {senderEmail}
-                          </div>
                           <div>
                             <strong>Slack:</strong>{" "}
                             {postToSlack ? "Yes" : "No"}

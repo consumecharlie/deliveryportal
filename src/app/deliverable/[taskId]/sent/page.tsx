@@ -40,8 +40,9 @@ export default function SentConfirmationPage() {
         </div>
         <h1 className="text-2xl font-bold">Delivery Sent!</h1>
         <p className="text-muted-foreground max-w-md">
-          The deliverable has been sent successfully. An email draft was created
-          and the task has been marked complete in ClickUp.
+          {slackPosted && !primaryEmail
+            ? "The deliverable has been sent successfully. A Slack message was posted and the task has been marked complete in ClickUp."
+            : "The deliverable has been sent successfully. An email draft was created and the task has been marked complete in ClickUp."}
         </p>
       </div>
 
@@ -52,31 +53,33 @@ export default function SentConfirmationPage() {
           <CardDescription>Task ID: {taskId}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Email section */}
-          <div className="flex items-start gap-3">
-            <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium">Email Draft Created</p>
-              {subject && (
-                <p className="text-sm text-muted-foreground">
-                  Subject: {subject}
-                </p>
-              )}
-              <div className="text-sm text-muted-foreground">
-                <span className="font-medium">To:</span> {primaryEmail}
+          {/* Email section — only show when email was part of the delivery */}
+          {(primaryEmail || subject) && (
+            <div className="flex items-start gap-3">
+              <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-medium">Email Draft Created</p>
+                {subject && (
+                  <p className="text-sm text-muted-foreground">
+                    Subject: {subject}
+                  </p>
+                )}
+                <div className="text-sm text-muted-foreground">
+                  <span className="font-medium">To:</span> {primaryEmail}
+                </div>
+                {ccEmails && (
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium">CC:</span> {ccEmails}
+                  </div>
+                )}
+                {senderEmail && (
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium">From:</span> {senderEmail}
+                  </div>
+                )}
               </div>
-              {ccEmails && (
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">CC:</span> {ccEmails}
-                </div>
-              )}
-              {senderEmail && (
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">From:</span> {senderEmail}
-                </div>
-              )}
             </div>
-          </div>
+          )}
 
           {slackPosted && (
             <>
@@ -126,7 +129,7 @@ export default function SentConfirmationPage() {
           </Button>
         </a>
         {deliveryId && (
-          <Link href={`/?tab=sent`}>
+          <Link href="/sent">
             <Button>View Sent Deliveries</Button>
           </Link>
         )}

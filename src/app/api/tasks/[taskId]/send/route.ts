@@ -27,6 +27,11 @@ interface SendRequestBody {
   listId: string;
   testMode?: boolean;
   testEmail?: string;
+  taskMeta?: {
+    clientName?: string;
+    projectName?: string;
+    department?: string;
+  };
 }
 
 /**
@@ -58,6 +63,7 @@ export async function POST(
       listId,
       testMode,
       testEmail,
+      taskMeta,
     } = body;
 
     const userEmail = await getSessionUserEmail();
@@ -270,6 +276,7 @@ export async function POST(
       tasks_in_progress_count: tasksInProgressCount,
       tasks_upcoming_count: tasksUpcomingCount,
       task_id: taskId,
+      skip_email_draft: postToSlack,
       ...(testMode ? { is_test: true } : {}),
     };
 
@@ -309,10 +316,10 @@ export async function POST(
         const delivery = await prisma.delivery.create({
           data: {
             taskId,
-            projectName: "", // populated below if available
-            clientName: "",
+            projectName: taskMeta?.projectName || "",
+            clientName: taskMeta?.clientName || "",
             deliverableType: formState.deliverableType,
-            department: "",
+            department: taskMeta?.department || "",
             senderEmail,
             primaryEmail,
             ccEmails: ccEmails || null,
