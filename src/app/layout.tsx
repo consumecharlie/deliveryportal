@@ -37,6 +37,9 @@ const smallPixel = localFont({
 export const metadata: Metadata = {
   title: "Consume Media - Delivery Portal",
   description: "Preview, edit, and send client deliverables",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
