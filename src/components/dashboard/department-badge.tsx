@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export const departmentColors: Record<string, string> = {
-  "Post": "bg-[#D63638] text-[#FBBC05] border-[#D63638]",
-  "Post-Production": "bg-[#D63638] text-[#FBBC05] border-[#D63638]",
+  "Post": "bg-[#D63638] text-white border-[#D63638]",
+  "Post-Production": "bg-[#D63638] text-white border-[#D63638]",
   "Pre-Pro": "bg-[#4A7CB5] text-white border-[#4A7CB5]",
   "Pre-Production": "bg-[#4A7CB5] text-white border-[#4A7CB5]",
   "Design": "bg-[#9B6BCD] text-white border-[#9B6BCD]",
