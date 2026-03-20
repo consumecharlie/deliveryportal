@@ -7,6 +7,8 @@ import { useSession } from "next-auth/react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: "/icons/tack.svg" },
+  { href: "/drafts", label: "Drafts", icon: "/icons/pencil.svg" },
+  { href: "/sent", label: "Sent", icon: "/icons/sent.svg" },
   { href: "/templates", label: "Templates", icon: "/icons/folder.svg" },
   { href: "/projects", label: "Project Links", icon: "/icons/bookmark.svg" },
   { href: "/analytics", label: "Analytics", icon: "/icons/timer.svg" },

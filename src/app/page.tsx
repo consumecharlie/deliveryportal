@@ -1,9 +1,6 @@
 "use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskTable } from "@/components/dashboard/task-table";
-import { DraftsTable } from "@/components/dashboard/drafts-table";
-import { SentTable } from "@/components/dashboard/sent-table";
 
 export default function DashboardPage() {
   return (
@@ -15,25 +12,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="deliverables">
-        <TabsList>
-          <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
-          <TabsTrigger value="drafts">Drafts</TabsTrigger>
-          <TabsTrigger value="sent">Sent</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="deliverables" className="mt-4">
-          <TaskTable />
-        </TabsContent>
-
-        <TabsContent value="drafts" className="mt-4">
-          <DraftsTable />
-        </TabsContent>
-
-        <TabsContent value="sent" className="mt-4">
-          <SentTable />
-        </TabsContent>
-      </Tabs>
+      <TaskTable />
     </div>
   );
 }
