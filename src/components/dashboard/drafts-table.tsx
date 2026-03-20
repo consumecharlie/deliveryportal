@@ -92,7 +92,8 @@ export function DraftsTable() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Task ID</TableHead>
+            <TableHead>Task Name</TableHead>
+            <TableHead>Project</TableHead>
             <TableHead>Deliverable Type</TableHead>
             <TableHead>Saved By</TableHead>
             <TableHead>Last Saved</TableHead>
@@ -102,8 +103,13 @@ export function DraftsTable() {
         <TableBody>
           {drafts.map((draft) => (
             <TableRow key={draft.id}>
-              <TableCell className="font-mono text-sm">
-                {draft.taskId}
+              <TableCell className="text-sm font-medium">
+                {(draft.formData as Record<string, string>)?.deliverableName || draft.taskId}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {(draft.formData as Record<string, string>)?.clientName && (draft.formData as Record<string, string>)?.projectName
+                  ? `${(draft.formData as Record<string, string>).clientName} — ${(draft.formData as Record<string, string>).projectName}`
+                  : (draft.formData as Record<string, string>)?.projectName || "—"}
               </TableCell>
               <TableCell>
                 {(draft.formData as Record<string, string>)?.deliverableType || "—"}
