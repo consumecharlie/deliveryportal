@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/shared/providers";
 import { Toaster } from "@/components/ui/sonner";
-import { Header } from "@/components/shared/header";
+import { AppShell } from "@/components/layout/app-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,6 +22,12 @@ const eightiesComeback = localFont({
   display: "swap",
 });
 
+const smallPixel = localFont({
+  src: "../fonts/small_pixel-7.woff",
+  variable: "--font-pixel",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Consume Media - Delivery Portal",
   description: "Preview, edit, and send client deliverables",
@@ -35,13 +41,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${eightiesComeback.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${eightiesComeback.variable} ${smallPixel.variable} antialiased`}
       >
         <Providers>
-          <div className="min-h-screen bg-background">
-            <Header />
-            <main className="container mx-auto px-4 py-6">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
           <Toaster />
         </Providers>
       </body>

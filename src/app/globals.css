@@ -159,6 +159,12 @@
   text-transform: none;
 }
 
+@utility font-pixel {
+  font-family: var(--font-pixel), monospace;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+}
+
 /* TipTap editor styles */
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
