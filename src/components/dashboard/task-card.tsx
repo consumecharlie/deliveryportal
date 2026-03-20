@@ -138,7 +138,7 @@ export function TaskCard({
       <CardHeader className="pb-0">
         <div className="flex items-center gap-2">
           {typeof icon === "string" ? (
-            <Image src={icon} alt="" width={18} height={18} className="flex-shrink-0" />
+            <Image src={icon} alt="" width={28} height={28} className="flex-shrink-0" />
           ) : (
             (() => { const Icon = icon; return <Icon className={`h-4 w-4 ${accentClass ?? "text-muted-foreground"}`} />; })()
           )}
