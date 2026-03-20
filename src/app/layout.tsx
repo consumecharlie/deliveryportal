@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/shared/providers";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,6 +16,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const eightiesComeback = localFont({
+  src: "../fonts/EightiesComeback-ExtraBold.otf",
+  variable: "--font-eighties",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Consume Media - Deliverable Portal",
   description: "Preview, edit, and send client deliverables",
@@ -28,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${eightiesComeback.variable} antialiased`}
       >
         <Providers>
           <div className="min-h-screen bg-background">

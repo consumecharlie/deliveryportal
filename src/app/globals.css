@@ -125,6 +125,39 @@
   }
 }
 
+/* Arcade login float animations */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(1.5deg); }
+}
+
+@keyframes float-medium {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-14px) rotate(-1deg); }
+}
+
+@keyframes float-fast {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+@utility animate-float-slow {
+  animation: float-slow 12s ease-in-out infinite;
+}
+
+@utility animate-float-medium {
+  animation: float-medium 8s ease-in-out infinite;
+}
+
+@utility animate-float-fast {
+  animation: float-fast 6s ease-in-out infinite;
+}
+
+@utility font-eighties {
+  font-family: var(--font-eighties), sans-serif;
+  text-transform: none;
+}
+
 /* TipTap editor styles */
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
