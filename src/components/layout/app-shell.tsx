@@ -13,7 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="h-screen bg-background overflow-hidden">
+    <div className="h-screen bg-muted/30 dark:bg-[#151919] overflow-hidden">
       {/* Fixed header */}
       <div className="fixed top-0 left-0 right-0 z-50">
         <Header />

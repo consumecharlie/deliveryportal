@@ -17,7 +17,6 @@ function getInitials(name?: string | null, email?: string | null): string {
 export function Header() {
   const { data: session, status } = useSession();
   const [imgError, setImgError] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
 
   const userName = session?.user?.name ?? session?.user?.email ?? "User";
   const initials = getInitials(session?.user?.name, session?.user?.email);
@@ -28,20 +27,22 @@ export function Header() {
       {/* Left: Pacman logo + Delivery Portal branding */}
       <Link href="/" className="flex items-center gap-3 shrink-0">
         <img src="/pacman-brand.svg" alt="Consume Media" className="h-9" />
-        <span className="font-eighties text-lg leading-tight">
-          Delivery Portal
-        </span>
+        <div className="flex flex-col">
+          <span className="font-eighties text-lg leading-tight">
+            Delivery Portal
+          </span>
+          <span className="font-pixel text-[10px] leading-tight" style={{ color: "#6AC387" }}>
+            CLIENT DELIVERABLES
+          </span>
+        </div>
       </Link>
 
-      {/* Right: Profile + Sign out */}
+      {/* Right: Profile + Logout */}
       <div className="flex items-center gap-6 shrink-0">
         {status === "authenticated" && session?.user && (
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
-            >
-              <span className="hidden sm:inline text-sm text-muted-foreground">
+          <>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {userName}
               </span>
               {avatarUrl && !imgError ? (
@@ -57,27 +58,14 @@ export function Header() {
                   {initials}
                 </div>
               )}
+            </div>
+            <button
+              onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+              className="font-pixel text-[13px] text-foreground bg-muted-foreground/20 hover:bg-[#6AC387] hover:text-[#151919] px-4 py-2 rounded transition-colors duration-75 whitespace-nowrap cursor-pointer"
+            >
+              LOGOUT
             </button>
-
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 z-50 rounded-xl shadow-xl py-1 min-w-40 bg-popover border border-border/30">
-                  {session.user.email && (
-                    <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border/30">
-                      {session.user.email}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-                    className="w-full text-left px-3 py-2 text-xs text-destructive hover:opacity-80 transition-opacity cursor-pointer"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          </>
         )}
       </div>
     </header>

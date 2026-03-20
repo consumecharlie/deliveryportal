@@ -17,9 +17,9 @@ export function Sidebar() {
   const { data: session } = useSession();
 
   return (
-    <aside className="w-64 shrink-0 h-full bg-background/80 dark:bg-[#1E2424]/60 backdrop-blur-md border-r border-border/30 overflow-y-auto flex flex-col">
+    <aside className="w-64 shrink-0 h-full bg-card/80 dark:bg-[#1E2424]/60 backdrop-blur-md border-r border-border/30 overflow-y-auto flex flex-col">
       {/* Navigation */}
-      <nav className="flex-1 pt-2">
+      <nav className="flex-1 px-0 pt-2 space-y-0">
         {/* Section header */}
         <div className="px-4 py-2">
           <span className="font-pixel text-[11px]" style={{ color: "#6AC387" }}>
@@ -40,10 +40,10 @@ export function Sidebar() {
               className={`flex items-center px-4 py-3 text-sm font-medium transition-colors duration-150 border-l-4 ${
                 isActive
                   ? "text-[#508E61] dark:text-[#6AC387] border-[#6AC387] bg-[#C5FFD8]/30 dark:bg-[#6AC387]/10"
-                  : "text-foreground/60 border-transparent hover:bg-[#DBEF00]/10 hover:text-foreground dark:hover:text-[#DBEF00]"
+                  : "text-muted-foreground border-transparent hover:bg-[#DBEF00]/10 hover:text-foreground dark:hover:text-[#DBEF00]"
               }`}
             >
-              <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
+              <item.icon className="w-6 h-6 mr-3 flex-shrink-0" />
               <span>{item.label}</span>
             </Link>
           );
