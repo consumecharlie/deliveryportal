@@ -5,10 +5,17 @@ import type { DeliveryFormState } from "@/lib/types";
 
 const AUTO_SAVE_INTERVAL = 30_000; // 30 seconds
 
+interface TaskMeta {
+  taskName?: string;
+  clientName?: string;
+  projectName?: string;
+}
+
 interface UseAutoSaveOptions {
   taskId: string;
   formState: DeliveryFormState;
   savedBy?: string;
+  taskMeta?: TaskMeta;
   enabled?: boolean;
 }
 
@@ -21,6 +28,7 @@ export function useAutoSave({
   taskId,
   formState,
   savedBy = "portal-user",
+  taskMeta,
   enabled = true,
 }: UseAutoSaveOptions) {
   const formStateRef = useRef(formState);
@@ -44,7 +52,7 @@ export function useAutoSave({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          formData: formStateRef.current,
+          formData: { ...formStateRef.current, ...taskMeta },
           savedBy,
         }),
       });
@@ -81,7 +89,7 @@ export function useAutoSave({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            formData: formStateRef.current,
+            formData: { ...formStateRef.current, ...taskMeta },
             savedBy,
           }),
         }).catch(() => {});

@@ -22,6 +22,7 @@ interface Draft {
     deliverableType?: string;
     clientName?: string;
     projectName?: string;
+    taskName?: string;
     deliverableName?: string;
   };
   savedBy: string;
@@ -104,7 +105,7 @@ export function DraftsTable() {
           {drafts.map((draft) => (
             <TableRow key={draft.id}>
               <TableCell className="text-sm font-medium">
-                {(draft.formData as Record<string, string>)?.deliverableName || draft.taskId}
+                {(draft.formData as Record<string, string>)?.taskName || draft.taskId}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {(draft.formData as Record<string, string>)?.clientName && (draft.formData as Record<string, string>)?.projectName
