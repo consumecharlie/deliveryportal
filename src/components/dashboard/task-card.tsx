@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import type { LucideIcon } from "lucide-react";
 import {
   Card,
@@ -117,7 +118,7 @@ function TaskRow({
 
 interface TaskCardProps {
   title: string;
-  icon: LucideIcon;
+  icon: LucideIcon | string;
   tasks: DeliverableTask[];
   maxHeight?: string;
   accentClass?: string;
@@ -125,7 +126,7 @@ interface TaskCardProps {
 
 export function TaskCard({
   title,
-  icon: Icon,
+  icon,
   tasks,
   maxHeight,
   accentClass,
@@ -136,7 +137,11 @@ export function TaskCard({
     <Card className="py-4 gap-3">
       <CardHeader className="pb-0">
         <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${accentClass ?? "text-muted-foreground"}`} />
+          {typeof icon === "string" ? (
+            <Image src={icon} alt="" width={18} height={18} className="flex-shrink-0" />
+          ) : (
+            (() => { const Icon = icon; return <Icon className={`h-4 w-4 ${accentClass ?? "text-muted-foreground"}`} />; })()
+          )}
           <CardTitle className="text-base">{title}</CardTitle>
           <span className="inline-flex items-center justify-center rounded-full bg-muted px-2 min-w-[22px] text-[11px] font-semibold text-muted-foreground">
             {tasks.length}

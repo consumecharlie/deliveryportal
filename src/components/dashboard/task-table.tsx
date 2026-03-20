@@ -146,13 +146,13 @@ export function TaskTable() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TaskCard
           title="Today"
-          icon={CalendarClock}
+          icon="/icons/bell-notification.svg"
           tasks={today}
           maxHeight="400px"
         />
         <TaskCard
           title="This Week"
-          icon={CalendarDays}
+          icon="/icons/calendar.svg"
           tasks={thisWeek}
           maxHeight="400px"
         />
