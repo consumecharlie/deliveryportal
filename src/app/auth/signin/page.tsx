@@ -28,7 +28,7 @@ function SignInContent() {
 
         {/* Heading */}
         <h1 className="font-eighties text-3xl text-[#E5EEEB] mb-2 text-center">
-          Deliverable Portal
+          Delivery Portal
         </h1>
         <p className="text-sm text-[#6F7F7F] mb-8 text-center">
           Sign in with your Google account to access the portal.

@@ -38,10 +38,10 @@ export function Header() {
   const isAuthPage = pathname.startsWith("/auth");
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-14 items-center px-4">
-        <Link href="/" className="mr-8 font-semibold text-lg">
-          Deliverable Portal
+    <header className="sticky top-0 z-50 border-b border-border/30 backdrop-blur-xl bg-background/80 dark:bg-[#151919]/75">
+      <div className="container mx-auto flex h-14 items-center px-6">
+        <Link href="/" className="mr-8 font-eighties text-lg leading-tight">
+          Delivery Portal
         </Link>
 
         {!isAuthPage && (

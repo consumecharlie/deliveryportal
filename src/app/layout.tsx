@@ -23,7 +23,7 @@ const eightiesComeback = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Consume Media - Deliverable Portal",
+  title: "Consume Media - Delivery Portal",
   description: "Preview, edit, and send client deliverables",
 };
 
