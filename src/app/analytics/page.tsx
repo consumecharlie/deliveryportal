@@ -144,8 +144,9 @@ export default function AnalyticsPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-24">
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
           <PacmanLoader size={32} />
+          <span className="font-pixel text-[13px]" style={{ color: "#6AC387" }}>LOADING ANALYTICS</span>
         </div>
       )}
 
