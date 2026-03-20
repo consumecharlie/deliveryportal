@@ -339,7 +339,7 @@ export default function ProjectsPage() {
       {/* Header row */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+          <h1 className="font-eighties text-2xl">Projects</h1>
           <p className="text-sm text-muted-foreground">
             {totalProjects} projects across {clients.length} clients
           </p>

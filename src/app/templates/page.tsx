@@ -79,7 +79,7 @@ export default function TemplatesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
+          <h1 className="font-eighties text-2xl">Templates</h1>
           <p className="text-sm text-muted-foreground">
             Manage delivery snippet templates used for client communications.
           </p>

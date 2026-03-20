@@ -1,15 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { LayoutDashboard, FileText, FolderOpen, BarChart3 } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/templates", label: "Templates", icon: FileText },
-  { href: "/projects", label: "Project Links", icon: FolderOpen },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/", label: "Dashboard", icon: "/icons/tack.svg" },
+  { href: "/templates", label: "Templates", icon: "/icons/book.svg" },
+  { href: "/projects", label: "Project Links", icon: "/icons/bookmark.svg" },
+  { href: "/analytics", label: "Analytics", icon: "/icons/timer.svg" },
 ];
 
 export function Sidebar() {
@@ -43,7 +43,13 @@ export function Sidebar() {
                   : "text-muted-foreground border-transparent hover:bg-[#DBEF00]/10 hover:text-foreground dark:hover:text-[#DBEF00]"
               }`}
             >
-              <item.icon className="w-6 h-6 mr-3 flex-shrink-0" />
+              <Image
+                src={item.icon}
+                alt=""
+                width={24}
+                height={24}
+                className="mr-3 flex-shrink-0"
+              />
               <span>{item.label}</span>
             </Link>
           );
