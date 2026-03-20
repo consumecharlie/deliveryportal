@@ -23,7 +23,7 @@ export function Header() {
   const avatarUrl = session?.user?.image;
 
   return (
-    <header className="flex items-center justify-between px-6 py-3 border-b border-border/30 backdrop-blur-xl bg-background/80 dark:bg-[#151919]/75 z-50">
+    <header className="flex items-center justify-between px-6 py-3 border-b border-[#364040]/30 backdrop-blur-xl bg-background/80 dark:bg-[#151919]/75 z-50">
       {/* Left: Pacman logo + Delivery Portal branding */}
       <Link href="/" className="flex items-center gap-3 shrink-0">
         <img src="/pacman-brand.svg" alt="Consume Media" className="h-9" />

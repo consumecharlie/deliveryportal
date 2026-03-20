@@ -17,7 +17,7 @@ export function Sidebar() {
   const { data: session } = useSession();
 
   return (
-    <aside className="w-64 shrink-0 h-full bg-background dark:bg-[#151919] border-r border-border/30 overflow-y-auto flex flex-col">
+    <aside className="w-64 shrink-0 h-full bg-background dark:bg-[#151919] border-r border-[#364040]/30 overflow-y-auto flex flex-col">
       {/* Navigation */}
       <nav className="flex-1 px-0 pt-2 space-y-0">
         {/* Section header */}
@@ -58,7 +58,7 @@ export function Sidebar() {
 
       {/* Footer */}
       {session?.user && (
-        <div className="p-4 border-t border-border/30 text-xs text-muted-foreground">
+        <div className="p-4 border-t border-[#364040]/30 text-xs text-muted-foreground">
           <p className="mb-1">Logged in as:</p>
           <p className="font-medium text-foreground truncate">
             {session.user.name ?? session.user.email}
