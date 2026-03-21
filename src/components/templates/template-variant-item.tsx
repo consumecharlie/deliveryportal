@@ -27,7 +27,7 @@ export function TemplateVariantItem({
   const complete = isComplete(template);
 
   return (
-    <div className="rounded-md transition-colors hover:bg-muted/40">
+    <div className="rounded-md transition-colors hover:bg-[#6AC387]/10 dark:hover:bg-[#6AC387]/10">
       {/* ── Main row — click anywhere to open editor ────────── */}
       <div
         className="flex w-full items-center gap-2 px-3 py-2.5 text-sm cursor-pointer"
