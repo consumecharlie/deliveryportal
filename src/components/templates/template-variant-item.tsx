@@ -28,8 +28,11 @@ export function TemplateVariantItem({
 
   return (
     <div className="rounded-md transition-colors hover:bg-muted/40">
-      {/* ── Main row ─────────────────────────────────────────── */}
-      <div className="flex w-full items-center gap-2 px-3 py-2.5 text-sm">
+      {/* ── Main row — click anywhere to open editor ────────── */}
+      <div
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm cursor-pointer"
+        onClick={() => onSelect(template.taskId)}
+      >
         {/* Completeness indicator */}
         {complete ? (
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
