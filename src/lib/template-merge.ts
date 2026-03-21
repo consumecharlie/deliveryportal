@@ -128,6 +128,37 @@ function performMerge(
 }
 
 /**
+ * Unicode → Slack shortcode emoji map.
+ * Used by convertToSlackFormat() and available for reverse-mapping in preview renderers.
+ */
+export const SLACK_EMOJI_MAP: Record<string, string> = {
+  "\u{1F6A8}": ":rotating_light:",
+  "\u{2705}": ":white_check_mark:",
+  "\u{1F4E9}": ":envelope_with_arrow:",
+  "\u{1F4CB}": ":clipboard:",
+  "\u{1F517}": ":link:",
+  "\u{1F4C5}": ":date:",
+  "\u{1F4DD}": ":memo:",
+  "\u{26A1}": ":zap:",
+  "\u{2B50}": ":star:",
+  "\u{1F4E5}": ":inbox_tray:",
+  "\u{1F514}": ":bell:",
+  "\u{1F4C1}": ":file_folder:",
+  "\u{1F4E6}": ":package:",
+  "\u{1F680}": ":rocket:",
+  "\u{1F525}": ":fire:",
+  "\u{1F4AC}": ":speech_balloon:",
+  "\u{1F3AF}": ":dart:",
+  "\u{2757}": ":exclamation:",
+  "\u{2753}": ":question:",
+  "\u{1F4A1}": ":bulb:",
+  "\u{1F389}": ":tada:",
+  "\u{1F44D}": ":thumbsup:",
+  "\u{270F}": ":pencil2:",
+  "\u{1F4CE}": ":paperclip:",
+};
+
+/**
  * Convert email markdown to Slack mrkdwn format.
  * Exported so the send route can call it at send time.
  */
@@ -172,33 +203,7 @@ export function convertToSlackFormat(markdown: string): string {
   });
 
   // ── 6. Emoji conversions (Unicode → Slack shortcodes) ──
-  const emojiMap: Record<string, string> = {
-    "\u{1F6A8}": ":rotating_light:",
-    "\u{2705}": ":white_check_mark:",
-    "\u{1F4E9}": ":envelope_with_arrow:",
-    "\u{1F4CB}": ":clipboard:",
-    "\u{1F517}": ":link:",
-    "\u{1F4C5}": ":date:",
-    "\u{1F4DD}": ":memo:",
-    "\u{26A1}": ":zap:",
-    "\u{2B50}": ":star:",
-    "\u{1F4E5}": ":inbox_tray:",
-    "\u{1F514}": ":bell:",
-    "\u{1F4C1}": ":file_folder:",
-    "\u{1F4E6}": ":package:",
-    "\u{1F680}": ":rocket:",
-    "\u{1F525}": ":fire:",
-    "\u{1F4AC}": ":speech_balloon:",
-    "\u{1F3AF}": ":dart:",
-    "\u{2757}": ":exclamation:",
-    "\u{2753}": ":question:",
-    "\u{1F4A1}": ":bulb:",
-    "\u{1F389}": ":tada:",
-    "\u{1F44D}": ":thumbsup:",
-    "\u{270F}": ":pencil2:",
-    "\u{1F4CE}": ":paperclip:",
-  };
-  for (const [emoji, shortcode] of Object.entries(emojiMap)) {
+  for (const [emoji, shortcode] of Object.entries(SLACK_EMOJI_MAP)) {
     result = result.replaceAll(emoji, shortcode);
   }
   // Also handle emoji + variation selector (e.g. ⚡️ = ⚡ + U+FE0F)
