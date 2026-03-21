@@ -84,8 +84,9 @@ export function lintSlackMrkdwn(mrkdwn: string): SlackLintError[] {
     }
   }
 
-  // ── Excessive blank lines: 3+ consecutive newlines ──
-  const blankLineMatches = mrkdwn.matchAll(/\n{3,}/g);
+  // ── Excessive blank lines: 4+ consecutive newlines (3+ blank lines) ──
+  // Slack collapses 3+ blank lines into 1. Single blank lines (\n\n) are normal spacing.
+  const blankLineMatches = mrkdwn.matchAll(/\n{4,}/g);
   for (const m of blankLineMatches) {
     // Find the line number where the excessive blanks start
     const offset = m.index!;

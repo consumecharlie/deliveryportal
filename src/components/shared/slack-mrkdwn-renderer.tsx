@@ -108,11 +108,11 @@ function parseInline(text: string, keyPrefix: string): React.ReactNode[] {
         );
       }
     } else if (slackTokenMatch[2]) {
-      // Bold: *text*
+      // Bold: *text* — recursively parse inner content for emoji shortcodes
       const boldText = matchStr.slice(1, -1);
       elements.push(
         <strong key={`${keyPrefix}-${idx++}`} className="font-bold">
-          {boldText}
+          {parseInline(boldText, `${keyPrefix}-b${idx}`)}
         </strong>
       );
     } else if (slackTokenMatch[3]) {

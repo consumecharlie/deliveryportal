@@ -131,9 +131,14 @@ describe("lintSlackMrkdwn", () => {
 
   // ── Excessive blank lines ──
   describe("excessive blank lines", () => {
-    it("flags 3+ consecutive newlines", () => {
-      const errors = lintSlackMrkdwn("line1\n\n\nline2");
+    it("flags 4+ consecutive newlines (3+ blank lines)", () => {
+      const errors = lintSlackMrkdwn("line1\n\n\n\nline2");
       expect(errors.some((e) => e.message.includes("blank lines"))).toBe(true);
+    });
+
+    it("does not flag 3 consecutive newlines (2 blank lines — normal spacing)", () => {
+      const errors = lintSlackMrkdwn("line1\n\n\nline2");
+      expect(errors.some((e) => e.message.includes("blank lines"))).toBe(false);
     });
 
     it("does not flag 2 consecutive newlines (single blank line)", () => {
