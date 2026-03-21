@@ -33,7 +33,7 @@ export function lintSlackMrkdwn(mrkdwn: string): SlackLintError[] {
     }
 
     // ── Unconverted headers: # at line start ──
-    if (/^#{1,6}\s/.test(line)) {
+    if (/^\s*#{1,6}\s/.test(line)) {
       errors.push({
         line: lineNum,
         message: "Unconverted header markdown (`#`) found",
