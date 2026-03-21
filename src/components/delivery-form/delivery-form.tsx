@@ -32,6 +32,7 @@ import type {
   SlackMember,
 } from "@/lib/types";
 import type { MentionItem } from "@/components/shared/rich-text-editor";
+import type { SlackLintError } from "@/lib/slack-lint";
 
 interface DeliveryFormProps {
   taskDetail: TaskDetail;
@@ -76,6 +77,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
     null
   );
   const [isEditMode, setIsEditMode] = useState(false);
+  const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
 
   // ── Editable recipient fields ──
   const [editedToEmail, setEditedToEmail] = useState<string | null>(null);
@@ -614,6 +616,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
             showEmail={showEmail}
             showSlack={showSlack}
             templateTaskId={activeTemplate?.taskId}
+            onSlackLintResult={showSlack ? setSlackLintErrors : undefined}
           />
         </div>
       </div>
@@ -637,6 +640,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
           projectName: task.projectName,
           department: task.department,
         }}
+        slackLintErrors={showSlack ? slackLintErrors : undefined}
       />
     </div>
   );

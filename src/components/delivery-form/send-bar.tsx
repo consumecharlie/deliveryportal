@@ -14,9 +14,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Save, Send, Loader2, FlaskConical } from "lucide-react";
+import { Save, Send, Loader2, FlaskConical, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { DeliveryFormState, MergedContent } from "@/lib/types";
+import type { SlackLintError } from "@/lib/slack-lint";
 
 interface SendBarProps {
   taskId: string;
@@ -36,6 +37,7 @@ interface SendBarProps {
     projectName?: string;
     department?: string;
   };
+  slackLintErrors?: SlackLintError[];
 }
 
 export function SendBar({
@@ -52,10 +54,13 @@ export function SendBar({
   testMode,
   testEmail,
   taskMeta,
+  slackLintErrors,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [showLintWarning, setShowLintWarning] = useState(false);
+  const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
@@ -176,10 +181,12 @@ export function SendBar({
             Save Draft
           </Button>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
+          {/* Send button — shows lint warning if errors exist, otherwise normal confirm */}
+          {slackLintErrors && slackLintErrors.length > 0 ? (
+            <>
               <Button
                 disabled={!isReady || isSending}
+                onClick={() => setShowLintWarning(true)}
                 className={
                   testMode
                     ? "bg-amber-600 hover:bg-amber-700 text-white"
@@ -195,112 +202,285 @@ export function SendBar({
                 )}
                 {testMode ? "Test Send" : "Send"}
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2">
-                  {testMode && (
-                    <FlaskConical className="h-5 w-5 text-amber-600" />
-                  )}
-                  {testMode ? "Test Send" : "Send Delivery"}
-                </AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-2 text-sm">
-                    {testMode ? (
-                      <>
+
+              {/* Lint warning dialog */}
+              <AlertDialog open={showLintWarning} onOpenChange={setShowLintWarning}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                      Slack Formatting Issues
+                    </AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-3 text-sm">
                         <p>
-                          This sends through the full n8n pipeline with
-                          overridden recipients. No ClickUp changes will be
-                          made.
+                          The Slack message has {slackLintErrors.length} formatting{" "}
+                          {slackLintErrors.length === 1 ? "issue" : "issues"} that
+                          may not render correctly:
                         </p>
-                        <div className="rounded border border-amber-200 bg-amber-50 p-3 space-y-1 dark:border-amber-800 dark:bg-amber-950">
-                          {postToSlack ? (
-                            <>
-                              <div>
-                                <strong>Slack:</strong> #delivery-testing
-                              </div>
-                              <div>
-                                <strong>Email:</strong>{" "}
-                                <span className="text-muted-foreground">
-                                  Not sent (Slack mode)
-                                </span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div>
-                                <strong>To:</strong> {testEmail}
-                              </div>
-                              <div>
-                                <strong>CC:</strong>{" "}
-                                <span className="text-muted-foreground">
-                                  None
-                                </span>
-                              </div>
-                              <div>
-                                <strong>Subject:</strong> [TEST]{" "}
-                                {formState.editedSubjectLine ??
-                                  mergedContent?.subjectLine ??
-                                  ""}
-                              </div>
-                            </>
-                          )}
-                          <div>
-                            <strong>ClickUp:</strong>{" "}
-                            <span className="text-muted-foreground">
-                              No changes
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p>
-                          {postToSlack
-                            ? "This will post a message to Slack."
-                            : "This will create an email draft and post to Slack."}
-                        </p>
-                        <div className="rounded border p-3 space-y-1">
-                          {!postToSlack && (
-                            <>
-                              <div>
-                                <strong>To:</strong> {primaryEmail}
-                              </div>
-                              {ccEmails && (
-                                <div>
-                                  <strong>CC:</strong> {ccEmails}
-                                </div>
+                        <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                          {slackLintErrors.map((err, i) => (
+                            <li
+                              key={i}
+                              className="text-xs text-amber-700 dark:text-amber-400"
+                            >
+                              <span className="font-mono">Line {err.line}:</span>{" "}
+                              {err.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Go Back</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        setShowLintWarning(false);
+                        setShowConfirmAfterLint(true);
+                      }}
+                    >
+                      Send Anyway
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Normal confirm dialog (shown after dismissing lint warning) */}
+              <AlertDialog open={showConfirmAfterLint} onOpenChange={setShowConfirmAfterLint}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      {testMode && (
+                        <FlaskConical className="h-5 w-5 text-amber-600" />
+                      )}
+                      {testMode ? "Test Send" : "Send Delivery"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2 text-sm">
+                        {testMode ? (
+                          <>
+                            <p>
+                              This sends through the full n8n pipeline with
+                              overridden recipients. No ClickUp changes will be
+                              made.
+                            </p>
+                            <div className="rounded border border-amber-200 bg-amber-50 p-3 space-y-1 dark:border-amber-800 dark:bg-amber-950">
+                              {postToSlack ? (
+                                <>
+                                  <div>
+                                    <strong>Slack:</strong> #delivery-testing
+                                  </div>
+                                  <div>
+                                    <strong>Email:</strong>{" "}
+                                    <span className="text-muted-foreground">
+                                      Not sent (Slack mode)
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div>
+                                    <strong>To:</strong> {testEmail}
+                                  </div>
+                                  <div>
+                                    <strong>CC:</strong>{" "}
+                                    <span className="text-muted-foreground">
+                                      None
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <strong>Subject:</strong> [TEST]{" "}
+                                    {formState.editedSubjectLine ??
+                                      mergedContent?.subjectLine ??
+                                      ""}
+                                  </div>
+                                </>
                               )}
                               <div>
-                                <strong>From:</strong> {senderEmail}
+                                <strong>ClickUp:</strong>{" "}
+                                <span className="text-muted-foreground">
+                                  No changes
+                                </span>
                               </div>
-                            </>
-                          )}
-                          <div>
-                            <strong>Slack:</strong>{" "}
-                            {postToSlack ? "Yes" : "No"}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleSend}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p>
+                              {postToSlack
+                                ? "This will post a message to Slack."
+                                : "This will create an email draft and post to Slack."}
+                            </p>
+                            <div className="rounded border p-3 space-y-1">
+                              {!postToSlack && (
+                                <>
+                                  <div>
+                                    <strong>To:</strong> {primaryEmail}
+                                  </div>
+                                  {ccEmails && (
+                                    <div>
+                                      <strong>CC:</strong> {ccEmails}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <strong>From:</strong> {senderEmail}
+                                  </div>
+                                </>
+                              )}
+                              <div>
+                                <strong>Slack:</strong>{" "}
+                                {postToSlack ? "Yes" : "No"}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleSend}
+                      className={
+                        testMode
+                          ? "bg-amber-600 hover:bg-amber-700"
+                          : undefined
+                      }
+                    >
+                      {testMode ? "Confirm Test Send" : "Confirm & Send"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          ) : (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  disabled={!isReady || isSending}
                   className={
                     testMode
-                      ? "bg-amber-600 hover:bg-amber-700"
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
                       : undefined
                   }
                 >
-                  {testMode ? "Confirm Test Send" : "Confirm & Send"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  {isSending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : testMode ? (
+                    <FlaskConical className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {testMode ? "Test Send" : "Send"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    {testMode && (
+                      <FlaskConical className="h-5 w-5 text-amber-600" />
+                    )}
+                    {testMode ? "Test Send" : "Send Delivery"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-2 text-sm">
+                      {testMode ? (
+                        <>
+                          <p>
+                            This sends through the full n8n pipeline with
+                            overridden recipients. No ClickUp changes will be
+                            made.
+                          </p>
+                          <div className="rounded border border-amber-200 bg-amber-50 p-3 space-y-1 dark:border-amber-800 dark:bg-amber-950">
+                            {postToSlack ? (
+                              <>
+                                <div>
+                                  <strong>Slack:</strong> #delivery-testing
+                                </div>
+                                <div>
+                                  <strong>Email:</strong>{" "}
+                                  <span className="text-muted-foreground">
+                                    Not sent (Slack mode)
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div>
+                                  <strong>To:</strong> {testEmail}
+                                </div>
+                                <div>
+                                  <strong>CC:</strong>{" "}
+                                  <span className="text-muted-foreground">
+                                    None
+                                  </span>
+                                </div>
+                                <div>
+                                  <strong>Subject:</strong> [TEST]{" "}
+                                  {formState.editedSubjectLine ??
+                                    mergedContent?.subjectLine ??
+                                    ""}
+                                </div>
+                              </>
+                            )}
+                            <div>
+                              <strong>ClickUp:</strong>{" "}
+                              <span className="text-muted-foreground">
+                                No changes
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p>
+                            {postToSlack
+                              ? "This will post a message to Slack."
+                              : "This will create an email draft and post to Slack."}
+                          </p>
+                          <div className="rounded border p-3 space-y-1">
+                            {!postToSlack && (
+                              <>
+                                <div>
+                                  <strong>To:</strong> {primaryEmail}
+                                </div>
+                                {ccEmails && (
+                                  <div>
+                                    <strong>CC:</strong> {ccEmails}
+                                  </div>
+                                )}
+                                <div>
+                                  <strong>From:</strong> {senderEmail}
+                                </div>
+                              </>
+                            )}
+                            <div>
+                              <strong>Slack:</strong>{" "}
+                              {postToSlack ? "Yes" : "No"}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleSend}
+                    className={
+                      testMode
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : undefined
+                    }
+                  >
+                    {testMode ? "Confirm Test Send" : "Confirm & Send"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
     </div>

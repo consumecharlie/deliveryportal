@@ -26,7 +26,9 @@ import {
 import { Pencil, RotateCcw, Eye, Check, ChevronDown, FileEdit } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { SlackValidationPanel } from "@/components/shared/slack-validation-panel";
 import type { MentionItem } from "@/components/shared/rich-text-editor";
+import type { SlackLintError } from "@/lib/slack-lint";
 import type { ProjectContact } from "@/lib/types";
 
 interface PreviewPanelProps {
@@ -46,6 +48,7 @@ interface PreviewPanelProps {
   showEmail?: boolean;
   showSlack?: boolean;
   templateTaskId?: string;
+  onSlackLintResult?: (errors: SlackLintError[]) => void;
 }
 
 /**
@@ -85,6 +88,7 @@ export function PreviewPanel({
   showEmail = true,
   showSlack = true,
   templateTaskId,
+  onSlackLintResult,
 }: PreviewPanelProps) {
   const router = useRouter();
   // Default to whichever channel is active
@@ -306,6 +310,14 @@ export function PreviewPanel({
                 />
               )}
             </div>
+            {showSlack && (
+              <div className="border-t px-4 py-3">
+                <SlackValidationPanel
+                  markdown={slackContent}
+                  onLintResult={onSlackLintResult}
+                />
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </Card>
