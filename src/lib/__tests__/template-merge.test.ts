@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { convertToSlackFormat } from "@/lib/template-merge";
+import { lintSlackMrkdwn } from "../slack-lint";
 
 describe("convertToSlackFormat", () => {
   // ── Bold conversion ──
@@ -140,5 +141,58 @@ describe("convertToSlackFormat", () => {
       expect(result).toContain("•");
       expect(result).toContain("*Next deadline:*");
     });
+  });
+});
+
+describe("end-to-end: conversion + lint", () => {
+  it("converted output of a valid template has zero lint errors", () => {
+    const template = [
+      "## ⚡ What You're Receiving",
+      "- **Storyboards:** A visual preview.",
+      "",
+      "## 📋 How to Submit Feedback",
+      "- **All feedback in [Frame.io](https://f.io/abc).**",
+    ].join("\n");
+
+    const converted = convertToSlackFormat(template);
+    const errors = lintSlackMrkdwn(converted);
+    expect(errors).toEqual([]);
+  });
+
+  it("converted output of a template with mentions has zero lint errors", () => {
+    const template = [
+      "Hey @[Adam](U12345)!",
+      "",
+      "## ⚡ What You're Receiving",
+      "- **Motion Graphics:** A preview.",
+      "- **Animatic:** A rough cut.",
+      "",
+      "## 🔗 Review Links",
+      "- [Project – Storyboards V1](https://f.io/abc)",
+    ].join("\n");
+
+    const converted = convertToSlackFormat(template);
+    const errors = lintSlackMrkdwn(converted);
+    expect(errors).toEqual([]);
+  });
+
+  it("converted output with bold headers (## **text**) has zero lint errors", () => {
+    const template = [
+      "## **⚡ What You're Receiving**",
+      "- **Storyboards:** A preview.",
+      "",
+      "## **📋 How to Submit Feedback**",
+      "- Please submit feedback.",
+    ].join("\n");
+
+    const converted = convertToSlackFormat(template);
+    const errors = lintSlackMrkdwn(converted);
+    expect(errors).toEqual([]);
+  });
+
+  it("lint catches unconverted content that bypasses conversion", () => {
+    const bad = "**broken bold** and ## broken header";
+    const errors = lintSlackMrkdwn(bad);
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
