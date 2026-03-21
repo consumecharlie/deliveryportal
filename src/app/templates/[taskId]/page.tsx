@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { SlackValidationPanel } from "@/components/shared/slack-validation-panel";
 import { TEMPLATE_VARIABLE_META } from "@/components/shared/template-variable-extension";
 import {
   Popover,
@@ -33,6 +34,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
 import {
   ArrowLeft,
@@ -45,10 +56,12 @@ import {
   ChevronUp,
   Check,
   ChevronsUpDown,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { DeliverySnippetTemplate } from "@/lib/types";
+import type { SlackLintError } from "@/lib/slack-lint";
 
 // Template variables grouped by category
 const VARIABLE_GROUPS: {
@@ -334,6 +347,8 @@ export default function TemplateEditorPage() {
     useState<TemplateVersionRecord | null>(null);
   const [confirmRestore, setConfirmRestore] =
     useState<TemplateVersionRecord | null>(null);
+  const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
+  const [showLintWarning, setShowLintWarning] = useState(false);
 
   // Track when we just saved so we can skip overwriting local state
   // on the next refetch (ClickUp may not have processed the update yet).
@@ -520,7 +535,13 @@ export default function TemplateEditorPage() {
             )}
           </Button>
           <Button
-            onClick={() => saveMutation.mutate()}
+            onClick={() => {
+              if (slackLintErrors.length > 0) {
+                setShowLintWarning(true);
+              } else {
+                saveMutation.mutate();
+              }
+            }}
             disabled={!hasChanges || saveMutation.isPending}
           >
             {saveMutation.isPending ? (
@@ -691,6 +712,11 @@ export default function TemplateEditorPage() {
                 Use [variableName] for simple variables or [Link Text |
                 variableName] for linked text. Variables appear as colored chips.
               </p>
+              <SlackValidationPanel
+                markdown={snippet}
+                onLintResult={setSlackLintErrors}
+                className="mt-4"
+              />
             </CardContent>
           </Card>
         </div>
@@ -880,6 +906,49 @@ export default function TemplateEditorPage() {
           </Card>
         </div>
       </div>
+
+      {/* Slack Lint Warning Dialog */}
+      <AlertDialog open={showLintWarning} onOpenChange={setShowLintWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Slack Formatting Issues
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  This template has {slackLintErrors.length} formatting{" "}
+                  {slackLintErrors.length === 1 ? "issue" : "issues"} that may
+                  not render correctly in Slack:
+                </p>
+                <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                  {slackLintErrors.map((err, i) => (
+                    <li
+                      key={i}
+                      className="text-xs text-amber-700 dark:text-amber-400"
+                    >
+                      <span className="font-mono">Line {err.line}:</span>{" "}
+                      {err.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowLintWarning(false);
+                saveMutation.mutate();
+              }}
+            >
+              Save Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Restore Confirmation Dialog */}
       <Dialog
