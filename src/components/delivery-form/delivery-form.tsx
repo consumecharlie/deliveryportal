@@ -78,6 +78,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
   );
   const [isEditMode, setIsEditMode] = useState(false);
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
+  const [slackChannelName, setSlackChannelName] = useState<string>("");
 
   // ── Editable recipient fields ──
   const [editedToEmail, setEditedToEmail] = useState<string | null>(null);
@@ -591,6 +592,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
                   channelId={slackChannelId}
                   onChannelChange={setSlackChannelId}
                   senderEmail={displaySenderEmail}
+                  onChannelNameResolved={setSlackChannelName}
                 />
               </div>
             </>
@@ -639,6 +641,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
           clientName: task.clientName,
           projectName: task.projectName,
           department: task.department,
+          slackChannelName: slackChannelName || undefined,
         }}
         slackLintErrors={showSlack ? slackLintErrors : undefined}
       />

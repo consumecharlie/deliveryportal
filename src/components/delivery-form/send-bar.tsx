@@ -36,6 +36,7 @@ interface SendBarProps {
     clientName?: string;
     projectName?: string;
     department?: string;
+    slackChannelName?: string;
   };
   slackLintErrors?: SlackLintError[];
 }

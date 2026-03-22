@@ -31,6 +31,7 @@ interface SendRequestBody {
     clientName?: string;
     projectName?: string;
     department?: string;
+    slackChannelName?: string;
   };
 }
 
@@ -324,6 +325,7 @@ export async function POST(
             primaryEmail,
             ccEmails: ccEmails || null,
             slackChannel: slackChannelId || null,
+            slackChannelName: taskMeta?.slackChannelName || null,
             emailSubject: emailSubject,
             emailContent: emailContent,
             slackContent: slackContent || null,

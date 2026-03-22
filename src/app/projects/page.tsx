@@ -60,6 +60,7 @@ interface ProjectDelivery {
   primaryEmail: string;
   emailSubject: string;
   slackChannel: string | null;
+  slackChannelName: string | null;
   links: DeliveryLink[];
 }
 
@@ -282,7 +283,7 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                       {delivery.emailSubject}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {delivery.primaryEmail || (delivery.slackChannel ? "Slack" : "—")}
+                      {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "—")}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">

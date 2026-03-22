@@ -17,8 +17,9 @@ model Delivery {
   senderEmail     String
   primaryEmail    String
   ccEmails        String?
-  slackChannel    String?
-  emailSubject    String
+  slackChannel     String?
+  slackChannelName String?
+  emailSubject     String
   emailContent    String         @db.Text
   slackContent    String?        @db.Text
   wasEdited       Boolean        @default(false)

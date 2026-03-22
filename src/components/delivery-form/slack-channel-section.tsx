@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/shared/searchable-select";
@@ -11,12 +12,15 @@ interface SlackChannelSectionProps {
   onChannelChange: (channelId: string) => void;
   /** Sender email to validate channel membership */
   senderEmail?: string;
+  /** Called when the channel name is resolved from the API */
+  onChannelNameResolved?: (name: string) => void;
 }
 
 export function SlackChannelSection({
   channelId,
   onChannelChange,
   senderEmail,
+  onChannelNameResolved,
 }: SlackChannelSectionProps) {
   const { data, isLoading, isError } = useQuery<{ channels: SlackChannel[] }>({
     queryKey: ["slack-channels"],
@@ -53,6 +57,12 @@ export function SlackChannelSection({
 
   const channelName =
     data?.channels.find((ch) => ch.id === channelId)?.name ?? "this channel";
+
+  useEffect(() => {
+    if (channelName && channelName !== "this channel" && onChannelNameResolved) {
+      onChannelNameResolved(channelName);
+    }
+  }, [channelName, onChannelNameResolved]);
 
   const channelOptions =
     data?.channels.map((ch) => ({
