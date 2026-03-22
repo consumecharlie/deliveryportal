@@ -197,7 +197,7 @@ export function convertToSlackFormat(markdown: string): string {
   // ── 5. Headers: # text → *text* ──
   // Strip any existing bold markers from header content to avoid double-wrapping
   // (e.g. ## **⚡ text** → step 2 makes ## *⚡ text* → this step would make **⚡ text**)
-  result = result.replace(/^\s*#{1,3}\s+(.+)$/gm, (_match, content: string) => {
+  result = result.replace(/^[ \t]*#{1,3}\s+(.+)$/gm, (_match, content: string) => {
     const stripped = content.replace(/\*/g, "").trim();
     return `*${stripped}*`;
   });
