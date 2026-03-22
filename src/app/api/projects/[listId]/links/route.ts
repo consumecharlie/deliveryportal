@@ -59,6 +59,7 @@ export async function GET(
         senderEmail: d.senderEmail,
         primaryEmail: d.primaryEmail,
         emailSubject: d.emailSubject,
+        slackChannel: d.slackChannel,
         links: d.links,
       })),
       allLinks,

@@ -59,6 +59,7 @@ interface ProjectDelivery {
   senderEmail: string;
   primaryEmail: string;
   emailSubject: string;
+  slackChannel: string | null;
   links: DeliveryLink[];
 }
 
@@ -204,9 +205,12 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
           <CardContent>
             <div className="space-y-2">
               {Array.from(uniqueLinks.values()).map((link, i) => (
-                <div
+                <a
                   key={i}
-                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between rounded-md border px-3 py-2 transition-colors hover:bg-[#6AC387]/10 hover:border-[#6AC387]/30 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -222,24 +226,12 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                         {link.deliverableType}
                       </Badge>
                     </div>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground hover:text-primary hover:underline truncate block mt-0.5"
-                    >
+                    <span className="text-xs text-muted-foreground truncate block mt-0.5">
                       {link.url}
-                    </a>
+                    </span>
                   </div>
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
+                  <ExternalLink className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                </a>
               ))}
             </div>
           </CardContent>
@@ -290,7 +282,7 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                       {delivery.emailSubject}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {delivery.primaryEmail}
+                      {delivery.primaryEmail || (delivery.slackChannel ? "Slack" : "—")}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
@@ -482,7 +474,7 @@ export default function ProjectsPage() {
       {!isLoading && !error && totalProjects > 0 && (
         <div className="flex flex-1 min-h-0 rounded-lg border border-[#364040]/30 overflow-hidden">
           {/* Column 1: Clients */}
-          <div className="w-1/4 shrink-0 border-r border-[#364040]/30 flex flex-col min-h-0">
+          <div className="shrink-0 border-r border-[#364040]/30 flex flex-col min-h-0" style={{ width: "clamp(140px, 20%, 260px)" }}>
             <div className="px-3 py-2 border-b border-[#364040]/30 shrink-0">
               <span
                 className="font-pixel text-[11px]"
@@ -530,7 +522,7 @@ export default function ProjectsPage() {
           </div>
 
           {/* Column 2: Projects */}
-          <div className="w-1/4 shrink-0 border-r border-[#364040]/30 flex flex-col min-h-0">
+          <div className="shrink-0 border-r border-[#364040]/30 flex flex-col min-h-0" style={{ width: "clamp(160px, 22%, 300px)" }}>
             <div className="px-3 py-2 border-b border-[#364040]/30 shrink-0">
               <span
                 className="font-pixel text-[11px]"
@@ -572,18 +564,13 @@ export default function ProjectsPage() {
 
           {/* Column 3: Project Detail */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            <div className="px-3 py-2 border-b border-[#364040]/30 shrink-0 flex items-center gap-2">
+            <div className="px-3 py-2 border-b border-[#364040]/30 shrink-0">
               <span
                 className="font-pixel text-[11px]"
                 style={{ color: "#6AC387" }}
               >
                 PROJECT DETAILS
               </span>
-              {selectedProjectName && (
-                <span className="text-sm text-muted-foreground truncate">
-                  — {selectedProjectName}
-                </span>
-              )}
             </div>
             <div className="overflow-y-auto flex-1 p-4">
               {!selectedProjectId && (
@@ -592,10 +579,15 @@ export default function ProjectsPage() {
                 </div>
               )}
               {selectedProjectId && (
-                <ProjectDetailPanel
-                  key={selectedProjectId}
-                  listId={selectedProjectId}
-                />
+                <>
+                  {selectedProjectName && (
+                    <h2 className="font-eighties text-xl mb-4">{selectedProjectName}</h2>
+                  )}
+                  <ProjectDetailPanel
+                    key={selectedProjectId}
+                    listId={selectedProjectId}
+                  />
+                </>
               )}
             </div>
           </div>
