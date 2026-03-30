@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { RichTextEditor, type Editor } from "@/components/shared/rich-text-editor";
 import { SlackValidationPanel } from "@/components/shared/slack-validation-panel";
 import { TEMPLATE_VARIABLE_META } from "@/components/shared/template-variable-extension";
 import {
@@ -371,6 +371,7 @@ export default function TemplateEditorPage() {
 
   const [snippet, setSnippet] = useState("");
   const [subjectLine, setSubjectLine] = useState("");
+  const snippetEditorRef = useRef<Editor | null>(null);
   const [deliverableType, setDeliverableType] = useState("");
   const [department, setDepartment] = useState("");
   const [senderUserId, setSenderUserId] = useState<number | undefined>();
@@ -762,6 +763,7 @@ export default function TemplateEditorPage() {
                 showToolbar={true}
                 minHeight="400px"
                 enableTemplateVariables={true}
+                onEditorReady={(e) => { snippetEditorRef.current = e; }}
               />
               <p className="text-xs text-muted-foreground mt-2">
                 Use [variableName] for simple variables or [Link Text |
@@ -933,7 +935,7 @@ export default function TemplateEditorPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Click a variable to insert it at the end of the snippet.
+                Click to insert at cursor. For links, select text first to create a linked variable.
               </p>
               {VARIABLE_GROUPS.map((group) => (
                 <div key={group.category}>
@@ -941,19 +943,57 @@ export default function TemplateEditorPage() {
                     {group.label}
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {group.variables.map((v) => (
-                      <button
-                        key={v.name}
-                        className={`template-variable-chip ${group.chipClass} text-xs cursor-pointer hover:opacity-80 transition-opacity`}
-                        onClick={() => {
-                          setSnippet((prev) => prev + `[${v.name}]`);
-                          setHasChanges(true);
-                        }}
-                        title={`Insert [${v.name}]`}
-                      >
-                        {v.displayLabel}
-                      </button>
-                    ))}
+                    {group.variables.map((v) => {
+                      const isLink = group.category === "link";
+                      return (
+                        <button
+                          key={v.name}
+                          className={`template-variable-chip ${group.chipClass} text-xs cursor-pointer hover:opacity-80 transition-opacity`}
+                          onClick={() => {
+                            const ed = snippetEditorRef.current;
+                            if (!ed) {
+                              // Fallback: append to markdown
+                              setSnippet((prev) => prev + `[${v.name}]`);
+                              setHasChanges(true);
+                              return;
+                            }
+
+                            const { from, to } = ed.state.selection;
+                            const selectedText = ed.state.doc.textBetween(from, to);
+
+                            if (isLink && selectedText) {
+                              // Wrap selected text as a linked variable: [selected text | variableName]
+                              ed.chain()
+                                .focus()
+                                .deleteSelection()
+                                .insertContent(`[${selectedText} | ${v.name}]`)
+                                .run();
+                            } else if (isLink) {
+                              // Insert link variable with a prompt for label text
+                              const label = window.prompt(
+                                `Enter display text for this link (or leave blank for just the variable):`,
+                                v.displayLabel
+                              );
+                              if (label === null) return; // cancelled
+                              const text = label.trim()
+                                ? `[${label.trim()} | ${v.name}]`
+                                : `[${v.name}]`;
+                              ed.chain().focus().insertContent(text).run();
+                            } else {
+                              // Regular variable: insert at cursor
+                              ed.chain().focus().insertContent(`[${v.name}]`).run();
+                            }
+                            setHasChanges(true);
+                          }}
+                          title={isLink
+                            ? `Insert [${v.name}] — select text first to create a linked variable`
+                            : `Insert [${v.name}]`
+                          }
+                        >
+                          {v.displayLabel}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

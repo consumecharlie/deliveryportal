@@ -1,6 +1,7 @@
 "use client";
 
-import { useEditor, EditorContent, type Editor, ReactRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor as TipTapEditor, ReactRenderer } from "@tiptap/react";
+export type { TipTapEditor as Editor };
 import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -59,6 +60,8 @@ interface RichTextEditorProps {
   mentionItems?: MentionItem[];
   /** Enable [variable] chip highlighting for template editing */
   enableTemplateVariables?: boolean;
+  /** Callback to receive the TipTap editor instance for external commands */
+  onEditorReady?: (editor: TipTapEditor) => void;
 }
 
 export type { MentionItem };
@@ -263,7 +266,7 @@ function ToolbarButton({
   );
 }
 
-function LinkButton({ editor }: { editor: Editor }) {
+function LinkButton({ editor }: { editor: TipTapEditor }) {
   const [url, setUrl] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -325,7 +328,7 @@ function LinkButton({ editor }: { editor: Editor }) {
   );
 }
 
-function EditorToolbar({ editor }: { editor: Editor }) {
+function EditorToolbar({ editor }: { editor: TipTapEditor }) {
   return (
     <div className="flex items-center gap-0.5 border-b px-2 py-1">
       <ToolbarButton
@@ -442,7 +445,7 @@ function buildMentionSuggestion(itemsRef: React.RefObject<MentionItem[]>) {
         onStart: (props: any) => {
           component = new ReactRenderer(MentionList, {
             props,
-            editor: props.editor as Editor,
+            editor: props.editor as TipTapEditor,
           });
 
           if (!props.clientRect) return;
@@ -493,6 +496,7 @@ export function RichTextEditor({
   editable = true,
   mentionItems,
   enableTemplateVariables = false,
+  onEditorReady,
 }: RichTextEditorProps) {
   const mentionItemsRef = useRef<MentionItem[]>(mentionItems ?? []);
   useEffect(() => {
@@ -613,6 +617,11 @@ export function RichTextEditor({
       }
     },
   });
+
+  // Expose editor instance to parent
+  useEffect(() => {
+    if (editor && onEditorReady) onEditorReady(editor);
+  }, [editor, onEditorReady]);
 
   // Sync external content changes (e.g., reset to template)
   useEffect(() => {
