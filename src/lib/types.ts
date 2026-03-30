@@ -173,6 +173,7 @@ export interface SlackChannel {
   name: string;
   isMember: boolean;
   numMembers: number;
+  isExtShared: boolean;
 }
 
 export interface SlackMember {

@@ -50,14 +50,18 @@ export async function GET() {
           name: ch.name,
           isMember: ch.is_member ?? false,
           numMembers: ch.num_members ?? 0,
+          isExtShared: ch.is_ext_shared ?? false,
         });
       }
 
       cursor = data.response_metadata?.next_cursor || undefined;
     } while (cursor);
 
-    // Sort alphabetically
-    channels.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort: external (client) channels first, then internal, alphabetical within each
+    channels.sort((a, b) => {
+      if (a.isExtShared !== b.isExtShared) return a.isExtShared ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
     return NextResponse.json({ channels });
   } catch (error) {

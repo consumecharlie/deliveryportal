@@ -68,6 +68,7 @@ export function SlackChannelSection({
     data?.channels.map((ch) => ({
       value: ch.id,
       label: `#${ch.name}`,
+      group: ch.isExtShared ? "Client Channels" : "Internal Channels",
     })) ?? [];
 
   const placeholder = isLoading
