@@ -6,8 +6,10 @@ import { SearchableSelect } from "@/components/shared/searchable-select";
 interface ScopeSectionProps {
   revisionRounds: string;
   feedbackWindows: string;
+  rushedProject: boolean;
   onRevisionRoundsChange: (value: string) => void;
   onFeedbackWindowsChange: (value: string) => void;
+  onRushedProjectChange: (value: boolean) => void;
 }
 
 const revisionOptions = [
@@ -24,8 +26,10 @@ const feedbackWindowOptions = [
 export function ScopeSection({
   revisionRounds,
   feedbackWindows,
+  rushedProject,
   onRevisionRoundsChange,
   onFeedbackWindowsChange,
+  onRushedProjectChange,
 }: ScopeSectionProps) {
   return (
     <div className="space-y-3">
@@ -54,6 +58,20 @@ export function ScopeSection({
           />
         </div>
       </div>
+      <label className="flex items-center gap-2 pt-1 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={rushedProject}
+          onChange={(e) => onRushedProjectChange(e.target.checked)}
+          className="h-4 w-4 rounded border-border accent-[#6AC387]"
+        />
+        <span className="text-sm flex items-center gap-1.5">
+          <span>🚨</span> Rushed Project
+          <span className="text-xs text-muted-foreground font-normal">
+            — adds strict feedback deadline notice
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

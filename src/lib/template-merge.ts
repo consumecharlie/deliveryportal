@@ -22,6 +22,8 @@ interface MergeVariables {
   projectPlanLink?: string;
   // Extra links added via the portal
   extraLinks?: Array<{ url: string; label: string }>;
+  // Rushed project: injects a strict deadline notice after the feedback deadline bullet
+  rushedProject?: boolean;
 }
 
 /**
@@ -237,8 +239,30 @@ export function mergeTemplate(
     projectPlanLink: variables.projectPlanLink ?? "",
   };
 
+  // Inject rushed project notice after the feedback deadline bullet
+  const RUSHED_BULLET =
+    "- 🚨 **This is a rushed project.** Starting at the beginning of the next business day following the feedback deadline, the feedback window will be considered closed and we will proceed with the project in order to keep the timeline on track. If you need additional time, please let us know — the delivery date may shift or rushed fees may apply.";
+
+  function injectRushedNotice(content: string): string {
+    if (!variables.rushedProject) return content;
+    // Find the line containing the feedback deadline and insert after it
+    const lines = content.split("\n");
+    const idx = lines.findIndex(
+      (line) =>
+        line.toLowerCase().includes("feedback deadline") &&
+        (line.startsWith("-") || line.startsWith("•") || line.includes("**Feedback Deadline"))
+    );
+    if (idx >= 0) {
+      lines.splice(idx + 1, 0, RUSHED_BULLET);
+      return lines.join("\n");
+    }
+    // Fallback: append to the end of the scope section if no deadline line found
+    return content + "\n" + RUSHED_BULLET;
+  }
+
   // Merge the email version
   let emailContent = performMerge(template, replacements);
+  emailContent = injectRushedNotice(emailContent);
 
   // Append extra links as additional bullets
   if (variables.extraLinks?.length) {
@@ -255,6 +279,7 @@ export function mergeTemplate(
     contacts: formatContactsSlack(variables.contacts),
   };
   let slackContent = performMerge(template, slackReplacements);
+  slackContent = injectRushedNotice(slackContent);
 
   // Append extra links (same markdown format as email)
   if (variables.extraLinks?.length) {

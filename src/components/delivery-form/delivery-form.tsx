@@ -64,6 +64,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
     taskDetail.feedbackWindows
   );
   const [versionNotes, setVersionNotes] = useState(taskDetail.versionNotes);
+  const [rushedProject, setRushedProject] = useState(false);
   const [slackChannelId, setSlackChannelId] = useState(
     taskDetail.slackChannelId ?? ""
   );
@@ -192,6 +193,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
       flexLink: reviewLinks.flexLink,
       projectPlanLink: taskDetail.projectPlanLink ?? undefined,
       extraLinks,
+      rushedProject,
     });
   }, [
     activeTemplate,
@@ -204,6 +206,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
     reviewLinks,
     taskDetail.projectPlanLink,
     extraLinks,
+    rushedProject,
   ]);
 
   // ── Recipient logic ──
@@ -551,8 +554,10 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
           <ScopeSection
             revisionRounds={revisionRounds}
             feedbackWindows={feedbackWindows}
+            rushedProject={rushedProject}
             onRevisionRoundsChange={setRevisionRounds}
             onFeedbackWindowsChange={setFeedbackWindows}
+            onRushedProjectChange={setRushedProject}
           />
 
           {/* Version Notes */}
