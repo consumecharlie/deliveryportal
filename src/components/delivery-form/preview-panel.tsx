@@ -184,17 +184,19 @@ export function PreviewPanel({
                     <Pencil className="mr-2 h-3.5 w-3.5" />
                     Edit Message
                   </DropdownMenuItem>
-                  {templateTaskId && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setShowTemplateWarning(true)}
-                      >
-                        <FileEdit className="mr-2 h-3.5 w-3.5" />
-                        Edit Template
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (templateTaskId) {
+                        setShowTemplateWarning(true);
+                      } else {
+                        router.push("/templates");
+                      }
+                    }}
+                  >
+                    <FileEdit className="mr-2 h-3.5 w-3.5" />
+                    {templateTaskId ? "Edit Template" : "Go to Templates"}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

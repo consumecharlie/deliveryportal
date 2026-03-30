@@ -163,7 +163,7 @@ export function SendBar({
         <div className="text-sm text-muted-foreground">
           {!isReady &&
             (!mergedContent
-              ? "Missing template"
+              ? "Missing or empty template — create or edit the template first"
               : postToSlack
                 ? "Missing Slack channel"
                 : "Missing recipient or sender email")}
