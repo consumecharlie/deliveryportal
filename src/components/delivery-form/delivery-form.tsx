@@ -243,16 +243,27 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
     staleTime: 30 * 60_000, // 30 min — these rarely change
   });
 
-  // ── Fetch Slack members for @mention autocomplete ──
+  // ── Fetch Slack channel members for @mention autocomplete ──
+  // When a channel is selected, fetch its members instead of the full workspace
 
-  const { data: slackMembersData } = useQuery<{ members: SlackMember[] }>({
-    queryKey: ["slack-members"],
+  const { data: slackMembersData } = useQuery<{
+    members: SlackMember[];
+  }>({
+    queryKey: ["slack-channel-members", slackChannelId],
     queryFn: async () => {
-      const res = await fetch("/api/slack/members");
-      if (!res.ok) throw new Error("Failed to fetch Slack members");
+      if (!slackChannelId) {
+        // Fallback: fetch all workspace members if no channel selected
+        const res = await fetch("/api/slack/members");
+        if (!res.ok) throw new Error("Failed to fetch Slack members");
+        return res.json();
+      }
+      const res = await fetch(
+        `/api/slack/channel-members?channelId=${encodeURIComponent(slackChannelId)}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch channel members");
       return res.json();
     },
-    staleTime: 10 * 60_000,
+    staleTime: 5 * 60_000,
   });
 
   // Build mention items: project contacts first (with Slack data), then Slack members
