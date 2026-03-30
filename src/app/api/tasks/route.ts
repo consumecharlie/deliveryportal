@@ -62,7 +62,7 @@ export async function GET() {
     }
 
     // Fetch tasks from all lists in parallel (batched to avoid rate limits)
-    const BATCH_SIZE = 15;
+    const BATCH_SIZE = 25;
     const deliverables: DeliverableTask[] = [];
 
     for (let i = 0; i < listMeta.length; i += BATCH_SIZE) {

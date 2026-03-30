@@ -82,7 +82,7 @@ export async function GET(req: Request) {
     }
 
     // Fetch contacts from all lists in parallel (batched to avoid rate limits)
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 25;
     const allContacts: ContactRecord[] = [];
 
     for (let i = 0; i < allLists.length; i += BATCH_SIZE) {
