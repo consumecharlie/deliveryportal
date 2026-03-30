@@ -239,13 +239,12 @@ export function mergeTemplate(
     projectPlanLink: variables.projectPlanLink ?? "",
   };
 
-  // Inject rushed project notice after the feedback deadline bullet
-  const RUSHED_BULLET =
-    "- 🚨 **This is a rushed project.** Starting at the beginning of the next business day following the feedback deadline, the feedback window will be considered closed and we will proceed with the project in order to keep the timeline on track. If you need additional time, please let us know — the delivery date may shift or rushed fees may apply.";
-
+  // Replace the feedback deadline bullet with a rushed project notice
   function injectRushedNotice(content: string): string {
     if (!variables.rushedProject) return content;
-    // Find the line containing the feedback deadline and insert after it
+    const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
+    const rushedLine = `- 🚨 **Hard Deadline Project:** Please submit feedback by **EOD ${deadline}**. The window closes at the start of the next business day (Eastern Time) and we'll proceed from there. If you need extra time, just let us know — but note that the delivery date will shift or rush fees will apply.`;
+
     const lines = content.split("\n");
     const idx = lines.findIndex(
       (line) =>
@@ -253,11 +252,12 @@ export function mergeTemplate(
         (line.startsWith("-") || line.startsWith("•") || line.includes("**Feedback Deadline"))
     );
     if (idx >= 0) {
-      lines.splice(idx + 1, 0, RUSHED_BULLET);
+      // Replace the existing feedback deadline line
+      lines[idx] = rushedLine;
       return lines.join("\n");
     }
-    // Fallback: append to the end of the scope section if no deadline line found
-    return content + "\n" + RUSHED_BULLET;
+    // Fallback: append if no deadline line found
+    return content + "\n" + rushedLine;
   }
 
   // Merge the email version
