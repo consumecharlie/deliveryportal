@@ -243,7 +243,7 @@ export function mergeTemplate(
   function injectRushedNotice(content: string): string {
     if (!variables.rushedProject) return content;
     const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
-    const rushedLine = `- 🚨 **Hard Deadline Project:** Please submit feedback by **EOD ${deadline}**. The window closes at the start of the next business day (Eastern Time) and we'll proceed from there. If you need extra time, just let us know — but note that the delivery date will shift or rush fees will apply.`;
+    const rushedLine = `- 🚨 **Hard Deadline Project:** Please submit feedback by **EOD ${deadline}**. The window closes at the start of the next business day (Eastern Time) and we'll proceed to keep the project timeline on track. If you need extra time, just let us know — but note that the delivery date will shift or rush fees will apply.`;
 
     const lines = content.split("\n");
     const idx = lines.findIndex(
