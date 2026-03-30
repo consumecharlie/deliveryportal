@@ -623,6 +623,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
             showEmail={showEmail}
             showSlack={showSlack}
             templateTaskId={activeTemplate?.taskId}
+            deliverableType={deliverableType}
             onSlackLintResult={showSlack ? setSlackLintErrors : undefined}
           />
         </div>

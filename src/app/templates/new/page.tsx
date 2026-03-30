@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,13 +49,23 @@ const DEPARTMENTS = [
 ];
 
 export default function NewTemplatePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12 text-muted-foreground">Loading...</div>}>
+      <NewTemplateContent />
+    </Suspense>
+  );
+}
+
+function NewTemplateContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState("");
+  const prefilledType = searchParams.get("type") ?? "";
+  const [name, setName] = useState(prefilledType);
   const [snippet, setSnippet] = useState("");
   const [subjectLine, setSubjectLine] = useState("");
-  const [deliverableType, setDeliverableType] = useState("");
+  const [deliverableType, setDeliverableType] = useState(prefilledType);
   const [department, setDepartment] = useState("");
 
   // Fetch deliverable type options for the dropdown

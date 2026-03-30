@@ -48,6 +48,7 @@ interface PreviewPanelProps {
   showEmail?: boolean;
   showSlack?: boolean;
   templateTaskId?: string;
+  deliverableType?: string;
   onSlackLintResult?: (errors: SlackLintError[]) => void;
 }
 
@@ -88,6 +89,7 @@ export function PreviewPanel({
   showEmail = true,
   showSlack = true,
   templateTaskId,
+  deliverableType,
   onSlackLintResult,
 }: PreviewPanelProps) {
   const router = useRouter();
@@ -190,12 +192,14 @@ export function PreviewPanel({
                       if (templateTaskId) {
                         setShowTemplateWarning(true);
                       } else {
-                        router.push("/templates");
+                        router.push(
+                          `/templates/new${deliverableType ? `?type=${encodeURIComponent(deliverableType)}` : ""}`
+                        );
                       }
                     }}
                   >
                     <FileEdit className="mr-2 h-3.5 w-3.5" />
-                    {templateTaskId ? "Edit Template" : "Go to Templates"}
+                    {templateTaskId ? "Edit Template" : "Create Template"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
