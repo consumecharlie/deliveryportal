@@ -223,9 +223,16 @@ export function mergeTemplate(
   subjectLine: string,
   variables: MergeVariables
 ): MergedContent {
+  // Derive primary contact info for individual contact variables
+  const primaryContact = variables.contacts.find((c) => c.role === "Primary") ?? variables.contacts[0];
+  const contactName = primaryContact?.name ?? "";
+  const contactFirstName = contactName.split(/\s+/)[0] ?? "";
+
   // Build the replacements dictionary
   const replacements: Record<string, string> = {
     contacts: formatContactsEmail(variables.contacts),
+    contactFirstName,
+    contactName,
     projectName: variables.projectName,
     versionNotes: variables.versionNotes,
     revisionRounds: variables.revisionRounds,
