@@ -7,6 +7,9 @@ import {
 import { SPACES } from "@/lib/custom-field-ids";
 import { prisma } from "@/lib/db";
 
+const projectsCache: Record<string, { data: any; timestamp: number }> = {};
+const PROJECTS_CACHE_TTL = 10 * 60_000; // 10 minutes
+
 /**
  * GET /api/projects?archived=false
  *
@@ -32,6 +35,12 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const includeArchived = url.searchParams.get("archived") === "true";
+
+    const cacheKey = includeArchived ? "archived" : "active";
+    const cached = projectsCache[cacheKey];
+    if (cached && Date.now() - cached.timestamp < PROJECTS_CACHE_TTL) {
+      return NextResponse.json(cached.data);
+    }
 
     // Always fetch active folders + folderless lists
     const [activeFoldersRes, activeFolderlessRes] = await Promise.all([
@@ -166,10 +175,9 @@ export async function GET(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      clients,
-      folderlessProjects,
-    });
+    const responseData = { clients, folderlessProjects };
+    projectsCache[cacheKey] = { data: responseData, timestamp: Date.now() };
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Failed to fetch projects:", error);
     return NextResponse.json(

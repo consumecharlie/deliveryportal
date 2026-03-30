@@ -11,8 +11,8 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30 * 1000, // 30 seconds
-            refetchInterval: 60 * 1000, // Poll every 60 seconds
+            staleTime: 2 * 60_000, // 2 minutes
+            refetchInterval: 3 * 60_000, // 3 minutes
           },
         },
       })

@@ -3,6 +3,9 @@ import { getListTasks, extractCustomFieldValue } from "@/lib/clickup";
 import { LISTS, TEMPLATE_FIELDS } from "@/lib/custom-field-ids";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 
+let templatesCache: { data: DeliverySnippetTemplate[]; timestamp: number } | null = null;
+const TEMPLATES_CACHE_TTL = 10 * 60_000; // 10 minutes
+
 /**
  * GET /api/templates
  *
@@ -10,6 +13,10 @@ import type { DeliverySnippetTemplate } from "@/lib/types";
  */
 export async function GET() {
   try {
+    if (templatesCache && Date.now() - templatesCache.timestamp < TEMPLATES_CACHE_TTL) {
+      return NextResponse.json({ templates: templatesCache.data });
+    }
+
     const res = await getListTasks(LISTS.DELIVERY_SNIPPETS, false);
 
     const templates: DeliverySnippetTemplate[] = res.tasks.map((snippet) => {
@@ -55,6 +62,7 @@ export async function GET() {
       };
     });
 
+    templatesCache = { data: templates, timestamp: Date.now() };
     return NextResponse.json({ templates });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

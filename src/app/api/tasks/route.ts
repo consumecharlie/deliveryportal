@@ -12,6 +12,9 @@ import {
 } from "@/lib/custom-field-ids";
 import type { DeliverableTask } from "@/lib/types";
 
+let tasksCache: { data: DeliverableTask[]; timestamp: number } | null = null;
+const TASKS_CACHE_TTL = 3 * 60_000; // 3 minutes
+
 /**
  * GET /api/tasks
  *
@@ -20,6 +23,10 @@ import type { DeliverableTask } from "@/lib/types";
  */
 export async function GET() {
   try {
+    if (tasksCache && Date.now() - tasksCache.timestamp < TASKS_CACHE_TTL) {
+      return NextResponse.json({ tasks: tasksCache.data });
+    }
+
     // Get all folders (clients) and folderless lists in the Projects space
     const [foldersRes, folderlessRes] = await Promise.all([
       getSpaceFolders(SPACES.PROJECTS),
@@ -55,7 +62,7 @@ export async function GET() {
     }
 
     // Fetch tasks from all lists in parallel (batched to avoid rate limits)
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 15;
     const deliverables: DeliverableTask[] = [];
 
     for (let i = 0; i < listMeta.length; i += BATCH_SIZE) {
@@ -138,6 +145,7 @@ export async function GET() {
       return Number(a.dueDate) - Number(b.dueDate);
     });
 
+    tasksCache = { data: deliverables, timestamp: Date.now() };
     return NextResponse.json({ tasks: deliverables });
   } catch (error) {
     console.error("Failed to fetch tasks:", error);
