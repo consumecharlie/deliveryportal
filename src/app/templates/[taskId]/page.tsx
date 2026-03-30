@@ -57,11 +57,49 @@ import {
   Check,
   ChevronsUpDown,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
+
+/**
+ * Replace the old verbose Scope & Timeline section with concise bullet format.
+ * Detects the "**Scope**" / "**Timeline**" paragraph block and swaps it for bullets.
+ */
+function modernizeScopeSection(content: string): string {
+  const NEW_SECTION = [
+    "- **Revision Rounds:** 1 of [revisionRounds]",
+    "- **Feedback Windows:** [feedbackWindows]",
+    "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
+    "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
+  ].join("\n");
+
+  const lines = content.split("\n");
+  const scopeIdx = lines.findIndex((l) => /^\*\*Scope\*\*$/i.test(l.trim()));
+  if (scopeIdx < 0) return content;
+
+  // Find the end: the line containing nextFeedbackDeadline, or the next ## header
+  let endIdx = scopeIdx + 1;
+  let foundDeadline = false;
+  while (endIdx < lines.length) {
+    if (lines[endIdx].includes("nextFeedbackDeadline")) {
+      foundDeadline = true;
+      endIdx++;
+      break;
+    }
+    if (/^#{1,3}\s/.test(lines[endIdx]) && endIdx > scopeIdx + 1) break;
+    endIdx++;
+  }
+  // If we found the deadline, also skip any trailing blank line
+  if (foundDeadline && endIdx < lines.length && lines[endIdx].trim() === "") {
+    endIdx++;
+  }
+
+  lines.splice(scopeIdx, endIdx - scopeIdx, ...NEW_SECTION.split("\n"));
+  return lines.join("\n");
+}
 
 // Template variables grouped by category
 const VARIABLE_GROUPS: {
@@ -692,8 +730,25 @@ export default function TemplateEditorPage() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Delivery Snippet</CardTitle>
+              {snippet.includes("revision round") && snippet.includes("feedback windows") && !snippet.includes("**Revision Rounds:**") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const updated = modernizeScopeSection(snippet);
+                    if (updated !== snippet) {
+                      setSnippet(updated);
+                      setHasChanges(true);
+                    }
+                  }}
+                  className="text-xs"
+                >
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Modernize Scope Section
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <RichTextEditor

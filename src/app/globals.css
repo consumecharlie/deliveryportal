@@ -127,6 +127,16 @@
   }
 }
 
+/* Command group headings — green background for visual distinction */
+.cmdk-group-styled [cmdk-group-heading] {
+  background-color: #6AC387;
+  color: #151919;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  margin: 0.25rem 0;
+}
+
 /* Arcade login float animations */
 @keyframes float-slow {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
