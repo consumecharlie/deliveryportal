@@ -39,6 +39,10 @@ interface SendBarProps {
     slackChannelName?: string;
   };
   slackLintErrors?: SlackLintError[];
+  adhocMode?: boolean;
+  adhocListId?: string;
+  adhocDeliverableType?: string;
+  adhocDepartment?: string;
 }
 
 export function SendBar({
@@ -56,6 +60,10 @@ export function SendBar({
   testEmail,
   taskMeta,
   slackLintErrors,
+  adhocMode,
+  adhocListId,
+  adhocDeliverableType,
+  adhocDepartment,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -87,22 +95,44 @@ export function SendBar({
   const handleSend = async () => {
     setIsSending(true);
     try {
-      const res = await fetch(`/api/tasks/${taskId}/send`, {
+      const endpoint = adhocMode
+        ? "/api/deliverable/adhoc-send"
+        : `/api/tasks/${taskId}/send`;
+
+      const body = adhocMode
+        ? {
+            formState,
+            mergedContent,
+            primaryEmail,
+            ccEmails,
+            senderEmail,
+            postToSlack,
+            slackChannelId,
+            originalDeliverableType,
+            listId: adhocListId,
+            deliverableType: adhocDeliverableType,
+            department: adhocDepartment,
+            taskMeta,
+            ...(testMode ? { testMode: true, testEmail } : {}),
+          }
+        : {
+            formState,
+            mergedContent,
+            primaryEmail,
+            ccEmails,
+            senderEmail,
+            postToSlack,
+            slackChannelId,
+            originalDeliverableType,
+            listId,
+            taskMeta,
+            ...(testMode ? { testMode: true, testEmail } : {}),
+          };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          formState,
-          mergedContent,
-          primaryEmail,
-          ccEmails,
-          senderEmail,
-          postToSlack,
-          slackChannelId,
-          originalDeliverableType,
-          listId,
-          taskMeta,
-          ...(testMode ? { testMode: true, testEmail } : {}),
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -126,6 +156,9 @@ export function SendBar({
             : "Email draft created, Slack message posted, and task marked complete.",
         });
 
+        // In adhoc mode, use the new task ID from the response
+        const resultTaskId = adhocMode ? result.taskId : taskId;
+
         const successParams = new URLSearchParams({
           to: primaryEmail,
           cc: ccEmails,
@@ -135,7 +168,7 @@ export function SendBar({
           slack: postToSlack ? "true" : "false",
           ...(result.deliveryId ? { deliveryId: result.deliveryId } : {}),
         });
-        router.push(`/deliverable/${taskId}/sent?${successParams.toString()}`);
+        router.push(`/deliverable/${resultTaskId}/sent?${successParams.toString()}`);
       }
     } catch (error) {
       toast.error(
@@ -169,18 +202,20 @@ export function SendBar({
                 : "Missing recipient or sender email")}
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={handleSaveDraft}
-            disabled={isSaving || isSending}
-          >
-            {isSaving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save Draft
-          </Button>
+          {!adhocMode && (
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isSending}
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save Draft
+            </Button>
+          )}
 
           {/* Send button — shows lint warning if errors exist, otherwise normal confirm */}
           {slackLintErrors && slackLintErrors.length > 0 ? (

@@ -36,9 +36,19 @@ import type { SlackLintError } from "@/lib/slack-lint";
 
 interface DeliveryFormProps {
   taskDetail: TaskDetail;
+  adhocMode?: boolean;
+  adhocListId?: string;
+  adhocDeliverableType?: string;
+  adhocDepartment?: string;
 }
 
-export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
+export function DeliveryForm({
+  taskDetail,
+  adhocMode,
+  adhocListId,
+  adhocDeliverableType,
+  adhocDepartment,
+}: DeliveryFormProps) {
   const { task, contacts, feedbackDeadline, template: initialTemplate } = taskDetail;
   const { data: session } = useSession();
 
@@ -394,6 +404,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
   };
 
   // ── Auto-save (every 30s, no ClickUp write) ──
+  // Disabled in adhoc mode since there's no real task ID to save against
   useAutoSave({
     taskId: task.id,
     formState,
@@ -403,6 +414,7 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
       clientName: task.clientName,
       projectName: task.projectName,
     },
+    enabled: !adhocMode,
   });
 
   // ── Restore draft on mount ──
@@ -666,6 +678,10 @@ export function DeliveryForm({ taskDetail }: DeliveryFormProps) {
           slackChannelName: slackChannelName || undefined,
         }}
         slackLintErrors={showSlack ? slackLintErrors : undefined}
+        adhocMode={adhocMode}
+        adhocListId={adhocListId}
+        adhocDeliverableType={adhocDeliverableType}
+        adhocDepartment={adhocDepartment}
       />
     </div>
   );
