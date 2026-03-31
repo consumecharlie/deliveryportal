@@ -79,11 +79,11 @@ function modernizeScopeSection(content: string): string {
 
   const lines = content.split("\n");
 
-  // Clean helper: strip zero-width chars, bold markers, and trim
+  // Clean helper: strip zero-width chars, bold markers, header markers, and trim
   const clean = (s: string) =>
-    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\*/g, "").trim().toLowerCase();
+    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/[*#]/g, "").trim().toLowerCase();
 
-  // Find "Scope" sub-header: a short line that is just "scope" (with or without bold/colon)
+  // Find "Scope" sub-header: could be ### Scope, **Scope**, or plain Scope
   const scopeIdx = lines.findIndex((l) => {
     const c = clean(l);
     return c === "scope" || c === "scope:";
@@ -751,17 +751,9 @@ export default function TemplateEditorPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    // Debug: log the raw markdown lines around "scope"
-                    const lines = snippet.split("\n");
-                    const scopeLines = lines
-                      .map((l, i) => ({ i, raw: l, cleaned: l.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\*/g, "").trim().toLowerCase() }))
-                      .filter(({ cleaned }) => cleaned.includes("scope"));
-                    console.log("Scope-related lines:", scopeLines);
-                    console.log("Full snippet lines:", lines.map((l, i) => `${i}: ${JSON.stringify(l)}`).join("\n"));
-
                     const updated = modernizeScopeSection(snippet);
                     if (updated === snippet) {
-                      toast.error("Could not find the old Scope/Timeline format to replace. Check browser console for debug info.");
+                      toast.error("Could not find the old Scope/Timeline format to replace.");
                       return;
                     }
                     setSnippet(updated);
