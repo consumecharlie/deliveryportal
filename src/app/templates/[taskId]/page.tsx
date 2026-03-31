@@ -66,11 +66,12 @@ import type { SlackLintError } from "@/lib/slack-lint";
 
 /**
  * Replace the old verbose Scope & Timeline section with concise bullet format.
- * Detects the "Scope" / "Timeline" sub-headers and everything between them
- * through the feedback deadline line, then replaces with bullet format.
+ * Finds the "Scope & Timeline Reminders" parent header and replaces everything
+ * after it (Scope sub-section + Timeline sub-section) up to the next ## header
+ * with the concise bullet format.
  */
 function modernizeScopeSection(content: string): string {
-  const NEW_SECTION = [
+  const NEW_BULLETS = [
     "- **Revision Rounds:** 1 of [revisionRounds]",
     "- **Feedback Windows:** [feedbackWindows]",
     "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
@@ -79,38 +80,39 @@ function modernizeScopeSection(content: string): string {
 
   const lines = content.split("\n");
 
-  // Clean helper: strip zero-width chars, bold markers, header markers, and trim
+  // Clean helper: strip zero-width chars, bold/header markers, emoji, and trim
   const clean = (s: string) =>
-    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/[*#]/g, "").trim().toLowerCase();
+    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/[*#]/g, "").trim();
 
-  // Find "Scope" sub-header: could be ### Scope, **Scope**, or plain Scope
-  const scopeIdx = lines.findIndex((l) => {
-    const c = clean(l);
-    return c === "scope" || c === "scope:";
-  });
+  // Find the "Scope & Timeline Reminders" parent header
+  const parentIdx = lines.findIndex((l) =>
+    clean(l).toLowerCase().includes("scope") && clean(l).toLowerCase().includes("timeline")
+  );
 
-  if (scopeIdx < 0) return content;
+  if (parentIdx < 0) return content;
 
-  // Find the end: the line containing "nextFeedbackDeadline" or "feedbackDeadline",
-  // or the next ## header after we've passed at least the Scope+Timeline content
-  let endIdx = scopeIdx + 1;
+  // Find the start of content after the parent header (skip the header itself)
+  const contentStart = parentIdx + 1;
+
+  // Find the end: the next ## header that is NOT part of the scope/timeline section
+  // (i.e., not "### Scope" or "### Timeline")
+  let endIdx = contentStart;
   while (endIdx < lines.length) {
-    const line = lines[endIdx];
-    if (line.includes("nextFeedbackDeadline") || line.includes("feedbackDeadline")) {
-      endIdx++; // include this line
+    const c = clean(lines[endIdx]).toLowerCase();
+    // Stop at a ## header that isn't "scope" or "timeline"
+    if (/^#{1,3}\s/.test(lines[endIdx]) && c !== "scope" && c !== "timeline" && c !== "scope:" && c !== "timeline:") {
       break;
     }
-    // Stop at a ## header (but not "Timeline" which is part of the old format)
-    if (/^#{1,3}\s/.test(line) && endIdx > scopeIdx + 2) break;
     endIdx++;
   }
 
-  // Skip trailing blank lines
-  while (endIdx < lines.length && lines[endIdx].trim() === "") {
-    endIdx++;
+  // Skip trailing blank lines before the next section
+  while (endIdx > contentStart && lines[endIdx - 1].trim() === "") {
+    endIdx--;
   }
 
-  lines.splice(scopeIdx, endIdx - scopeIdx, ...NEW_SECTION.split("\n"));
+  // Replace everything between the parent header and the next section
+  lines.splice(contentStart, endIdx - contentStart, NEW_BULLETS);
   return lines.join("\n");
 }
 
