@@ -35,8 +35,9 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const includeArchived = url.searchParams.get("archived") === "true";
+    const showAll = url.searchParams.get("all") === "true";
 
-    const cacheKey = includeArchived ? "archived" : "active";
+    const cacheKey = `${includeArchived ? "archived" : "active"}${showAll ? "-all" : ""}`;
     const cached = projectsCache[cacheKey];
     if (cached && Date.now() - cached.timestamp < PROJECTS_CACHE_TTL) {
       return NextResponse.json(cached.data);
@@ -133,7 +134,8 @@ export async function GET(req: Request) {
     }
 
     // Filter projects to only those with deliveries (if DB is available)
-    if (projectIdsWithDeliveries !== null) {
+    // Skip filtering when all=true (used by ad hoc delivery page)
+    if (projectIdsWithDeliveries !== null && !showAll) {
       for (const client of clients) {
         client.projects = client.projects.filter((p) =>
           projectIdsWithDeliveries!.has(p.listId)
@@ -169,7 +171,7 @@ export async function GET(req: Request) {
     );
 
     // Filter folderless projects too
-    if (projectIdsWithDeliveries !== null) {
+    if (projectIdsWithDeliveries !== null && !showAll) {
       folderlessProjects = folderlessProjects.filter((p) =>
         projectIdsWithDeliveries!.has(p.listId)
       );
