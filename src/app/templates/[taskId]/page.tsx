@@ -751,9 +751,17 @@ export default function TemplateEditorPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
+                    // Debug: log the raw markdown lines around "scope"
+                    const lines = snippet.split("\n");
+                    const scopeLines = lines
+                      .map((l, i) => ({ i, raw: l, cleaned: l.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\*/g, "").trim().toLowerCase() }))
+                      .filter(({ cleaned }) => cleaned.includes("scope"));
+                    console.log("Scope-related lines:", scopeLines);
+                    console.log("Full snippet lines:", lines.map((l, i) => `${i}: ${JSON.stringify(l)}`).join("\n"));
+
                     const updated = modernizeScopeSection(snippet);
                     if (updated === snippet) {
-                      toast.error("Could not find the old Scope/Timeline format to replace.");
+                      toast.error("Could not find the old Scope/Timeline format to replace. Check browser console for debug info.");
                       return;
                     }
                     setSnippet(updated);
