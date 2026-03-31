@@ -306,14 +306,23 @@ export function mergeTemplate(
   function injectRushedNotice(content: string): string {
     if (!variables.rushedProject) return content;
     const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
+    // Determine if this is the final revision round by checking the merged content
+    // Looks for "N of M" pattern in the revision rounds line
+    const revisionMatch = content.match(/(\d+)\s+of\s+(\d+)/i);
+    const isFinalRound = revisionMatch
+      ? revisionMatch[1] === revisionMatch[2]
+      : variables.revisionRounds === "1";
+
     const rushedBullets = [
       ``,
       `### 🚨 URGENT: Fixed Deadline Alert`,
       `- Feedback deadline is **EOD ${deadline}**`,
-      `- Our team will proceed the following business day whether feedback has been received or not.`,
+      `- Our team will proceed the following business day regardless of whether feedback has been received.`,
       `- If feedback has not been received by the deadline, the current revision round will be considered complete and, if applicable, the next revision round will begin.`,
-      `- If this is the final revision round, we will proceed to the next step.`,
-      `- This is in order to keep the project timeline on track and hit the fixed deadline.`,
+      ...(isFinalRound
+        ? [`- Because this is the final revision round, we will proceed to the next step.`]
+        : []),
+      `- This is necessary to keep the project timeline on track and hit the fixed deadline.`,
       `- If your team needs more time, the delivery date will be delayed or rushed fees will apply.`,
     ];
 
