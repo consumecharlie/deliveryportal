@@ -307,7 +307,8 @@ export function mergeTemplate(
     if (!variables.rushedProject) return content;
     const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
     const rushedBullets = [
-      `- 🚨 **URGENT: Fixed Deadline Alert**`,
+      ``,
+      `### 🚨 URGENT: Fixed Deadline Alert`,
       `- Feedback deadline is **EOD ${deadline}**`,
       `- Our team will proceed the following business day whether feedback has been received or not.`,
       `- If feedback has not been received by the deadline, the current revision round will be considered complete and, if applicable, the next revision round will begin.`,
