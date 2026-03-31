@@ -318,10 +318,11 @@ export function mergeTemplate(
       `### 🚨 URGENT: Fixed Deadline Alert`,
       `- Feedback deadline is **EOD ${deadline}**`,
       `- Our team will proceed the following business day regardless of whether feedback has been received.`,
-      `- If feedback has not been received by the deadline, the current revision round will be considered complete and, if applicable, the next revision round will begin.`,
       ...(isFinalRound
-        ? [`- Because this is the final revision round, we will proceed to the next step.`]
-        : []),
+        ? [`- Because this is the final revision round, if feedback has not been received by the deadline, we will proceed to the next step.`]
+        : [
+            `- If feedback has not been received by the deadline, the current revision round will be considered complete and the next revision round will begin. Any feedback provided after the deadline will apply to the next revision round.`,
+          ]),
       `- This is necessary to keep the project timeline on track and hit the fixed deadline.`,
       `- If your team needs more time, the delivery date will be delayed or rushed fees will apply.`,
     ];
