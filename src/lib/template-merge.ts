@@ -306,21 +306,37 @@ export function mergeTemplate(
   function injectRushedNotice(content: string): string {
     if (!variables.rushedProject) return content;
     const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
-    const rushedLine = `- 🚨 **Hard Deadline Project:** Please submit feedback by **EOD ${deadline}**. The window closes at the start of the next business day (Eastern Time) at which time we will proceed to keep the project timeline on track. If you need extra time, just let us know - but note that the delivery date will shift or rush fees will apply.`;
+    const rushedBullets = [
+      `- 🚨 **URGENT: Fixed Deadline Alert**`,
+      `- Feedback deadline is **EOD ${deadline}**`,
+      `- Our team will proceed the following business day whether feedback has been received or not.`,
+      `- If feedback has not been received by the deadline, the current revision round will be considered complete and, if applicable, the next revision round will begin.`,
+      `- If this is the final revision round, we will proceed to the next step.`,
+      `- This is in order to keep the project timeline on track and hit the fixed deadline.`,
+      `- If your team needs more time, the delivery date will be delayed or rushed fees will apply.`,
+    ];
 
     const lines = content.split("\n");
+
+    // Find and replace the feedback deadline line
     const idx = lines.findIndex(
       (line) =>
         line.toLowerCase().includes("feedback deadline") &&
         (line.startsWith("-") || line.startsWith("•") || line.includes("**Feedback Deadline"))
     );
     if (idx >= 0) {
-      // Replace the existing feedback deadline line
-      lines[idx] = rushedLine;
-      return lines.join("\n");
+      lines.splice(idx, 1, ...rushedBullets);
+    } else {
+      // Fallback: append
+      lines.push("", ...rushedBullets);
     }
-    // Fallback: append if no deadline line found
-    return content + "\n" + rushedLine;
+
+    // Remove "Additional revisions beyond the included revision rounds" bullet
+    const filtered = lines.filter(
+      (line) => !line.toLowerCase().includes("additional revisions beyond the included revision rounds")
+    );
+
+    return filtered.join("\n");
   }
 
   // Merge the email version
