@@ -189,6 +189,22 @@ export function DeliveryForm({
     return getLinkLabelsFromTemplate(activeTemplate.snippet);
   }, [activeTemplate?.snippet]);
 
+  // Pre-fill link labels from template defaults when they change
+  useEffect(() => {
+    if (Object.keys(defaultLinkLabels).length > 0) {
+      setLinkLabels((prev) => {
+        // Only fill in labels that aren't already set by the user
+        const merged = { ...prev };
+        for (const [varName, label] of Object.entries(defaultLinkLabels)) {
+          if (!merged[varName]) {
+            merged[varName] = label;
+          }
+        }
+        return merged;
+      });
+    }
+  }, [defaultLinkLabels]);
+
   // ── Build merged preview ──
 
   const mergedContent: MergedContent | null = useMemo(() => {
