@@ -134,6 +134,12 @@ export async function getFolderLists(
   );
 }
 
+export async function getList(listId: string) {
+  return clickupFetch<{ id: string; name: string; folder: { id: string; name: string } }>(
+    `/list/${listId}`
+  );
+}
+
 // ── Field / List Metadata ──
 
 export async function getListFields(
