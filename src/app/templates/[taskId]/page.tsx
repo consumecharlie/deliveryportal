@@ -66,7 +66,8 @@ import type { SlackLintError } from "@/lib/slack-lint";
 
 /**
  * Replace the old verbose Scope & Timeline section with concise bullet format.
- * Detects the "**Scope**" / "**Timeline**" paragraph block and swaps it for bullets.
+ * Detects the "Scope" / "Timeline" sub-headers and everything between them
+ * through the feedback deadline line, then replaces with bullet format.
  */
 function modernizeScopeSection(content: string): string {
   const NEW_SECTION = [
@@ -77,32 +78,34 @@ function modernizeScopeSection(content: string): string {
   ].join("\n");
 
   const lines = content.split("\n");
+
+  // Clean helper: strip zero-width chars, bold markers, and trim
+  const clean = (s: string) =>
+    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\*/g, "").trim().toLowerCase();
+
+  // Find "Scope" sub-header: a short line that is just "scope" (with or without bold/colon)
   const scopeIdx = lines.findIndex((l) => {
-    const trimmed = l.trim();
-    return (
-      trimmed === "**Scope**" ||
-      trimmed === "Scope" ||
-      trimmed === "**Scope**:" ||
-      /^\*{0,2}Scope\*{0,2}:?$/.test(trimmed)
-    );
+    const c = clean(l);
+    return c === "scope" || c === "scope:";
   });
+
   if (scopeIdx < 0) return content;
 
-  // Find the end: the line containing nextFeedbackDeadline, or the next ## header
+  // Find the end: the line containing "nextFeedbackDeadline" or "feedbackDeadline",
+  // or the next ## header after we've passed at least the Scope+Timeline content
   let endIdx = scopeIdx + 1;
-  let foundDeadline = false;
   while (endIdx < lines.length) {
-    if (lines[endIdx].includes("nextFeedbackDeadline")) {
-      foundDeadline = true;
-      endIdx++;
+    const line = lines[endIdx];
+    if (line.includes("nextFeedbackDeadline") || line.includes("feedbackDeadline")) {
+      endIdx++; // include this line
       break;
     }
-    // Stop at a ## header that isn't part of the scope section
-    const isHeader = /^#{1,3}\s/.test(lines[endIdx]);
-    if (isHeader && endIdx > scopeIdx + 1) break;
+    // Stop at a ## header (but not "Timeline" which is part of the old format)
+    if (/^#{1,3}\s/.test(line) && endIdx > scopeIdx + 2) break;
     endIdx++;
   }
-  // Skip trailing blank lines after the replaced section
+
+  // Skip trailing blank lines
   while (endIdx < lines.length && lines[endIdx].trim() === "") {
     endIdx++;
   }
