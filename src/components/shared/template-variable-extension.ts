@@ -20,7 +20,6 @@ export const TEMPLATE_VARIABLE_META: Record<
   revisionRounds: { label: "Revision Rounds", category: "project" },
   feedbackWindows: { label: "Feedback Windows", category: "project" },
   nextFeedbackDeadline: { label: "Feedback Deadline", category: "project" },
-  feedbackDeadline: { label: "Feedback Deadline", category: "project" },
   versionNotes: { label: "Version Notes", category: "project" },
 
   // ── Review Links ──

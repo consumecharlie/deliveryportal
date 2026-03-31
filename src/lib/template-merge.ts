@@ -240,6 +240,7 @@ export function mergeTemplate(
     revisionRounds: variables.revisionRounds,
     feedbackWindows: variables.feedbackWindows,
     nextFeedbackDeadline: variables.nextFeedbackDeadline,
+    feedbackDeadline: variables.nextFeedbackDeadline, // alias
     googleDeliverableLink: variables.googleDeliverableLink ?? "",
     frameReviewLink: variables.frameReviewLink ?? "",
     animaticReviewLink: variables.animaticReviewLink ?? "",
