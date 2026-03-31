@@ -10,8 +10,13 @@ import { LINK_VARIABLE_MAP } from "@/lib/custom-field-ids";
 interface ReviewLinksSectionProps {
   requiredFields: string[];
   reviewLinks: Record<string, string>;
+  /** Custom link labels per variable name (overrides template defaults) */
+  linkLabels: Record<string, string>;
+  /** Default labels from the template's [Link Text | varName] patterns */
+  defaultLinkLabels: Record<string, string>;
   extraLinks: Array<{ url: string; label: string }>;
   onReviewLinkChange: (field: string, value: string) => void;
+  onLinkLabelChange: (field: string, value: string) => void;
   onAddExtraLink: () => void;
   onExtraLinkChange: (index: number, field: "url" | "label", value: string) => void;
   onRemoveExtraLink: (index: number) => void;
@@ -20,8 +25,11 @@ interface ReviewLinksSectionProps {
 export function ReviewLinksSection({
   requiredFields,
   reviewLinks,
+  linkLabels,
+  defaultLinkLabels,
   extraLinks,
   onReviewLinkChange,
+  onLinkLabelChange,
   onAddExtraLink,
   onExtraLinkChange,
   onRemoveExtraLink,
@@ -59,30 +67,42 @@ export function ReviewLinksSection({
         const meta = LINK_VARIABLE_MAP[varName];
         if (!meta) return null;
         const value = reviewLinks[varName] ?? "";
+        const labelValue = linkLabels[varName] ?? "";
+        const defaultLabel = defaultLinkLabels[varName] ?? "";
 
         return (
-          <div key={varName} className="flex items-center gap-2">
-            <div className="flex-1">
-              <Label className="text-xs text-muted-foreground">
-                {meta.label}
-              </Label>
-              <Input
-                type="url"
-                placeholder={`https://...`}
-                value={value}
-                onChange={(e) => onReviewLinkChange(varName, e.target.value)}
-              />
+          <div key={varName} className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              {meta.label}
+            </Label>
+            <div className="flex items-center gap-2">
+              <div className="w-2/5">
+                <Input
+                  placeholder={defaultLabel || "Link text..."}
+                  value={labelValue}
+                  onChange={(e) => onLinkLabelChange(varName, e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={value}
+                  onChange={(e) => onReviewLinkChange(varName, e.target.value)}
+                />
+              </div>
+              {value && (
+                <a
+                  href={value}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
             </div>
-            {value && (
-              <a
-                href={value}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-5 text-muted-foreground hover:text-foreground"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            )}
           </div>
         );
       })}
@@ -95,37 +115,46 @@ export function ReviewLinksSection({
 
       {/* Flexible Link — shown when user clicks Add (before extra links) */}
       {flexLinkActive && !flexAlreadyRequired && (
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Label className="text-xs text-muted-foreground">
-              Flexible Link
-              <span className="ml-1 text-[10px] text-blue-500">(syncs to ClickUp)</span>
-            </Label>
-            <Input
-              type="url"
-              placeholder="https://..."
-              value={reviewLinks.flexLink ?? ""}
-              onChange={(e) => onReviewLinkChange("flexLink", e.target.value)}
-            />
-          </div>
-          {reviewLinks.flexLink && (
-            <a
-              href={reviewLinks.flexLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mb-2 text-muted-foreground hover:text-foreground"
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">
+            Flexible Link
+            <span className="ml-1 text-[10px] text-blue-500">(syncs to ClickUp)</span>
+          </Label>
+          <div className="flex items-center gap-2">
+            <div className="w-2/5">
+              <Input
+                placeholder={defaultLinkLabels.flexLink || "Link text..."}
+                value={linkLabels.flexLink ?? ""}
+                onChange={(e) => onLinkLabelChange("flexLink", e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                type="url"
+                placeholder="https://..."
+                value={reviewLinks.flexLink ?? ""}
+                onChange={(e) => onReviewLinkChange("flexLink", e.target.value)}
+              />
+            </div>
+            {reviewLinks.flexLink && (
+              <a
+                href={reviewLinks.flexLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRemoveFlexLink}
             >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mb-0.5"
-            onClick={handleRemoveFlexLink}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 

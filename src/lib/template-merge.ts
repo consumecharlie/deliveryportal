@@ -26,6 +26,8 @@ interface MergeVariables {
   rushedProject?: boolean;
   // Repeat client: strips "What You're Receiving" and "We Need Your Feedback" sections
   repeatClient?: boolean;
+  // Custom link labels — overrides the template's [Link Text | varName] defaults
+  linkLabels?: Record<string, string>;
 }
 
 /**
@@ -74,7 +76,8 @@ function escapeRegExp(str: string): string {
  */
 function performMerge(
   template: string,
-  replacements: Record<string, string>
+  replacements: Record<string, string>,
+  linkLabels?: Record<string, string>
 ): string {
   let result = template;
 
@@ -98,7 +101,8 @@ function performMerge(
       const trimmedVar = varName.trim();
       const url = replacements[trimmedVar];
       if (!url) return ""; // Remove the entire bullet if no URL
-      const text = linkText.trim();
+      // Use custom label if provided, otherwise use template default
+      const text = linkLabels?.[trimmedVar]?.trim() || linkText.trim();
       const enrichedText =
         projectName && !text.toLowerCase().includes(projectName.toLowerCase())
           ? `${projectName} – ${text}`
@@ -113,7 +117,8 @@ function performMerge(
     const trimmedVar = varName.trim();
     const url = replacements[trimmedVar];
     if (!url) return ""; // Remove the placeholder if no URL
-    return `[${linkText.trim()}](${url})`;
+    const text = linkLabels?.[trimmedVar]?.trim() || linkText.trim();
+    return `[${text}](${url})`;
   });
 
   // Handle simple [variable] patterns
@@ -352,7 +357,7 @@ export function mergeTemplate(
   }
 
   // Merge the email version
-  let emailContent = performMerge(template, replacements);
+  let emailContent = performMerge(template, replacements, variables.linkLabels);
   emailContent = stripRepeatClientSections(emailContent);
   emailContent = injectRushedNotice(emailContent);
 
@@ -370,7 +375,7 @@ export function mergeTemplate(
     ...replacements,
     contacts: formatContactsSlack(variables.contacts),
   };
-  let slackContent = performMerge(template, slackReplacements);
+  let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
   slackContent = stripRepeatClientSections(slackContent);
   slackContent = injectRushedNotice(slackContent);
 
@@ -428,4 +433,22 @@ export function getRequiredLinkFields(template: string): string[] {
     "flexLink",
   ];
   return linkVarNames.filter((v) => allVars.includes(v));
+}
+
+/**
+ * Extract link variables with their default label text from a template.
+ * Parses [Link Text | variableName] patterns to get the display label.
+ * Returns a map of variableName → defaultLabel.
+ */
+export function getLinkLabelsFromTemplate(template: string): Record<string, string> {
+  const labels: Record<string, string> = {};
+  // Match [Link Text | variableName] patterns
+  const linkPattern = /\[([^\]|]+)\s*\|\s*(\w+)\]/g;
+  let match;
+  while ((match = linkPattern.exec(template)) !== null) {
+    const label = match[1].trim();
+    const varName = match[2].trim();
+    labels[varName] = label;
+  }
+  return labels;
 }

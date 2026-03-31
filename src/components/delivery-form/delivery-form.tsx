@@ -21,6 +21,7 @@ import { SearchableSelect } from "@/components/shared/searchable-select";
 import {
   mergeTemplate,
   getRequiredLinkFields,
+  getLinkLabelsFromTemplate,
 } from "@/lib/template-merge";
 import { DEPARTMENT_CC_EMAILS } from "@/lib/custom-field-ids";
 import type {
@@ -64,6 +65,7 @@ export function DeliveryForm({
     animaticReviewLink: taskDetail.reviewLinks.animaticReviewLink ?? "",
     flexLink: taskDetail.reviewLinks.flexLink ?? "",
   });
+  const [linkLabels, setLinkLabels] = useState<Record<string, string>>({});
   const [extraLinks, setExtraLinks] = useState<
     Array<{ url: string; label: string }>
   >([]);
@@ -182,6 +184,11 @@ export function DeliveryForm({
     return getRequiredLinkFields(activeTemplate.snippet);
   }, [activeTemplate?.snippet]);
 
+  const defaultLinkLabels = useMemo(() => {
+    if (!activeTemplate?.snippet) return {};
+    return getLinkLabelsFromTemplate(activeTemplate.snippet);
+  }, [activeTemplate?.snippet]);
+
   // ── Build merged preview ──
 
   const mergedContent: MergedContent | null = useMemo(() => {
@@ -206,6 +213,7 @@ export function DeliveryForm({
       extraLinks,
       rushedProject,
       repeatClient,
+      linkLabels: Object.keys(linkLabels).length > 0 ? linkLabels : undefined,
     });
   }, [
     activeTemplate,
@@ -220,6 +228,7 @@ export function DeliveryForm({
     extraLinks,
     rushedProject,
     repeatClient,
+    linkLabels,
   ]);
 
   // ── Recipient logic ──
@@ -569,8 +578,13 @@ export function DeliveryForm({
           <ReviewLinksSection
             requiredFields={requiredLinkFields}
             reviewLinks={reviewLinks}
+            linkLabels={linkLabels}
+            defaultLinkLabels={defaultLinkLabels}
             extraLinks={extraLinks}
             onReviewLinkChange={handleReviewLinkChange}
+            onLinkLabelChange={(field, value) =>
+              setLinkLabels((prev) => ({ ...prev, [field]: value }))
+            }
             onAddExtraLink={handleAddExtraLink}
             onExtraLinkChange={handleExtraLinkChange}
             onRemoveExtraLink={handleRemoveExtraLink}
