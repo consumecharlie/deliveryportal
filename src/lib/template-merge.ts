@@ -253,28 +253,47 @@ export function mergeTemplate(
     if (!variables.repeatClient) return content;
     const lines = content.split("\n");
     const result: string[] = [];
-    let skipping = false;
+    // "section" = skip until next ## header; "subsection" = skip until next blank line or header
+    let skipMode: "none" | "section" | "subsection" = "none";
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      // Check if this line is a header (## or bold header with emoji)
       const isHeader = /^#{1,3}\s/.test(line) || /^\*\*.*\*\*$/.test(line.trim());
+      const lower = line.toLowerCase();
+      const cleaned = lower.replace(/[*#]/g, "").trim();
 
+      // Check for section-level headers to skip (skip until next ## header)
       if (isHeader) {
-        const lower = line.toLowerCase();
-        // Skip "What You're Receiving" and "We Need Your Feedback" sections
         if (
-          lower.includes("what you") && lower.includes("receiving") ||
-          lower.includes("we need") && lower.includes("feedback")
+          (lower.includes("what you") && lower.includes("receiving")) ||
+          (lower.includes("we need") && lower.includes("feedback"))
         ) {
-          skipping = true;
+          skipMode = "section";
           continue;
         }
-        // Any other header ends the skip
-        skipping = false;
+        // Any other header ends section-level skip
+        if (skipMode === "section") {
+          skipMode = "none";
+        }
       }
 
-      if (!skipping) {
+      // Check for "Typical feedback might include" sub-section
+      if (cleaned.includes("typical feedback") && cleaned.includes("include")) {
+        skipMode = "subsection";
+        continue;
+      }
+
+      // End subsection skip at blank line or header
+      if (skipMode === "subsection" && (line.trim() === "" || isHeader)) {
+        skipMode = "none";
+        // Keep the blank line or header that ended the skip
+        if (isHeader) {
+          result.push(line);
+        }
+        continue;
+      }
+
+      if (skipMode === "none") {
         result.push(line);
       }
     }
