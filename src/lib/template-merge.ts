@@ -24,6 +24,8 @@ interface MergeVariables {
   extraLinks?: Array<{ url: string; label: string }>;
   // Rushed project: injects a strict deadline notice after the feedback deadline bullet
   rushedProject?: boolean;
+  // Repeat client: strips "What You're Receiving" and "We Need Your Feedback" sections
+  repeatClient?: boolean;
 }
 
 /**
@@ -246,6 +248,41 @@ export function mergeTemplate(
     projectPlanLink: variables.projectPlanLink ?? "",
   };
 
+  // Strip explainer sections for repeat clients
+  function stripRepeatClientSections(content: string): string {
+    if (!variables.repeatClient) return content;
+    const lines = content.split("\n");
+    const result: string[] = [];
+    let skipping = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Check if this line is a header (## or bold header with emoji)
+      const isHeader = /^#{1,3}\s/.test(line) || /^\*\*.*\*\*$/.test(line.trim());
+
+      if (isHeader) {
+        const lower = line.toLowerCase();
+        // Skip "What You're Receiving" and "We Need Your Feedback" sections
+        if (
+          lower.includes("what you") && lower.includes("receiving") ||
+          lower.includes("we need") && lower.includes("feedback")
+        ) {
+          skipping = true;
+          continue;
+        }
+        // Any other header ends the skip
+        skipping = false;
+      }
+
+      if (!skipping) {
+        result.push(line);
+      }
+    }
+
+    // Clean up excessive blank lines from removed sections
+    return result.join("\n").replace(/\n{3,}/g, "\n\n");
+  }
+
   // Replace the feedback deadline bullet with a rushed project notice
   function injectRushedNotice(content: string): string {
     if (!variables.rushedProject) return content;
@@ -269,6 +306,7 @@ export function mergeTemplate(
 
   // Merge the email version
   let emailContent = performMerge(template, replacements);
+  emailContent = stripRepeatClientSections(emailContent);
   emailContent = injectRushedNotice(emailContent);
 
   // Append extra links as additional bullets
@@ -286,6 +324,7 @@ export function mergeTemplate(
     contacts: formatContactsSlack(variables.contacts),
   };
   let slackContent = performMerge(template, slackReplacements);
+  slackContent = stripRepeatClientSections(slackContent);
   slackContent = injectRushedNotice(slackContent);
 
   // Append extra links (same markdown format as email)

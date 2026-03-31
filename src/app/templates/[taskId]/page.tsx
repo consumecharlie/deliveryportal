@@ -77,7 +77,15 @@ function modernizeScopeSection(content: string): string {
   ].join("\n");
 
   const lines = content.split("\n");
-  const scopeIdx = lines.findIndex((l) => /^\*\*Scope\*\*$/i.test(l.trim()));
+  const scopeIdx = lines.findIndex((l) => {
+    const trimmed = l.trim();
+    return (
+      trimmed === "**Scope**" ||
+      trimmed === "Scope" ||
+      trimmed === "**Scope**:" ||
+      /^\*{0,2}Scope\*{0,2}:?$/.test(trimmed)
+    );
+  });
   if (scopeIdx < 0) return content;
 
   // Find the end: the line containing nextFeedbackDeadline, or the next ## header
@@ -89,11 +97,13 @@ function modernizeScopeSection(content: string): string {
       endIdx++;
       break;
     }
-    if (/^#{1,3}\s/.test(lines[endIdx]) && endIdx > scopeIdx + 1) break;
+    // Stop at a ## header that isn't part of the scope section
+    const isHeader = /^#{1,3}\s/.test(lines[endIdx]);
+    if (isHeader && endIdx > scopeIdx + 1) break;
     endIdx++;
   }
-  // If we found the deadline, also skip any trailing blank line
-  if (foundDeadline && endIdx < lines.length && lines[endIdx].trim() === "") {
+  // Skip trailing blank lines after the replaced section
+  while (endIdx < lines.length && lines[endIdx].trim() === "") {
     endIdx++;
   }
 
@@ -739,10 +749,12 @@ export default function TemplateEditorPage() {
                   size="sm"
                   onClick={() => {
                     const updated = modernizeScopeSection(snippet);
-                    if (updated !== snippet) {
-                      setSnippet(updated);
-                      setHasChanges(true);
+                    if (updated === snippet) {
+                      toast.error("Could not find the old Scope/Timeline format to replace.");
+                      return;
                     }
+                    setSnippet(updated);
+                    setHasChanges(true);
                   }}
                   className="text-xs"
                 >
