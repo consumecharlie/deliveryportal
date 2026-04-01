@@ -722,14 +722,20 @@ export function DeliveryForm({
           </button>
         </div>
       ) : hasEligibleAddons ? (
-        <Button
-          variant="outline"
-          onClick={() => setShowAddonModal(true)}
-          className="border-[#6AC387]/40 text-[#6AC387] hover:bg-[#6AC387]/10 hover:text-[#5aad74]"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Combine with Another Project (Same Contact)
-        </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground border border-border/50 rounded-full px-2.5 py-1">
+            Contact match found
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddonModal(true)}
+            className="border-[#6AC387]/40 text-[#6AC387] hover:bg-[#6AC387]/10 hover:text-[#5aad74]"
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Merge Delivery
+          </Button>
+        </div>
       ) : null}
 
       {/* Two-column layout */}
