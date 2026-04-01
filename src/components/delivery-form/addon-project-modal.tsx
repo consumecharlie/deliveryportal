@@ -163,7 +163,14 @@ export function AddonProjectModal({
               <div className="space-y-2">
                 <Label>Select a delivery to combine</Label>
                 <div className="space-y-1.5">
-                  {selectedProject.activeDeliveryDeadlines.map((d) => (
+                  {[...selectedProject.activeDeliveryDeadlines]
+                    .sort((a, b) => {
+                      if (!a.dueDate && !b.dueDate) return 0;
+                      if (!a.dueDate) return 1;
+                      if (!b.dueDate) return -1;
+                      return Number(a.dueDate) - Number(b.dueDate);
+                    })
+                    .map((d) => (
                     <button
                       key={d.taskId}
                       type="button"
