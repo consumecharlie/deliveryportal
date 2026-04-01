@@ -228,7 +228,13 @@ export function convertToSlackFormat(markdown: string): string {
   // Also handle emoji + variation selector (e.g. ⚡️ = ⚡ + U+FE0F)
   result = result.replace(/\uFE0F/g, "");
 
-  return result;
+  // ── 7. Normalize blank lines ──
+  // Slack renders each \n as a line break. Multiple blank lines between
+  // sections create excessive spacing. Collapse 3+ consecutive newlines
+  // (2+ blank lines) down to 2 newlines (1 blank line).
+  result = result.replace(/\n{3,}/g, "\n\n");
+
+  return result.trim();
 }
 
 /**

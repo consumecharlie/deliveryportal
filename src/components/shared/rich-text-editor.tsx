@@ -239,8 +239,10 @@ function htmlToMarkdown(html: string): string {
   md = md.replace(/\*\*(\s*)\*\*/g, "$1");                  // ** ** → (space)
   md = md.replace(/\*{3,}/g, "**");                          // *** → **
 
-  // Clean up excessive newlines (4+ → 3, preserving intentional double-blank-lines)
-  md = md.replace(/\n{4,}/g, "\n\n\n");
+  // Normalize blank lines: collapse 3+ consecutive newlines down to 2 (one blank line).
+  // TipTap round-trips inflate blank lines because each <p></p> + </p> boundary
+  // both produce newlines. This keeps section spacing consistent across edits.
+  md = md.replace(/\n{3,}/g, "\n\n");
 
   return md.trim();
 }
