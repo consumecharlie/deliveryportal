@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical } from "lucide-react";
+import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus } from "lucide-react";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { Button } from "@/components/ui/button";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
@@ -705,6 +705,33 @@ export function DeliveryForm({
         </div>
       )}
 
+      {/* Add-on project banner / button */}
+      {addonProject ? (
+        <div className="flex items-center gap-3 rounded-lg border border-[#6AC387]/40 bg-[#6AC387]/10 px-4 py-2.5">
+          <Plus className="h-4 w-4 text-[#6AC387] shrink-0" />
+          <span className="text-sm flex-1">
+            Combined with <strong>{addonProject.projectName}</strong>
+            <span className="text-muted-foreground"> — {addonProject.deliverableType}</span>
+          </span>
+          <button
+            type="button"
+            onClick={handleRemoveAddon}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Remove
+          </button>
+        </div>
+      ) : hasEligibleAddons ? (
+        <Button
+          variant="outline"
+          onClick={() => setShowAddonModal(true)}
+          className="border-[#6AC387]/40 text-[#6AC387] hover:bg-[#6AC387]/10 hover:text-[#5aad74]"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Combine with Another Project (Same Contact)
+        </Button>
+      ) : null}
+
       {/* Two-column layout */}
       <div className="grid grid-cols-5 gap-6">
         {/* Left: Editor */}
@@ -752,10 +779,6 @@ export function DeliveryForm({
             onFeedbackWindowsChange={setFeedbackWindows}
             onRushedProjectChange={setRushedProject}
             onRepeatClientChange={setRepeatClient}
-            showAddonButton={hasEligibleAddons}
-            addonProjectName={addonProject?.projectName}
-            onAddProject={() => setShowAddonModal(true)}
-            onRemoveAddon={handleRemoveAddon}
           />
 
           {/* Add-on project fields */}
