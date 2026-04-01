@@ -545,8 +545,14 @@ function findSection(
 
 /**
  * Merge a combined delivery for a primary + add-on project.
- * Takes the primary project's already-merged content and the add-on's raw template,
- * then builds a combined message with labeled sections for each project.
+ *
+ * Strategy (based on real-world reference):
+ * 1. Keep the primary project's full content (greeting + all sections)
+ * 2. Remove project plan from the primary (it goes at the end, shared)
+ * 3. Add a transition intro line
+ * 4. Include the add-on project's full merged content (all sections — NOT stripped)
+ *    minus its greeting, closing, and project plan
+ * 5. Append shared project plan (with links from both projects) + closing once
  */
 export function mergeAddonDelivery(input: AddonMergeInput): string {
   const {
@@ -562,7 +568,7 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
   // 1. Parse primary content into sections
   const primary = parseSections(primaryContent);
 
-  // 2. Merge the addon template
+  // 2. Merge the addon template (NO repeatClient — keep all sections intact)
   const addonMerged = mergeTemplate(addonTemplate, "", {
     contacts: addonContacts,
     projectName: addonProjectName,
@@ -577,11 +583,9 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     flexLink: addonVariables.flexLink,
     projectPlanLink: addonVariables.projectPlanLink,
     extraLinks: addonVariables.extraLinks,
-    repeatClient: true, // Strip explainer sections for addon
     linkLabels: addonVariables.linkLabels,
   });
 
-  // Use emailContent for email mode, slackContent for slack mode
   const addonContent = isSlack
     ? addonMerged.slackContent
     : addonMerged.emailContent;
@@ -589,77 +593,61 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
   // 3. Parse addon content into sections
   const addon = parseSections(addonContent);
 
-  // 4. Extract specific sections from primary
-  const primaryScope = findSection(primary.sections, /scope|timeline/i);
-  const primaryLinks = findSection(primary.sections, /review.*link/i);
-  const primaryFeedback = findSection(primary.sections, /feedback|submit/i);
-  const primaryPlan = findSection(primary.sections, /project\s*plan/i);
+  // 4. Extract project plan from primary (to place at end, shared)
+  const primaryPlanIdx = primary.sections.findIndex((s) =>
+    /project\s*plan/i.test(s.header.toLowerCase().replace(/[#*]/g, ""))
+  );
+  const primaryPlan =
+    primaryPlanIdx >= 0 ? primary.sections.splice(primaryPlanIdx, 1)[0] : null;
 
-  // 5. Extract specific sections from addon
-  const addonScope = findSection(addon.sections, /scope|timeline/i);
-  const addonLinks = findSection(addon.sections, /review.*link/i);
-  const addonPlan = findSection(addon.sections, /project\s*plan/i);
+  // Extract project plan from addon (to merge links into shared plan)
+  const addonPlanIdx = addon.sections.findIndex((s) =>
+    /project\s*plan/i.test(s.header.toLowerCase().replace(/[#*]/g, ""))
+  );
+  const addonPlan =
+    addonPlanIdx >= 0 ? addon.sections.splice(addonPlanIdx, 1)[0] : null;
 
-  // 6. Build combined output
+  // 5. Build combined output
   const parts: string[] = [];
 
-  // Greeting
+  // Primary greeting
   if (primary.greeting) {
     parts.push(primary.greeting);
   }
 
-  // Intro line
-  parts.push("");
-  if (isSlack) {
-    parts.push(
-      `We have deliverables ready for both *${primaryProjectName}* and *${addonProjectName}* — details for each are below!`
-    );
-  } else {
-    parts.push(
-      `We have deliverables ready for both **${primaryProjectName}** and **${addonProjectName}** — details for each are below!`
-    );
-  }
-  parts.push("");
-
-  // Helper to append header with project name suffix
-  const appendSection = (
-    section: ParsedSection | undefined,
-    projectName: string
-  ) => {
-    if (!section) return;
-    // Append project name to header
-    const header = `${section.header} — ${projectName}`;
-    parts.push(header);
+  // All primary sections (everything except project plan, which was removed)
+  for (const section of primary.sections) {
+    parts.push("");
+    parts.push(section.header);
     if (section.content) {
       parts.push(section.content);
     }
-    parts.push("");
-  };
-
-  // Primary scope + links
-  appendSection(primaryScope, primaryProjectName);
-  appendSection(primaryLinks, primaryProjectName);
-
-  // Addon scope + links
-  appendSection(addonScope, addonProjectName);
-  appendSection(addonLinks, addonProjectName);
-
-  // Feedback section (once, from primary)
-  if (primaryFeedback) {
-    parts.push(primaryFeedback.header);
-    if (primaryFeedback.content) {
-      parts.push(primaryFeedback.content);
-    }
-    parts.push("");
   }
 
-  // Project plan section (once, from primary — add addon plan link if available)
-  if (primaryPlan) {
-    parts.push(primaryPlan.header);
-    let planContent = primaryPlan.content || "";
-    // If addon has a project plan link, add it as additional bullet
-    if (addonPlan?.content) {
-      // Extract any bullet lines from addon plan that contain links
+  // Transition intro to addon project
+  parts.push("");
+  const bold = isSlack ? "*" : "**";
+  parts.push(
+    `Second, we also have ${bold}${addonProjectName}${bold} deliverables ready for your review!`
+  );
+
+  // All addon sections (everything except greeting, closing, and project plan)
+  for (const section of addon.sections) {
+    parts.push("");
+    parts.push(section.header);
+    if (section.content) {
+      parts.push(section.content);
+    }
+  }
+
+  // Shared project plan (once, with links from both projects)
+  if (primaryPlan || addonPlan) {
+    const plan = primaryPlan || addonPlan;
+    parts.push("");
+    parts.push(plan!.header);
+    let planContent = plan!.content || "";
+    // If both projects have plan content, merge the addon's link bullets
+    if (primaryPlan && addonPlan?.content) {
       const addonPlanBullets = addonPlan.content
         .split("\n")
         .filter((line) => /^\s*[-•*]\s*\[/.test(line));
@@ -670,11 +658,11 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     if (planContent) {
       parts.push(planContent);
     }
-    parts.push("");
   }
 
-  // Closing
+  // Closing (from primary)
   if (primary.closing) {
+    parts.push("");
     parts.push(primary.closing);
   }
 
