@@ -10,16 +10,6 @@ import { DeliveryForm } from "@/components/delivery-form/delivery-form";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import type { TaskDetail } from "@/lib/types";
 
-const DEPARTMENTS = [
-  "Pre-Production",
-  "Pre-Pro",
-  "Design",
-  "Post-Production",
-  "Post",
-  "Production",
-  "Project Management",
-];
-
 interface ClientWithProjects {
   folderId: string;
   name: string;
@@ -34,7 +24,6 @@ interface ClientWithProjects {
 export default function NewDeliveryPage() {
   const [selectedListId, setSelectedListId] = useState("");
   const [selectedDeliverableType, setSelectedDeliverableType] = useState("");
-  const [selectedDepartment, setSelectedDepartment] = useState("");
 
   // Fetch all projects (including those without deliveries)
   const { data: projectsData } = useQuery<{
@@ -93,12 +82,6 @@ export default function NewDeliveryPage() {
     return options.map((o) => ({ value: o.name, label: o.name }));
   }, [deliverableTypesData]);
 
-  // Department options
-  const departmentOptions = useMemo(
-    () => DEPARTMENTS.map((d) => ({ value: d, label: d })),
-    []
-  );
-
   // Auto-fetch project detail when project AND deliverable type are selected
   const shouldFetchDetail = !!selectedListId && !!selectedDeliverableType;
 
@@ -135,7 +118,7 @@ export default function NewDeliveryPage() {
       {/* Selection Card */}
       <div className="rounded-lg border border-border/50 bg-card p-6">
         <h2 className="mb-4 text-base font-semibold">Select Project & Template</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {/* Project */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Project</label>
@@ -159,18 +142,6 @@ export default function NewDeliveryPage() {
               placeholder="Select type..."
               searchPlaceholder="Search types..."
               emptyMessage="No types found."
-            />
-          </div>
-
-          {/* Department */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Department</label>
-            <SearchableSelect
-              options={departmentOptions}
-              value={selectedDepartment}
-              onValueChange={setSelectedDepartment}
-              placeholder="Select department..."
-              searchPlaceholder="Search departments..."
             />
           </div>
         </div>
@@ -197,7 +168,7 @@ export default function NewDeliveryPage() {
           adhocMode
           adhocListId={selectedListId}
           adhocDeliverableType={selectedDeliverableType}
-          adhocDepartment={selectedDepartment}
+          adhocDepartment={taskDetail.template?.department ?? ""}
         />
       )}
     </div>

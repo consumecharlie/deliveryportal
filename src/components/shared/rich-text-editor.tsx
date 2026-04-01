@@ -232,6 +232,13 @@ function htmlToMarkdown(html: string): string {
   md = md.replace(/&#39;/g, "'");
   md = md.replace(/&nbsp;/g, " ");
 
+  // Fix broken bold around links: **text **[**link**](url)*** → **text [link](url)**
+  // TipTap wraps bold on each text node separately, so bold text containing a
+  // link produces adjacent/overlapping bold markers around the markdown link.
+  md = md.replace(/\[\*\*([^\]]+?)\*\*\]/g, "[$1]");      // [**text**] → [text]
+  md = md.replace(/\*\*(\s*)\*\*/g, "$1");                  // ** ** → (space)
+  md = md.replace(/\*{3,}/g, "**");                          // *** → **
+
   // Clean up excessive newlines (4+ → 3, preserving intentional double-blank-lines)
   md = md.replace(/\n{4,}/g, "\n\n\n");
 

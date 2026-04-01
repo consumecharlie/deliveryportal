@@ -127,6 +127,16 @@ function performMerge(
     result = result.replace(pattern, value);
   }
 
+  // Fix broken bold around links: **text **[**link**](url)*** → **text [link](url)**
+  // This happens when TipTap's htmlToMarkdown wraps bold on each text node separately,
+  // producing adjacent/overlapping bold markers around markdown links.
+  // Step 1: Remove bold markers wrapping only the link text inside [**...**](url)
+  result = result.replace(/\[\*\*([^\]]+?)\*\*\]/g, "[$1]");
+  // Step 2: Collapse adjacent bold end+start: "**foo **[" → "**foo ["
+  result = result.replace(/\*\*(\s*)\*\*/g, "$1");
+  // Step 3: Clean trailing triple+ asterisks (from overlapping bold closers)
+  result = result.replace(/\*{3,}/g, "**");
+
   // Clean up empty bullet points (lines that are just "- " or "• " after removing empty vars)
   result = result.replace(/^[\s]*[-•]\s*$/gm, "");
 
