@@ -104,15 +104,6 @@ export function AddonProjectModal({
     }
   }, [open, projects, selectedListId]);
 
-  // Auto-select deliverable type from the project's active deadline
-  useEffect(() => {
-    if (!selectedProject || selectedType) return;
-    const deadlines = selectedProject.activeDeliveryDeadlines ?? [];
-    if (deadlines.length === 1 && deadlines[0].deliverableType) {
-      setSelectedType(deadlines[0].deliverableType);
-    }
-  }, [selectedProject, selectedType]);
-
   const handleConfirm = () => {
     if (!selectedProject || !selectedType) return;
     onConfirm({
@@ -122,12 +113,6 @@ export function AddonProjectModal({
     });
     onOpenChange(false);
   };
-
-  // Build suggested deliverable types: deadlines first, then all options
-  const suggestedTypes =
-    selectedProject?.activeDeliveryDeadlines
-      ?.filter((d) => d.deliverableType)
-      .map((d) => d.deliverableType) ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,47 +158,43 @@ export function AddonProjectModal({
               />
             </div>
 
-            {/* Show active delivery deadlines as context */}
+            {/* Clickable delivery deadlines — selecting one sets the type directly */}
             {selectedProject?.activeDeliveryDeadlines?.length ? (
-              <div className="rounded-md border border-border/50 bg-muted/30 p-3 space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Active delivery deadlines:
-                </p>
-                {selectedProject.activeDeliveryDeadlines.map((d) => (
-                  <div
-                    key={d.taskId}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <span className="font-medium">{d.deliverableType || d.taskName}</span>
-                    {d.dueDate && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {formatDueDate(d.dueDate)}
+              <div className="space-y-2">
+                <Label>Select a delivery to combine</Label>
+                <div className="space-y-1.5">
+                  {selectedProject.activeDeliveryDeadlines.map((d) => (
+                    <button
+                      key={d.taskId}
+                      type="button"
+                      onClick={() => setSelectedType(d.deliverableType || "")}
+                      className={`w-full flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${
+                        selectedType === d.deliverableType
+                          ? "border-[#6AC387] bg-[#6AC387]/10"
+                          : "border-border/50 hover:border-border hover:bg-muted/30"
+                      }`}
+                    >
+                      <span className="font-medium flex-1">
+                        {d.deliverableType || d.taskName}
                       </span>
-                    )}
-                    <span className="text-xs text-muted-foreground capitalize">
-                      ({d.status})
-                    </span>
-                  </div>
-                ))}
+                      {d.dueDate && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          {formatDueDate(d.dueDate)}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {d.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : selectedProject ? (
-              <p className="text-xs text-muted-foreground">
-                No active delivery deadlines — you can still combine with a
-                template of your choice.
-              </p>
-            ) : null}
-
-            {selectedListId && (
               <div className="space-y-2">
-                <Label>
-                  Deliverable Type
-                  {suggestedTypes.length > 0 && (
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">
-                      (auto-suggested from deadline)
-                    </span>
-                  )}
-                </Label>
+                <p className="text-xs text-muted-foreground">
+                  No active delivery deadlines — select a template type manually.
+                </p>
                 <SearchableSelect
                   options={deliverableTypeOptions}
                   value={selectedType}
@@ -222,7 +203,7 @@ export function AddonProjectModal({
                   searchPlaceholder="Search types..."
                 />
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
