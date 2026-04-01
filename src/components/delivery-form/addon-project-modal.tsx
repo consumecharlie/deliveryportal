@@ -178,7 +178,7 @@ export function AddonProjectModal({
                       className={`w-full flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors min-w-0 ${
                         selectedType === d.deliverableType
                           ? "border-[#6AC387] bg-[#6AC387]/10"
-                          : "border-border/50 hover:border-border hover:bg-muted/30"
+                          : "border-border/50 hover:border-[#6AC387]/40 hover:bg-[#6AC387]/5"
                       }`}
                     >
                       <span className="font-medium flex-1 truncate">
