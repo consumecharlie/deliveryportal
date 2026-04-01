@@ -43,6 +43,11 @@ interface SendBarProps {
   adhocListId?: string;
   adhocDeliverableType?: string;
   adhocDepartment?: string;
+  addonListId?: string;
+  addonDeliverableType?: string;
+  addonDepartment?: string;
+  addonReviewLinks?: Record<string, string>;
+  addonProjectName?: string;
 }
 
 export function SendBar({
@@ -64,6 +69,11 @@ export function SendBar({
   adhocListId,
   adhocDeliverableType,
   adhocDepartment,
+  addonListId,
+  addonDeliverableType,
+  addonDepartment,
+  addonReviewLinks,
+  addonProjectName,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -99,6 +109,16 @@ export function SendBar({
         ? "/api/deliverable/adhoc-send"
         : `/api/tasks/${taskId}/send`;
 
+      const addonFields = addonListId
+        ? {
+            addonListId,
+            addonDeliverableType,
+            addonDepartment,
+            addonReviewLinks,
+            addonProjectName,
+          }
+        : {};
+
       const body = adhocMode
         ? {
             formState,
@@ -114,6 +134,7 @@ export function SendBar({
             department: adhocDepartment,
             taskMeta,
             ...(testMode ? { testMode: true, testEmail } : {}),
+            ...addonFields,
           }
         : {
             formState,
@@ -127,6 +148,7 @@ export function SendBar({
             listId,
             taskMeta,
             ...(testMode ? { testMode: true, testEmail } : {}),
+            ...addonFields,
           };
 
       const res = await fetch(endpoint, {

@@ -397,6 +397,277 @@ export function mergeTemplate(
   };
 }
 
+// ── Add-on project merge ──
+
+export interface AddonMergeInput {
+  // Primary project (already merged)
+  primaryProjectName: string;
+  primaryContent: string; // Already merged email or slack content
+  // Add-on project
+  addonProjectName: string;
+  addonTemplate: string; // Raw template snippet
+  addonContacts: ProjectContact[];
+  addonVariables: {
+    revisionRounds: string;
+    feedbackWindows: string;
+    nextFeedbackDeadline: string;
+    googleDeliverableLink?: string;
+    frameReviewLink?: string;
+    animaticReviewLink?: string;
+    loomReviewLink?: string;
+    flexLink?: string;
+    projectPlanLink?: string;
+    linkLabels?: Record<string, string>;
+    extraLinks?: Array<{ url: string; label: string }>;
+  };
+  // Mode
+  isSlack: boolean;
+}
+
+interface ParsedSection {
+  header: string;
+  content: string;
+}
+
+/**
+ * Parse merged content into sections by detecting markdown headers.
+ * Returns greeting, named sections, and closing text.
+ */
+function parseSections(content: string): {
+  greeting: string;
+  sections: ParsedSection[];
+  closing: string;
+} {
+  const lines = content.split("\n");
+  const headerPattern = /^#{1,3}\s+/;
+
+  // Find the first header index
+  let firstHeaderIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headerPattern.test(lines[i])) {
+      firstHeaderIdx = i;
+      break;
+    }
+  }
+
+  if (firstHeaderIdx === -1) {
+    // No headers found — treat everything as greeting
+    return { greeting: content, sections: [], closing: "" };
+  }
+
+  const greeting = lines.slice(0, firstHeaderIdx).join("\n").trimEnd();
+
+  // Parse sections
+  const sections: ParsedSection[] = [];
+  let currentHeader = "";
+  let currentLines: string[] = [];
+
+  for (let i = firstHeaderIdx; i < lines.length; i++) {
+    if (headerPattern.test(lines[i])) {
+      if (currentHeader) {
+        sections.push({
+          header: currentHeader,
+          content: currentLines.join("\n").trimEnd(),
+        });
+      }
+      currentHeader = lines[i];
+      currentLines = [];
+    } else {
+      currentLines.push(lines[i]);
+    }
+  }
+
+  // Push last section
+  if (currentHeader) {
+    sections.push({
+      header: currentHeader,
+      content: currentLines.join("\n").trimEnd(),
+    });
+  }
+
+  // Identify closing: anything after the last recognized section that looks
+  // like a sign-off (doesn't start with a header keyword we care about)
+  let closing = "";
+  const recognizedPatterns = [
+    /scope|timeline/i,
+    /review.*link/i,
+    /feedback|submit/i,
+    /project\s*plan/i,
+  ];
+
+  // Walk backwards to find the last recognized section
+  let lastRecognizedIdx = -1;
+  for (let i = sections.length - 1; i >= 0; i--) {
+    const headerLower = sections[i].header.toLowerCase().replace(/[#*]/g, "");
+    if (recognizedPatterns.some((p) => p.test(headerLower))) {
+      lastRecognizedIdx = i;
+      break;
+    }
+  }
+
+  if (lastRecognizedIdx >= 0 && lastRecognizedIdx < sections.length - 1) {
+    // Everything after the last recognized section is closing
+    const closingSections = sections.splice(lastRecognizedIdx + 1);
+    closing = closingSections
+      .map((s) => `${s.header}\n${s.content}`)
+      .join("\n")
+      .trim();
+  }
+
+  return { greeting, sections, closing };
+}
+
+function findSection(
+  sections: ParsedSection[],
+  pattern: RegExp
+): ParsedSection | undefined {
+  return sections.find((s) => {
+    const cleaned = s.header.toLowerCase().replace(/[#*]/g, "");
+    return pattern.test(cleaned);
+  });
+}
+
+/**
+ * Merge a combined delivery for a primary + add-on project.
+ * Takes the primary project's already-merged content and the add-on's raw template,
+ * then builds a combined message with labeled sections for each project.
+ */
+export function mergeAddonDelivery(input: AddonMergeInput): string {
+  const {
+    primaryProjectName,
+    primaryContent,
+    addonProjectName,
+    addonTemplate,
+    addonContacts,
+    addonVariables,
+    isSlack,
+  } = input;
+
+  // 1. Parse primary content into sections
+  const primary = parseSections(primaryContent);
+
+  // 2. Merge the addon template
+  const addonMerged = mergeTemplate(addonTemplate, "", {
+    contacts: addonContacts,
+    projectName: addonProjectName,
+    versionNotes: "",
+    revisionRounds: addonVariables.revisionRounds,
+    feedbackWindows: addonVariables.feedbackWindows,
+    nextFeedbackDeadline: addonVariables.nextFeedbackDeadline,
+    googleDeliverableLink: addonVariables.googleDeliverableLink,
+    frameReviewLink: addonVariables.frameReviewLink,
+    animaticReviewLink: addonVariables.animaticReviewLink,
+    loomReviewLink: addonVariables.loomReviewLink,
+    flexLink: addonVariables.flexLink,
+    projectPlanLink: addonVariables.projectPlanLink,
+    extraLinks: addonVariables.extraLinks,
+    repeatClient: true, // Strip explainer sections for addon
+    linkLabels: addonVariables.linkLabels,
+  });
+
+  // Use emailContent for email mode, slackContent for slack mode
+  const addonContent = isSlack
+    ? addonMerged.slackContent
+    : addonMerged.emailContent;
+
+  // 3. Parse addon content into sections
+  const addon = parseSections(addonContent);
+
+  // 4. Extract specific sections from primary
+  const primaryScope = findSection(primary.sections, /scope|timeline/i);
+  const primaryLinks = findSection(primary.sections, /review.*link/i);
+  const primaryFeedback = findSection(primary.sections, /feedback|submit/i);
+  const primaryPlan = findSection(primary.sections, /project\s*plan/i);
+
+  // 5. Extract specific sections from addon
+  const addonScope = findSection(addon.sections, /scope|timeline/i);
+  const addonLinks = findSection(addon.sections, /review.*link/i);
+  const addonPlan = findSection(addon.sections, /project\s*plan/i);
+
+  // 6. Build combined output
+  const parts: string[] = [];
+
+  // Greeting
+  if (primary.greeting) {
+    parts.push(primary.greeting);
+  }
+
+  // Intro line
+  parts.push("");
+  if (isSlack) {
+    parts.push(
+      `We have deliverables ready for both *${primaryProjectName}* and *${addonProjectName}* — details for each are below!`
+    );
+  } else {
+    parts.push(
+      `We have deliverables ready for both **${primaryProjectName}** and **${addonProjectName}** — details for each are below!`
+    );
+  }
+  parts.push("");
+
+  // Helper to append header with project name suffix
+  const appendSection = (
+    section: ParsedSection | undefined,
+    projectName: string
+  ) => {
+    if (!section) return;
+    // Append project name to header
+    const header = `${section.header} — ${projectName}`;
+    parts.push(header);
+    if (section.content) {
+      parts.push(section.content);
+    }
+    parts.push("");
+  };
+
+  // Primary scope + links
+  appendSection(primaryScope, primaryProjectName);
+  appendSection(primaryLinks, primaryProjectName);
+
+  // Addon scope + links
+  appendSection(addonScope, addonProjectName);
+  appendSection(addonLinks, addonProjectName);
+
+  // Feedback section (once, from primary)
+  if (primaryFeedback) {
+    parts.push(primaryFeedback.header);
+    if (primaryFeedback.content) {
+      parts.push(primaryFeedback.content);
+    }
+    parts.push("");
+  }
+
+  // Project plan section (once, from primary — add addon plan link if available)
+  if (primaryPlan) {
+    parts.push(primaryPlan.header);
+    let planContent = primaryPlan.content || "";
+    // If addon has a project plan link, add it as additional bullet
+    if (addonPlan?.content) {
+      // Extract any bullet lines from addon plan that contain links
+      const addonPlanBullets = addonPlan.content
+        .split("\n")
+        .filter((line) => /^\s*[-•*]\s*\[/.test(line));
+      if (addonPlanBullets.length > 0) {
+        planContent += "\n" + addonPlanBullets.join("\n");
+      }
+    }
+    if (planContent) {
+      parts.push(planContent);
+    }
+    parts.push("");
+  }
+
+  // Closing
+  if (primary.closing) {
+    parts.push(primary.closing);
+  }
+
+  return parts
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * Extract template variable names from a snippet body.
  * Returns both simple [var] and link [Text | var] variable names.

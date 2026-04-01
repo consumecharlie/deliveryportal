@@ -1,0 +1,153 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/shared/searchable-select";
+
+interface EligibleProject {
+  listId: string;
+  projectName: string;
+  clientName: string;
+  primaryContactName: string;
+  primaryContactEmail: string;
+  hasActiveDeliveryDeadlines: boolean;
+}
+
+export interface AddonSelection {
+  listId: string;
+  projectName: string;
+  deliverableType: string;
+}
+
+interface AddonProjectModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentListId: string;
+  deliverableTypeOptions: Array<{ value: string; label: string }>;
+  onConfirm: (selection: AddonSelection) => void;
+}
+
+export function AddonProjectModal({
+  open,
+  onOpenChange,
+  currentListId,
+  deliverableTypeOptions,
+  onConfirm,
+}: AddonProjectModalProps) {
+  const [selectedListId, setSelectedListId] = useState<string>("");
+  const [selectedType, setSelectedType] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setSelectedListId("");
+      setSelectedType("");
+    }
+  }, [open]);
+
+  const { data, isLoading } = useQuery<{ projects: EligibleProject[] }>({
+    queryKey: ["eligible-addons", currentListId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(currentListId)}/eligible-addons`
+      );
+      if (!res.ok) throw new Error("Failed to fetch eligible projects");
+      return res.json();
+    },
+    enabled: open && !!currentListId,
+    staleTime: 5 * 60_000,
+  });
+
+  const projects = data?.projects ?? [];
+  const selectedProject = projects.find((p) => p.listId === selectedListId);
+
+  const handleConfirm = () => {
+    if (!selectedProject || !selectedType) return;
+    onConfirm({
+      listId: selectedProject.listId,
+      projectName: selectedProject.projectName,
+      deliverableType: selectedType,
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Add Project to Delivery
+          </DialogTitle>
+          <DialogDescription>
+            Combine another project into this delivery. Both projects share the
+            same primary contact.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : projects.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            No eligible projects found. Projects must be in the same client
+            folder and share the same primary contact.
+          </p>
+        ) : (
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Project</Label>
+              <SearchableSelect
+                options={projects.map((p) => ({
+                  value: p.listId,
+                  label: p.projectName,
+                }))}
+                value={selectedListId}
+                onValueChange={setSelectedListId}
+                placeholder="Select project..."
+                searchPlaceholder="Search projects..."
+              />
+            </div>
+
+            {selectedListId && (
+              <div className="space-y-2">
+                <Label>Deliverable Type</Label>
+                <SearchableSelect
+                  options={deliverableTypeOptions}
+                  value={selectedType}
+                  onValueChange={setSelectedType}
+                  placeholder="Select deliverable type..."
+                  searchPlaceholder="Search types..."
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!selectedListId || !selectedType}
+            className="bg-[#6AC387] hover:bg-[#5aad74] text-[#151919]"
+          >
+            Add Project
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

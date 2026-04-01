@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   getListTasks,
+  createTask,
+  getListFields,
   updateTaskCustomField,
   updateTaskStatus,
   extractCustomFieldValue,
@@ -9,6 +11,7 @@ import {
   CUSTOM_FIELDS,
   PROJECT_TASK_TYPES,
   DEPARTMENT_CC_EMAILS,
+  LINK_VARIABLE_MAP,
 } from "@/lib/custom-field-ids";
 import { prisma } from "@/lib/db";
 import { mergeTemplate, convertToSlackFormat } from "@/lib/template-merge";
@@ -33,6 +36,11 @@ interface SendRequestBody {
     department?: string;
     slackChannelName?: string;
   };
+  addonListId?: string;
+  addonDeliverableType?: string;
+  addonDepartment?: string;
+  addonReviewLinks?: Record<string, string>;
+  addonProjectName?: string;
 }
 
 /**
@@ -374,6 +382,112 @@ export async function POST(
       } catch (dbErr) {
         console.warn("Delivery DB logging failed (DB may not be connected):", dbErr);
         // Non-fatal: the delivery was still sent successfully
+      }
+    }
+
+    // ── 7. Handle add-on project (if combined delivery) ──
+    if (!testMode && body.addonListId) {
+      try {
+        const addonListId = body.addonListId;
+        const addonDeliverableType = body.addonDeliverableType ?? "";
+        const addonDepartment = body.addonDepartment ?? "";
+
+        // Create task in addon project
+        const addonTask = await createTask(addonListId, {
+          name: `Share ${addonDeliverableType} with Client`,
+          custom_fields: [],
+        });
+
+        // Resolve dropdown option IDs
+        const fieldsRes = await getListFields(addonListId);
+        const fields = fieldsRes.fields ?? [];
+
+        const resolveOptionId = (fieldId: string, optionName: string): string | null => {
+          const field = fields.find((f: { id: string }) => f.id === fieldId);
+          if (!field?.type_config?.options) return null;
+          const option = field.type_config.options.find(
+            (o: { name?: string; label?: string }) =>
+              o.name === optionName || o.label === optionName
+          );
+          return option ? String(option.orderindex) : null;
+        };
+
+        const addonUpdates: Promise<void>[] = [];
+
+        if (addonDeliverableType) {
+          const optionId = resolveOptionId(CUSTOM_FIELDS.DELIVERABLE_TYPE, addonDeliverableType);
+          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.DELIVERABLE_TYPE, optionId));
+        }
+        if (addonDepartment) {
+          const optionId = resolveOptionId(CUSTOM_FIELDS.DEPARTMENT, addonDepartment);
+          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.DEPARTMENT, optionId));
+        }
+        {
+          const optionId = resolveOptionId(CUSTOM_FIELDS.PROJECT_TASK_TYPE, "Delivery Deadline");
+          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.PROJECT_TASK_TYPE, optionId));
+        }
+
+        // Set addon review link fields
+        const addonLinks = body.addonReviewLinks ?? {};
+        for (const [varName, url] of Object.entries(addonLinks)) {
+          if (!url) continue;
+          const mapping = LINK_VARIABLE_MAP[varName];
+          if (mapping) {
+            addonUpdates.push(updateTaskCustomField(addonTask.id, mapping.fieldId, url));
+          }
+        }
+
+        await Promise.allSettled(addonUpdates);
+
+        // Mark addon task complete
+        await updateTaskStatus(addonTask.id, "complete");
+
+        // Log addon delivery to DB
+        try {
+          const addonDelivery = await prisma.delivery.create({
+            data: {
+              taskId: addonTask.id,
+              projectName: body.addonProjectName || "",
+              clientName: taskMeta?.clientName || "",
+              deliverableType: addonDeliverableType,
+              department: addonDepartment || taskMeta?.department || "",
+              senderEmail,
+              primaryEmail,
+              ccEmails: ccEmails || null,
+              slackChannel: slackChannelId || null,
+              slackChannelName: taskMeta?.slackChannelName || null,
+              emailSubject: emailSubject,
+              emailContent: emailContent,
+              slackContent: slackContent || null,
+              wasEdited: !!(formState.editedEmailContent || formState.editedSlackContent),
+              sentBy: userEmail,
+              projectListId: body.addonListId || null,
+              clientFolderId: null,
+            },
+          });
+
+          // Save addon review links
+          const addonLinkRecords = Object.entries(addonLinks)
+            .filter(([, url]) => !!url)
+            .map(([varName, url]) => ({
+              deliveryId: addonDelivery.id,
+              url,
+              label: varName,
+              linkType: "standard",
+              variableName: varName,
+              projectListId: body.addonListId || "",
+              clientFolderId: "",
+            }));
+
+          if (addonLinkRecords.length > 0) {
+            await prisma.deliveryLink.createMany({ data: addonLinkRecords });
+          }
+        } catch (dbErr) {
+          console.warn("Addon delivery DB logging failed:", dbErr);
+        }
+      } catch (addonErr) {
+        console.error("Failed to handle add-on project:", addonErr);
+        // Non-fatal: primary delivery was already sent
       }
     }
 

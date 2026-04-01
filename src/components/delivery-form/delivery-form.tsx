@@ -20,9 +20,12 @@ import { SendBar } from "./send-bar";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import {
   mergeTemplate,
+  mergeAddonDelivery,
   getRequiredLinkFields,
   getLinkLabelsFromTemplate,
 } from "@/lib/template-merge";
+import { AddonProjectModal } from "./addon-project-modal";
+import type { AddonSelection } from "./addon-project-modal";
 import { DEPARTMENT_CC_EMAILS } from "@/lib/custom-field-ids";
 import type {
   TaskDetail,
@@ -94,6 +97,14 @@ export function DeliveryForm({
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
   const [slackChannelName, setSlackChannelName] = useState<string>("");
 
+  // ── Add-on project state ──
+  const [addonProject, setAddonProject] = useState<AddonSelection | null>(null);
+  const [showAddonModal, setShowAddonModal] = useState(false);
+  const [addonReviewLinks, setAddonReviewLinks] = useState<Record<string, string>>({});
+  const [addonLinkLabels, setAddonLinkLabels] = useState<Record<string, string>>({});
+  const [addonRevisionRounds, setAddonRevisionRounds] = useState("");
+  const [addonFeedbackWindows, setAddonFeedbackWindows] = useState("");
+
   // ── Editable recipient fields ──
   const [editedToEmail, setEditedToEmail] = useState<string | null>(null);
   const [editedCcEmails, setEditedCcEmails] = useState<string | null>(null);
@@ -155,6 +166,40 @@ export function DeliveryForm({
   // Use fetched template if type changed, otherwise initial
   const activeTemplate = fetchedTemplate ?? currentTemplate;
 
+  // ── Fetch eligible add-on projects ──
+
+  const { data: eligibleAddonsData } = useQuery<{
+    projects: Array<{ listId: string; projectName: string }>;
+  }>({
+    queryKey: ["eligible-addons", task.listId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(task.listId)}/eligible-addons`
+      );
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+    enabled: !!task.listId && task.listId !== "__adhoc__",
+  });
+
+  const hasEligibleAddons = (eligibleAddonsData?.projects?.length ?? 0) > 0;
+
+  // ── Fetch add-on project detail ──
+
+  const { data: addonTaskDetail } = useQuery<TaskDetail>({
+    queryKey: ["addon-detail", addonProject?.listId, addonProject?.deliverableType],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(addonProject!.listId)}/detail?deliverableType=${encodeURIComponent(addonProject!.deliverableType)}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch add-on project detail");
+      return res.json();
+    },
+    enabled: !!addonProject?.listId && !!addonProject?.deliverableType,
+    staleTime: 5 * 60_000,
+  });
+
   // ── Fetch allowed senders (for From dropdown) ──
 
   const { data: fieldOptionsData } = useQuery<{
@@ -205,15 +250,32 @@ export function DeliveryForm({
     }
   }, [defaultLinkLabels]);
 
+  // Pre-fill addon fields when detail loads
+  useEffect(() => {
+    if (addonTaskDetail) {
+      setAddonRevisionRounds(addonTaskDetail.revisionRounds || "");
+      setAddonFeedbackWindows(addonTaskDetail.feedbackWindows || "");
+      setAddonReviewLinks({
+        googleDeliverableLink: addonTaskDetail.reviewLinks.googleDeliverableLink ?? "",
+        frameReviewLink: addonTaskDetail.reviewLinks.frameReviewLink ?? "",
+        loomReviewLink: addonTaskDetail.reviewLinks.loomReviewLink ?? "",
+        animaticReviewLink: addonTaskDetail.reviewLinks.animaticReviewLink ?? "",
+        flexLink: addonTaskDetail.reviewLinks.flexLink ?? "",
+      });
+      // Pre-fill addon link labels from template
+      if (addonTaskDetail.template?.snippet) {
+        const defaults = getLinkLabelsFromTemplate(addonTaskDetail.template.snippet);
+        setAddonLinkLabels(defaults);
+      }
+    }
+  }, [addonTaskDetail]);
+
   // ── Build merged preview ──
 
   const mergedContent: MergedContent | null = useMemo(() => {
     if (!activeTemplate?.snippet) return null;
 
-    const primaryContact = contacts.find((c) => c.role === "Primary");
-    const postToSlack = !!primaryContact?.slackUserId;
-
-    return mergeTemplate(activeTemplate.snippet, activeTemplate.subjectLine, {
+    const baseMerged = mergeTemplate(activeTemplate.snippet, activeTemplate.subjectLine, {
       contacts,
       projectName: task.projectName,
       versionNotes,
@@ -231,6 +293,51 @@ export function DeliveryForm({
       repeatClient,
       linkLabels: Object.keys(linkLabels).length > 0 ? linkLabels : undefined,
     });
+
+    // If addon project is active and has a template, create combined content
+    if (addonProject && addonTaskDetail?.template?.snippet) {
+      const addonVars = {
+        revisionRounds: addonRevisionRounds,
+        feedbackWindows: addonFeedbackWindows,
+        nextFeedbackDeadline: addonTaskDetail.feedbackDeadline?.formattedDate ?? "",
+        googleDeliverableLink: addonReviewLinks.googleDeliverableLink,
+        frameReviewLink: addonReviewLinks.frameReviewLink,
+        animaticReviewLink: addonReviewLinks.animaticReviewLink,
+        loomReviewLink: addonReviewLinks.loomReviewLink,
+        flexLink: addonReviewLinks.flexLink,
+        projectPlanLink: addonTaskDetail.projectPlanLink ?? undefined,
+        linkLabels: Object.keys(addonLinkLabels).length > 0 ? addonLinkLabels : undefined,
+        extraLinks: [] as Array<{ url: string; label: string }>,
+      };
+
+      const addonEmailContent = mergeAddonDelivery({
+        primaryProjectName: task.projectName,
+        primaryContent: baseMerged.emailContent,
+        addonProjectName: addonProject.projectName,
+        addonTemplate: addonTaskDetail.template.snippet,
+        addonContacts: addonTaskDetail.contacts,
+        addonVariables: addonVars,
+        isSlack: false,
+      });
+
+      const addonSlackContent = mergeAddonDelivery({
+        primaryProjectName: task.projectName,
+        primaryContent: baseMerged.slackContent,
+        addonProjectName: addonProject.projectName,
+        addonTemplate: addonTaskDetail.template.snippet,
+        addonContacts: addonTaskDetail.contacts,
+        addonVariables: addonVars,
+        isSlack: true,
+      });
+
+      return {
+        emailContent: addonEmailContent,
+        slackContent: addonSlackContent,
+        subjectLine: baseMerged.subjectLine,
+      };
+    }
+
+    return baseMerged;
   }, [
     activeTemplate,
     contacts,
@@ -245,6 +352,12 @@ export function DeliveryForm({
     rushedProject,
     repeatClient,
     linkLabels,
+    addonProject,
+    addonTaskDetail,
+    addonReviewLinks,
+    addonLinkLabels,
+    addonRevisionRounds,
+    addonFeedbackWindows,
   ]);
 
   // ── Recipient logic ──
@@ -387,6 +500,22 @@ export function DeliveryForm({
     setExtraLinks((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleAddonConfirm = useCallback((selection: AddonSelection) => {
+    setAddonProject(selection);
+    setAddonReviewLinks({});
+    setAddonLinkLabels({});
+    setAddonRevisionRounds("");
+    setAddonFeedbackWindows("");
+  }, []);
+
+  const handleRemoveAddon = useCallback(() => {
+    setAddonProject(null);
+    setAddonReviewLinks({});
+    setAddonLinkLabels({});
+    setAddonRevisionRounds("");
+    setAddonFeedbackWindows("");
+  }, []);
+
   const handleToggleEditMode = useCallback(() => {
     // NOTE: We intentionally do NOT pre-initialize editedEmailContent here.
     // TipTap's editor receives its content from displayEmailContent which
@@ -426,6 +555,13 @@ export function DeliveryForm({
     editedToEmail,
     editedCcEmails,
     editedSenderEmail,
+    ...(addonProject ? {
+      addonListId: addonProject.listId,
+      addonDeliverableType: addonProject.deliverableType,
+      addonDepartment: addonTaskDetail?.task.department,
+      addonReviewLinks,
+      addonProjectName: addonProject.projectName,
+    } : {}),
   };
 
   // ── Auto-save (every 30s, no ClickUp write) ──
@@ -616,7 +752,64 @@ export function DeliveryForm({
             onFeedbackWindowsChange={setFeedbackWindows}
             onRushedProjectChange={setRushedProject}
             onRepeatClientChange={setRepeatClient}
+            showAddonButton={hasEligibleAddons}
+            addonProjectName={addonProject?.projectName}
+            onAddProject={() => setShowAddonModal(true)}
+            onRemoveAddon={handleRemoveAddon}
           />
+
+          {/* Add-on project fields */}
+          {addonProject && addonTaskDetail && (
+            <div className="space-y-6 rounded-lg border border-[#6AC387]/30 bg-[#6AC387]/5 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">
+                  📎 {addonProject.projectName} — {addonProject.deliverableType}
+                </span>
+              </div>
+
+              <ReviewLinksSection
+                requiredFields={addonTaskDetail.template ? getRequiredLinkFields(addonTaskDetail.template.snippet) : []}
+                reviewLinks={addonReviewLinks}
+                linkLabels={addonLinkLabels}
+                defaultLinkLabels={addonTaskDetail.template ? getLinkLabelsFromTemplate(addonTaskDetail.template.snippet) : {}}
+                extraLinks={[]}
+                onReviewLinkChange={(field, value) =>
+                  setAddonReviewLinks((prev) => ({ ...prev, [field]: value }))
+                }
+                onLinkLabelChange={(field, value) =>
+                  setAddonLinkLabels((prev) => ({ ...prev, [field]: value }))
+                }
+                onAddExtraLink={() => {}}
+                onExtraLinkChange={() => {}}
+                onRemoveExtraLink={() => {}}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Revision Rounds</Label>
+                  <SearchableSelect
+                    options={[{ value: "1", label: "1" }, { value: "2", label: "2" }]}
+                    value={addonRevisionRounds}
+                    onValueChange={setAddonRevisionRounds}
+                    placeholder="Select..."
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Feedback Windows</Label>
+                  <SearchableSelect
+                    options={[
+                      { value: "Same day", label: "Same day" },
+                      { value: "24 Hours", label: "24 Hours" },
+                      { value: "48 Hours", label: "48 Hours" },
+                    ]}
+                    value={addonFeedbackWindows}
+                    onValueChange={setAddonFeedbackWindows}
+                    placeholder="Select..."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Version Notes */}
           <VersionNotesSection
@@ -687,6 +880,15 @@ export function DeliveryForm({
         </div>
       </div>
 
+      {/* Add-on project modal */}
+      <AddonProjectModal
+        open={showAddonModal}
+        onOpenChange={setShowAddonModal}
+        currentListId={task.listId}
+        deliverableTypeOptions={deliverableTypeOptions}
+        onConfirm={handleAddonConfirm}
+      />
+
       {/* Bottom bar */}
       <SendBar
         taskId={task.id}
@@ -712,6 +914,11 @@ export function DeliveryForm({
         adhocListId={adhocListId}
         adhocDeliverableType={adhocDeliverableType}
         adhocDepartment={adhocDepartment}
+        addonListId={addonProject?.listId}
+        addonDeliverableType={addonProject?.deliverableType}
+        addonDepartment={addonTaskDetail?.task.department}
+        addonReviewLinks={addonProject ? addonReviewLinks : undefined}
+        addonProjectName={addonProject?.projectName}
       />
     </div>
   );

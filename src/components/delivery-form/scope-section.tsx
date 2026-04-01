@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 
@@ -12,6 +13,10 @@ interface ScopeSectionProps {
   onFeedbackWindowsChange: (value: string) => void;
   onRushedProjectChange: (value: boolean) => void;
   onRepeatClientChange: (value: boolean) => void;
+  showAddonButton?: boolean;
+  addonProjectName?: string;
+  onAddProject?: () => void;
+  onRemoveAddon?: () => void;
 }
 
 const revisionOptions = [
@@ -34,6 +39,10 @@ export function ScopeSection({
   onFeedbackWindowsChange,
   onRushedProjectChange,
   onRepeatClientChange,
+  showAddonButton,
+  addonProjectName,
+  onAddProject,
+  onRemoveAddon,
 }: ScopeSectionProps) {
   return (
     <div className="space-y-3">
@@ -91,6 +100,30 @@ export function ScopeSection({
             </span>
           </span>
         </label>
+        {showAddonButton && !addonProjectName && (
+          <button
+            type="button"
+            onClick={onAddProject}
+            className="flex items-center gap-1.5 text-sm text-[#6AC387] hover:text-[#5aad74] transition-colors mt-1"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Project (same contact)
+          </button>
+        )}
+        {addonProjectName && (
+          <div className="flex items-center gap-2 mt-1 rounded-md border border-[#6AC387]/30 bg-[#6AC387]/5 px-3 py-1.5">
+            <span className="text-sm">
+              📎 Combined with <strong>{addonProjectName}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={onRemoveAddon}
+              className="ml-auto text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

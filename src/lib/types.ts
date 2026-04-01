@@ -149,6 +149,12 @@ export interface DeliveryFormState {
   editedToEmail: string | null;
   editedCcEmails: string | null;
   editedSenderEmail: string | null;
+  // Add-on project data (when combining projects)
+  addonListId?: string;
+  addonDeliverableType?: string;
+  addonDepartment?: string;
+  addonReviewLinks?: Record<string, string>;
+  addonProjectName?: string;
 }
 
 export interface SendPayload {
