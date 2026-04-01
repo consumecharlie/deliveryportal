@@ -723,7 +723,7 @@ export function DeliveryForm({
         </div>
       ) : hasEligibleAddons ? (
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground border border-border/50 rounded-full px-2.5 py-1">
+          <span className="text-xs text-[#6AC387] border border-[#6AC387]/40 bg-[#6AC387]/5 rounded-full px-2.5 py-1">
             Contact match found
           </span>
           <Button
