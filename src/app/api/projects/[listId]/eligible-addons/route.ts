@@ -45,30 +45,31 @@ export async function GET(
   { params }: { params: Promise<{ listId: string }> }
 ) {
   const { listId } = await params;
+  const { searchParams } = new URL(req.url);
+  // The ClickUp task ID of the current delivery deadline — used to exclude
+  // it when showing same-project deadlines as add-on options.
+  const currentTaskId = searchParams.get("currentTaskId") ?? "";
 
   try {
     // Get current project's folder info
     const listInfo = await getList(listId);
     const folderId = listInfo.folder.id;
     const clientName = listInfo.folder.name;
+    const projectName = listInfo.name;
 
     if (!folderId || folderId === "0") {
       return NextResponse.json({ projects: [] });
     }
 
-    // Get sibling lists in the same client folder
+    // Get all lists in the same client folder (including current project)
     const folderListsRes = await getFolderLists(folderId);
-    const siblingLists = folderListsRes.lists.filter(
-      (l) => l.id !== listId
-    );
-    if (siblingLists.length === 0) {
-      return NextResponse.json({ projects: [] });
-    }
+    const allLists = folderListsRes.lists;
 
-    // Fetch current project's contacts to find primary
+    // Fetch current project's tasks to find primary contact + same-project deadlines
     const currentTasksRes = await getListTasks(listId, true);
     let currentPrimaryEmail = "";
     let currentPrimaryName = "";
+    const sameProjectDeadlines: ActiveDeliveryDeadline[] = [];
 
     for (const task of currentTasksRes.tasks) {
       const rawType = task.custom_fields.find(
@@ -82,28 +83,63 @@ export async function GET(
       const isContact =
         taskType === "Project Contact" ||
         String(rawType) === PROJECT_TASK_TYPES.PROJECT_CONTACT;
-      if (!isContact) continue;
+      const isDeliveryDeadline =
+        taskType === "Delivery Deadline" ||
+        String(rawType) === PROJECT_TASK_TYPES.DELIVERY_DEADLINE;
 
-      const role =
-        extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_ROLE) ?? "";
-      if (role !== "Primary") continue;
+      if (isContact) {
+        const role =
+          extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_ROLE) ?? "";
+        if (role === "Primary") {
+          currentPrimaryEmail = (
+            extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? ""
+          ).toLowerCase().trim();
+          currentPrimaryName = (
+            extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ??
+            task.name
+          ).toLowerCase().trim();
+        }
+      }
 
-      currentPrimaryEmail = (
-        extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? ""
-      ).toLowerCase().trim();
-      currentPrimaryName = (
-        extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ??
-        task.name
-      ).toLowerCase().trim();
-      break;
+      // Collect OTHER active delivery deadlines in the same project
+      // (exclude the current task being edited)
+      if (isDeliveryDeadline && task.id !== currentTaskId) {
+        const status = task.status.status.toLowerCase();
+        if (status !== "complete" && status !== "closed") {
+          sameProjectDeadlines.push({
+            taskId: task.id,
+            taskName: task.name,
+            deliverableType:
+              extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.DELIVERABLE_TYPE) ?? "",
+            department:
+              extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.DEPARTMENT) ?? "",
+            dueDate: task.due_date,
+            status: task.status.status,
+          });
+        }
+      }
     }
 
     if (!currentPrimaryEmail && !currentPrimaryName) {
       return NextResponse.json({ projects: [] });
     }
 
-    // Check each sibling project for matching primary contact
+    // Start with same-project deadlines (if any other deliverables pending)
     const eligible: EligibleProject[] = [];
+    if (sameProjectDeadlines.length > 0) {
+      eligible.push({
+        listId,
+        projectName,
+        clientName,
+        primaryContactName: currentPrimaryName || currentPrimaryEmail,
+        primaryContactEmail: currentPrimaryEmail,
+        hasActiveDeliveryDeadlines: true,
+        activeDeliveryDeadlines: sameProjectDeadlines,
+      });
+    }
+
+    // Check sibling projects for matching primary contact
+    const siblingLists = allLists.filter((l) => l.id !== listId);
     const BATCH_SIZE = 10;
 
     for (let i = 0; i < siblingLists.length; i += BATCH_SIZE) {

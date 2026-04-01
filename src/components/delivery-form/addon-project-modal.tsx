@@ -116,7 +116,7 @@ export function AddonProjectModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
@@ -168,13 +168,13 @@ export function AddonProjectModal({
                       key={d.taskId}
                       type="button"
                       onClick={() => setSelectedType(d.deliverableType || "")}
-                      className={`w-full flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`w-full flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors min-w-0 ${
                         selectedType === d.deliverableType
                           ? "border-[#6AC387] bg-[#6AC387]/10"
                           : "border-border/50 hover:border-border hover:bg-muted/30"
                       }`}
                     >
-                      <span className="font-medium flex-1">
+                      <span className="font-medium flex-1 truncate">
                         {d.deliverableType || d.taskName}
                       </span>
                       {d.dueDate && (

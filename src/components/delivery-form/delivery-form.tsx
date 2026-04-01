@@ -171,10 +171,10 @@ export function DeliveryForm({
   const { data: eligibleAddonsData } = useQuery<{
     projects: Array<{ listId: string; projectName: string }>;
   }>({
-    queryKey: ["eligible-addons", task.listId],
+    queryKey: ["eligible-addons", task.listId, task.id],
     queryFn: async () => {
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(task.listId)}/eligible-addons`
+        `/api/projects/${encodeURIComponent(task.listId)}/eligible-addons?currentTaskId=${encodeURIComponent(task.id)}`
       );
       if (!res.ok) throw new Error("Failed");
       return res.json();
