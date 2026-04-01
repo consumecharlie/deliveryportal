@@ -10,6 +10,15 @@ import {
   PROJECT_TASK_TYPES,
 } from "@/lib/custom-field-ids";
 
+interface ActiveDeliveryDeadline {
+  taskId: string;
+  taskName: string;
+  deliverableType: string;
+  department: string;
+  dueDate: string | null;
+  status: string;
+}
+
 interface EligibleProject {
   listId: string;
   projectName: string;
@@ -17,6 +26,7 @@ interface EligibleProject {
   primaryContactName: string;
   primaryContactEmail: string;
   hasActiveDeliveryDeadlines: boolean;
+  activeDeliveryDeadlines: ActiveDeliveryDeadline[];
 }
 
 /**
@@ -103,7 +113,7 @@ export async function GET(
           const tasksRes = await getListTasks(sibList.id, true);
           let primaryEmail = "";
           let primaryName = "";
-          let hasActiveDeliveryDeadlines = false;
+          const activeDeadlines: ActiveDeliveryDeadline[] = [];
 
           for (const task of tasksRes.tasks) {
             const rawType = task.custom_fields.find(
@@ -138,7 +148,16 @@ export async function GET(
             if (isDeliveryDeadline) {
               const status = task.status.status.toLowerCase();
               if (status !== "complete" && status !== "closed") {
-                hasActiveDeliveryDeadlines = true;
+                activeDeadlines.push({
+                  taskId: task.id,
+                  taskName: task.name,
+                  deliverableType:
+                    extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.DELIVERABLE_TYPE) ?? "",
+                  department:
+                    extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.DEPARTMENT) ?? "",
+                  dueDate: task.due_date,
+                  status: task.status.status,
+                });
               }
             }
           }
@@ -159,7 +178,8 @@ export async function GET(
               clientName,
               primaryContactName: primaryName || primaryEmail,
               primaryContactEmail: primaryEmail,
-              hasActiveDeliveryDeadlines,
+              hasActiveDeliveryDeadlines: activeDeadlines.length > 0,
+              activeDeliveryDeadlines: activeDeadlines,
             } as EligibleProject;
           }
           return null;
