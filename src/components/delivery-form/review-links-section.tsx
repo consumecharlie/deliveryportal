@@ -102,6 +102,18 @@ export function ReviewLinksSection({
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  onReviewLinkChange(varName, "");
+                  onLinkLabelChange(varName, "");
+                }}
+                disabled={!value && !labelValue}
+                title="Clear field"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         );
