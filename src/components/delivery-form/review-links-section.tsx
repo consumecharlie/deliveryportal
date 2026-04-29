@@ -160,31 +160,43 @@ export function ReviewLinksSection({
 
       {/* Extra links (dynamic, non-ClickUp) */}
       {extraLinks.map((link, index) => (
-        <div key={index} className="flex items-end gap-2">
-          <div className="flex-1">
-            <Label className="text-xs text-muted-foreground">Link Text</Label>
-            <Input
-              placeholder="e.g., View Storyboard Revisions"
-              value={link.label}
-              onChange={(e) => onExtraLinkChange(index, "label", e.target.value)}
-            />
+        <div key={index} className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Additional Link</Label>
+          <div className="flex items-center gap-2">
+            <div className="w-2/5">
+              <Input
+                placeholder="Link text..."
+                value={link.label}
+                onChange={(e) => onExtraLinkChange(index, "label", e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                type="url"
+                placeholder="https://..."
+                value={link.url}
+                onChange={(e) => onExtraLinkChange(index, "url", e.target.value)}
+              />
+            </div>
+            {link.url && (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onRemoveExtraLink(index)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-          <div className="flex-1">
-            <Label className="text-xs text-muted-foreground">URL</Label>
-            <Input
-              type="url"
-              placeholder="https://..."
-              value={link.url}
-              onChange={(e) => onExtraLinkChange(index, "url", e.target.value)}
-            />
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemoveExtraLink(index)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       ))}
 

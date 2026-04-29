@@ -147,6 +147,60 @@ function performMerge(
 }
 
 /**
+ * Insert extra bullet lines into the "Review Link(s)" section of a merged
+ * snippet. Falls back to appending at the end of the content when no such
+ * section exists. Skips silently when there are no bullets to insert.
+ */
+function injectReviewLinkBullets(content: string, bullets: string[]): string {
+  if (bullets.length === 0) return content;
+
+  const lines = content.split("\n");
+  const headerPattern = /^\s*#{1,3}\s/;
+  const reviewHeader = /review\s*link/i;
+
+  const headerIdx = lines.findIndex(
+    (line) => headerPattern.test(line) && reviewHeader.test(line)
+  );
+
+  if (headerIdx === -1) {
+    return `${content}\n${bullets.join("\n")}`.replace(/\n{3,}/g, "\n\n");
+  }
+
+  // Find the end of the section: next header or end of content.
+  let endIdx = lines.length;
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    if (headerPattern.test(lines[i])) {
+      endIdx = i;
+      break;
+    }
+  }
+
+  // Find the last bullet within the section.
+  let lastBulletIdx = -1;
+  for (let i = endIdx - 1; i > headerIdx; i--) {
+    if (/^\s*[-•*]\s/.test(lines[i])) {
+      lastBulletIdx = i;
+      break;
+    }
+  }
+
+  let insertIdx: number;
+  if (lastBulletIdx >= 0) {
+    insertIdx = lastBulletIdx + 1;
+  } else {
+    // No bullets yet — insert before any trailing blank lines that pad the
+    // section, so the new bullets sit immediately after the header content.
+    insertIdx = endIdx;
+    while (insertIdx > headerIdx + 1 && lines[insertIdx - 1].trim() === "") {
+      insertIdx--;
+    }
+  }
+
+  lines.splice(insertIdx, 0, ...bullets);
+  return lines.join("\n");
+}
+
+/**
  * Unicode → Slack shortcode emoji map.
  * Used by convertToSlackFormat() and available for reverse-mapping in preview renderers.
  */
@@ -372,18 +426,36 @@ export function mergeTemplate(
     return filtered.join("\n");
   }
 
+  // Build the bullet lines that should appear inside the Review Links section
+  // for fields the template itself doesn't render: an unplaced flexLink and any
+  // user-added extra links.
+  const templateHasFlexLinkPlaceholder = /\|\s*flexLink\s*\]/.test(template);
+  const reviewLinkBullets: string[] = [];
+
+  if (variables.flexLink && !templateHasFlexLinkPlaceholder) {
+    const customLabel = variables.linkLabels?.flexLink?.trim();
+    const baseText = customLabel || variables.projectName || "Review Link";
+    const text =
+      variables.projectName &&
+      !baseText.toLowerCase().includes(variables.projectName.toLowerCase())
+        ? `${variables.projectName} – ${baseText}`
+        : baseText;
+    reviewLinkBullets.push(`- [${text}](${variables.flexLink})`);
+  }
+
+  if (variables.extraLinks?.length) {
+    for (const link of variables.extraLinks) {
+      if (!link.url) continue;
+      const label = link.label?.trim() || "Link";
+      reviewLinkBullets.push(`- [${label}](${link.url})`);
+    }
+  }
+
   // Merge the email version
   let emailContent = performMerge(template, replacements, variables.linkLabels);
   emailContent = stripRepeatClientSections(emailContent);
   emailContent = injectRushedNotice(emailContent);
-
-  // Append extra links as additional bullets
-  if (variables.extraLinks?.length) {
-    const extraBullets = variables.extraLinks
-      .map((link) => `- [${link.label}](${link.url})`)
-      .join("\n");
-    emailContent += `\n${extraBullets}`;
-  }
+  emailContent = injectReviewLinkBullets(emailContent, reviewLinkBullets);
 
   // Build Slack version: same markdown as email, but with @mention tokens
   // for contacts. The actual Slack mrkdwn conversion happens at send time.
@@ -394,14 +466,7 @@ export function mergeTemplate(
   let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
   slackContent = stripRepeatClientSections(slackContent);
   slackContent = injectRushedNotice(slackContent);
-
-  // Append extra links (same markdown format as email)
-  if (variables.extraLinks?.length) {
-    const extraBullets = variables.extraLinks
-      .map((link) => `- [${link.label}](${link.url})`)
-      .join("\n");
-    slackContent += `\n${extraBullets}`;
-  }
+  slackContent = injectReviewLinkBullets(slackContent, reviewLinkBullets);
 
   // Merge subject line
   const mergedSubject = performMerge(subjectLine, replacements);
