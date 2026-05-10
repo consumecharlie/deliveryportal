@@ -11,14 +11,6 @@ interface DropdownOption {
   color?: string;
 }
 
-interface MemberOption {
-  id: number;
-  username: string;
-  email: string;
-  profilePicture?: string;
-  initials: string;
-}
-
 /**
  * GET /api/templates/field-options
  *
@@ -56,7 +48,7 @@ export async function GET() {
 
     // Fetch workspace members for the Sender field
     // ClickUp v2: GET /team lists all teams; each team has members
-    let senderOptions: MemberOption[] = [];
+    let senderOptions: WorkspaceMember[] = [];
     try {
       const teamsRes = await fetch(
         `https://api.clickup.com/api/v2/team`,
