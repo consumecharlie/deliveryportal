@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getListFields } from "@/lib/clickup";
 import { LISTS, TEMPLATE_FIELDS, WORKSPACE_ID } from "@/lib/custom-field-ids";
 import { prisma } from "@/lib/db";
-import { filterMembersByAllowlist, type WorkspaceMember } from "@/lib/allowed-senders";
+import { clickupUserToMember, filterMembersByAllowlist, type WorkspaceMember } from "@/lib/allowed-senders";
 
 interface DropdownOption {
   id: string;
@@ -69,32 +69,7 @@ export async function GET() {
         ) ?? teams[0];
 
         if (team?.members) {
-          const mapped: WorkspaceMember[] = team.members.map(
-            (m: {
-              user: {
-                id: number;
-                username: string;
-                email: string;
-                profilePicture?: string;
-              };
-            }) => {
-              const user = m.user;
-              const name = (user.username ?? user.email ?? "").trim();
-              const initials = name
-                .split(/[\s.@]+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((p) => (p[0] ?? "").toUpperCase())
-                .join("");
-              return {
-                id: user.id ?? 0,
-                username: user.username ?? "",
-                email: user.email ?? "",
-                profilePicture: user.profilePicture ?? undefined,
-                initials,
-              };
-            }
-          );
+          const mapped: WorkspaceMember[] = team.members.map(clickupUserToMember);
 
           let allowedIds = new Set<number>();
           try {

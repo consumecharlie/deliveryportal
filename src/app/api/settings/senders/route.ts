@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserEmail } from "@/lib/get-session-user";
 import { WORKSPACE_ID } from "@/lib/custom-field-ids";
-import type { WorkspaceMember } from "@/lib/allowed-senders";
+import { clickupUserToMember, type WorkspaceMember } from "@/lib/allowed-senders";
 
 interface AllowedSenderRow {
   clickupUserId: number;
@@ -24,25 +24,7 @@ async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
     (teams ?? []).find((t: { id: string }) => t.id === WORKSPACE_ID) ??
     (teams ?? [])[0];
   if (!team?.members) return [];
-  return team.members.map((m: {
-    user: { id: number; username: string; email: string; profilePicture?: string };
-  }) => {
-    const u = m.user;
-    const name = (u.username ?? u.email ?? "").trim();
-    const initials = name
-      .split(/[\s.@]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => (p[0] ?? "").toUpperCase())
-      .join("");
-    return {
-      id: u.id ?? 0,
-      username: u.username ?? "",
-      email: u.email ?? "",
-      profilePicture: u.profilePicture ?? undefined,
-      initials,
-    };
-  });
+  return team.members.map(clickupUserToMember);
 }
 
 export async function GET() {
