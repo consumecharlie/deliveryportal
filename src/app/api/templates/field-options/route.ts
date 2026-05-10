@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getListFields } from "@/lib/clickup";
 import { LISTS, TEMPLATE_FIELDS, WORKSPACE_ID } from "@/lib/custom-field-ids";
+import { prisma } from "@/lib/db";
+import { filterMembersByAllowlist, type WorkspaceMember } from "@/lib/allowed-senders";
 
 interface DropdownOption {
   id: string;
@@ -75,7 +77,7 @@ export async function GET() {
         ) ?? teams[0];
 
         if (team?.members) {
-          senderOptions = team.members.map(
+          const mapped: WorkspaceMember[] = team.members.map(
             (m: {
               user: {
                 id: number;
@@ -102,21 +104,15 @@ export async function GET() {
             }
           );
 
-          // Only show portal users who have n8n credentials configured
-          const ALLOWED_SENDERS = new Set([
-            "louis galanti",
-            "landon schellman",
-            "tony saffell",
-            "sadjr williams",
-            "michael rosenberg",
-          ]);
+          let allowedIds = new Set<number>();
+          try {
+            const rows = await prisma.allowedSender.findMany({ select: { clickupUserId: true } });
+            allowedIds = new Set(rows.map((r) => r.clickupUserId));
+          } catch (dbErr) {
+            console.warn("Failed to load AllowedSender rows; sender list will be empty:", dbErr);
+          }
 
-          senderOptions = senderOptions.filter((m) =>
-            ALLOWED_SENDERS.has(m.username.toLowerCase())
-          );
-
-          // Sort alphabetically by username
-          senderOptions.sort((a, b) => a.username.localeCompare(b.username));
+          senderOptions = filterMembersByAllowlist(mapped, allowedIds);
         }
       }
     } catch (memberErr) {
