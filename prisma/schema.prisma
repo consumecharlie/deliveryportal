@@ -80,3 +80,11 @@ model TemplateVersion {
   @@index([templateTaskId])
   @@index([editedAt])
 }
+
+model AllowedSender {
+  clickupUserId Int      @id
+  addedBy       String
+  addedAt       DateTime @default(now())
+
+  @@index([addedAt])
+}
