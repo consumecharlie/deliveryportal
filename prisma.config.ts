@@ -6,16 +6,14 @@ import { defineConfig } from "prisma/config";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not set in .env.local or .env");
+}
+
 export default defineConfig({
   earlyAccess: true,
   schema: path.join("prisma", "schema.prisma"),
   datasource: {
-    async url() {
-      const url = process.env.POSTGRES_URL;
-      if (!url) {
-        throw new Error("POSTGRES_URL is not set in .env.local or .env");
-      }
-      return url;
-    },
+    url: process.env.POSTGRES_URL,
   },
 });
