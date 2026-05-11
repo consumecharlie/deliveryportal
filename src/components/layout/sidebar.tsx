@@ -12,7 +12,7 @@ const navItems = [
   { href: "/templates", label: "Templates", icon: "/icons/folder.svg" },
   { href: "/projects", label: "Project Links", icon: "/icons/bookmark.svg" },
   { href: "/analytics", label: "Analytics", icon: "/icons/timer.svg" },
-  { href: "/settings", label: "Settings", icon: "/icons/on-button.svg" },
+  { href: "/settings", label: "Settings", icon: "/icons/rules.svg" },
 ];
 
 export function Sidebar() {
