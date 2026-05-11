@@ -60,8 +60,12 @@ model Draft {
   savedBy   String
   savedAt   DateTime @default(now())
   updatedAt DateTime @updatedAt
+  scheduledFor    DateTime?
+  scheduleStatus  String?
+  lastReminderAt  DateTime?
 
   @@index([taskId])
+  @@index([scheduledFor])
 }
 
 model TemplateVersion {
