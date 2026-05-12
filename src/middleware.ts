@@ -16,6 +16,14 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Allow any internal request that presents a valid CRON_SECRET bearer.
+  // This covers the cron's fan-out call to /api/tasks/[taskId]/send.
+  // Downstream routes still enforce their own bearer check before doing anything.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers.get("authorization") === `Bearer ${cronSecret}`) {
+    return NextResponse.next();
+  }
+
   // Skip auth for these paths
   if (
     pathname.startsWith("/auth") ||
