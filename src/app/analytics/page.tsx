@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DepartmentBadge } from "@/components/dashboard/department-badge";
+import { DepartmentBadge, getDepartmentChartColor } from "@/components/dashboard/department-badge";
 import {
   Send,
   Users,
@@ -306,10 +306,10 @@ export default function AnalyticsPage() {
                           outerRadius={90}
                           innerRadius={50}
                         >
-                          {data.byDepartment.map((_, index) => (
+                          {data.byDepartment.map((entry, index) => (
                             <Cell
                               key={`dept-${index}`}
-                              fill={CHART_COLORS[index % CHART_COLORS.length]}
+                              fill={getDepartmentChartColor(entry.department)}
                             />
                           ))}
                         </Pie>
@@ -324,7 +324,7 @@ export default function AnalyticsPage() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="flex-1 space-y-2">
-                      {data.byDepartment.map((dept, i) => (
+                      {data.byDepartment.map((dept) => (
                         <div
                           key={dept.department}
                           className="flex items-center justify-between text-sm"
@@ -333,8 +333,9 @@ export default function AnalyticsPage() {
                             <div
                               className="h-3 w-3 rounded-full"
                               style={{
-                                backgroundColor:
-                                  CHART_COLORS[i % CHART_COLORS.length],
+                                backgroundColor: getDepartmentChartColor(
+                                  dept.department
+                                ),
                               }}
                             />
                             <span>{dept.department || "Unknown"}</span>

@@ -13,6 +13,26 @@ export const departmentColors: Record<string, string> = {
   "Project Management": "bg-[#627885] text-white border-[#627885]",
 };
 
+/**
+ * Hex versions of the department colors above, for use anywhere that
+ * needs a raw color string (e.g. Recharts `fill`, inline `backgroundColor`).
+ * Kept in lockstep with `departmentColors` — update both together.
+ */
+export const departmentChartColors: Record<string, string> = {
+  "Post": "#FA0000",
+  "Post-Production": "#FA0000",
+  "Pre-Pro": "#0084BD",
+  "Pre-Production": "#0084BD",
+  "Design": "#854AFF",
+  "Production": "#16A34A", // matches Tailwind's green-600
+  "Project Management": "#627885",
+};
+
+/** Look up a department's chart color with a neutral gray fallback. */
+export function getDepartmentChartColor(department: string): string {
+  return departmentChartColors[department] ?? "#94A3B8"; // slate-400
+}
+
 /** Canonical display order for departments */
 export const DEPARTMENT_ORDER = [
   "Project Management",
