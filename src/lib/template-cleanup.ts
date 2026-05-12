@@ -88,7 +88,7 @@ export function magicCleanup(input: string): string {
     if (section.header !== null) {
       if (output.length > 0) output.push("");
       output.push(section.header);
-      if (processed.length > 0) output.push("");
+      // No blank line between the header and its body — only between sections.
     }
 
     for (let i = 0; i < processed.length; i++) {
