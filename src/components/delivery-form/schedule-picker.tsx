@@ -87,8 +87,13 @@ export function SchedulePicker({ trigger, onSchedule, busy = false }: Props) {
     return etWallClockToIso(y, m, dd, hh, mm);
   }, [date, time]);
 
+  // Recomputes whenever the picker re-renders (typing, opening, etc.), which
+  // is desired — past-time validation needs current Date.now() at evaluation.
   const previewIsValid =
-    previewIso != null && new Date(previewIso).getTime() > Date.now();
+    previewIso != null &&
+    new Date(previewIso).getTime() >
+      // eslint-disable-next-line react-hooks/purity
+      Date.now();
 
   const handlePick = (iso: string) => {
     setOpen(false);

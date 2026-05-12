@@ -785,7 +785,7 @@ export function DeliveryForm({
                 timeZoneName: "short",
               })}
               <span className="ml-2 text-muted-foreground">
-                — edits below take effect only when you click "Update schedule".
+                {"— edits below take effect only when you click “Update schedule”."}
               </span>
             </div>
           </div>
