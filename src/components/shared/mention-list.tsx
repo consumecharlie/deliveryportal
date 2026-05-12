@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/dashboard/assignee-filter";
 
 export interface MentionItem {
   id: string;
@@ -9,6 +10,7 @@ export interface MentionItem {
   slackUserId?: string;
   slackHandle?: string;
   email?: string;
+  avatar?: string;
   source: "project" | "all" | "slack";
 }
 
@@ -83,6 +85,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
             )}
             onClick={() => selectItem(index)}
           >
+            <Avatar src={item.avatar} name={item.label} size={22} />
             <span className="flex-1 truncate font-medium">{item.label}</span>
             {item.slackHandle && (
               <span className="text-xs text-muted-foreground">

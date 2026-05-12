@@ -423,6 +423,13 @@ export function DeliveryForm({
     const items: MentionItem[] = [];
     const seenIds = new Set<string>();
 
+    // Build avatar lookup so we can enrich project contacts that match a Slack user.
+    const slackMembers = slackMembersData?.members ?? [];
+    const slackAvatarById = new Map<string, string>();
+    for (const m of slackMembers) {
+      if (m.avatar) slackAvatarById.set(m.id, m.avatar);
+    }
+
     // Tier 1: Project contacts (from task detail)
     for (const contact of contacts) {
       const id = contact.slackUserId ?? contact.email;
@@ -434,12 +441,14 @@ export function DeliveryForm({
         slackUserId: contact.slackUserId,
         slackHandle: contact.slackHandle,
         email: contact.email,
+        avatar: contact.slackUserId
+          ? slackAvatarById.get(contact.slackUserId)
+          : undefined,
         source: "project",
       });
     }
 
     // Tier 2: All Slack workspace members
-    const slackMembers = slackMembersData?.members ?? [];
     for (const member of slackMembers) {
       if (seenIds.has(member.id)) continue;
       seenIds.add(member.id);
@@ -448,6 +457,7 @@ export function DeliveryForm({
         label: member.displayName || member.realName || member.name,
         slackUserId: member.id,
         slackHandle: member.name,
+        avatar: member.avatar,
         source: "slack",
       });
     }
