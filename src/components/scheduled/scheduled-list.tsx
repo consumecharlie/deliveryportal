@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, AlertCircle, Eye, Mail, MessageSquare } from "lucide-react";
+import { X, AlertCircle, Eye, Mail, MessageSquare, FlaskConical } from "lucide-react";
 import { SchedulePreviewDialog } from "./schedule-preview-dialog";
 import {
   AlertDialog,
@@ -37,6 +37,7 @@ interface ScheduledRow {
   slackContent: string;
   projectName: string;
   clientName: string;
+  testMode: boolean;
 }
 
 function fmtET(iso: string | null): string {
@@ -135,6 +136,12 @@ export function ScheduledList() {
                     <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-sky-500/30 shrink-0">
                       <Mail className="h-3 w-3" />
                       Email
+                    </span>
+                  )}
+                  {row.testMode && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-amber-500/30 shrink-0">
+                      <FlaskConical className="h-3 w-3" />
+                      Test
                     </span>
                   )}
                 </div>

@@ -100,7 +100,18 @@ async function runFirePass(
         throw new Error(`send route returned ${res.status}: ${txt.slice(0, 200)}`);
       }
       fired++;
-      // On success the send route deletes the draft (including its schedule).
+      // On a normal send the route deletes the draft entirely. On a test
+      // send the draft is preserved (no ClickUp/DB writes) — manually clear
+      // the schedule columns so it stops appearing in /scheduled. updateMany
+      // is a no-op when the row was already deleted.
+      await prisma.draft.updateMany({
+        where: { id: d.id, scheduleStatus: "firing" },
+        data: {
+          scheduledFor: null,
+          scheduleStatus: null,
+          scheduledPayload: Prisma.JsonNull,
+        },
+      });
     } catch (err) {
       console.error("scheduled send failed for draft", d.id, err);
       await bounce(

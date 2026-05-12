@@ -26,6 +26,8 @@ export interface ScheduledSendPayload {
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
   addonProjectName?: string;
+  testMode?: boolean;
+  testEmail?: string;
 }
 
 interface Check {

@@ -45,6 +45,7 @@ export async function GET() {
         slackContent,
         projectName: payload?.taskMeta?.projectName ?? "",
         clientName: payload?.taskMeta?.clientName ?? "",
+        testMode: payload?.testMode ?? false,
       };
     });
 

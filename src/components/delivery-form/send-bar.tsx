@@ -103,7 +103,7 @@ export function SendBar({
   const [showLintWarning, setShowLintWarning] = useState(false);
   const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
 
-  const canSchedule = !adhocMode && !testMode;
+  const canSchedule = !adhocMode;
 
   const buildSchedulePayload = (): ScheduledSendPayload => ({
     formState,
@@ -125,6 +125,7 @@ export function SendBar({
           addonProjectName,
         }
       : {}),
+    ...(testMode ? { testMode: true, testEmail } : {}),
   });
 
   const handleSchedule = async (isoString: string) => {
@@ -671,7 +672,11 @@ export function SendBar({
                           <Button
                             disabled={!isReady || isSending || isScheduling}
                             aria-label="Schedule for later"
-                            className="rounded-l-none border-l border-l-white/20 px-2"
+                            className={`rounded-l-none border-l border-l-white/20 px-2 ${
+                              testMode
+                                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                                : ""
+                            }`}
                           >
                             {isScheduling ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
