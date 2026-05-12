@@ -364,16 +364,16 @@ export default function AnalyticsPage() {
                 {data.byType.length > 0 ? (
                   // Hand-rolled horizontal bar list — mimics the
                   // "Department Breakdown" pattern from consume-media-insights:
-                  // fixed-width label on the left, rounded-pill track in the
-                  // middle with value inside the filled bar when wide enough,
-                  // count to the right when the bar is too short. No tooltip.
+                  // fixed-width label on the left, rounded-pill track with the
+                  // count rendered INSIDE the filled bar. No tooltip; value
+                  // is always visible. The minWidth on the bar guarantees
+                  // even single-digit counts have room to sit inside.
                   <div className="space-y-2.5 py-1">
                     {(() => {
                       const rows = data.byType.slice(0, 8);
                       const max = rows[0]?.count ?? 1;
                       return rows.map((row) => {
                         const widthPct = Math.max((row.count / max) * 100, 2);
-                        const showInside = widthPct > 18;
                         return (
                           <div
                             key={row.deliverableType}
@@ -391,18 +391,13 @@ export default function AnalyticsPage() {
                                 style={{
                                   width: `${widthPct}%`,
                                   backgroundColor: "#6AC387",
-                                  minWidth: "1.75rem",
+                                  minWidth: "2rem",
                                 }}
                               >
-                                {showInside && (
-                                  <span className="text-xs font-semibold text-[#151919]">
-                                    {row.count}
-                                  </span>
-                                )}
+                                <span className="text-xs font-semibold text-[#151919]">
+                                  {row.count}
+                                </span>
                               </div>
-                            </div>
-                            <div className="w-8 text-right text-xs text-muted-foreground shrink-0">
-                              {!showInside && <span>{row.count}</span>}
                             </div>
                           </div>
                         );
