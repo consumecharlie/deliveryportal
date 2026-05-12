@@ -14,6 +14,7 @@ import {
   type MentionItem,
   type MentionListRef,
 } from "./mention-list";
+import { filterMentionItems } from "@/lib/mention-filter";
 import {
   Bold,
   Italic,
@@ -431,19 +432,8 @@ function EditorToolbar({ editor }: { editor: TipTapEditor }) {
  */
 function buildMentionSuggestion(itemsRef: React.RefObject<MentionItem[]>) {
   return {
-    items: ({ query }: { query: string }) => {
-      const items = itemsRef.current ?? [];
-      if (!query) return items.slice(0, 10);
-      const lower = query.toLowerCase();
-      return items
-        .filter(
-          (item) =>
-            item.label.toLowerCase().includes(lower) ||
-            (item.slackHandle?.toLowerCase().includes(lower) ?? false) ||
-            (item.email?.toLowerCase().includes(lower) ?? false)
-        )
-        .slice(0, 10);
-    },
+    items: ({ query }: { query: string }) =>
+      filterMentionItems(itemsRef.current ?? [], query),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render: (): any => {
       let component: ReactRenderer<MentionListRef> | null = null;
