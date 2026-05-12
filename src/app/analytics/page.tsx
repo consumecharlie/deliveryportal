@@ -350,35 +350,75 @@ export default function AnalyticsPage() {
                           ))}
                         </Pie>
                         <Tooltip
-                          contentStyle={{
-                            borderRadius: "8px",
-                            border: "1px solid hsl(var(--border))",
-                            background: "hsl(var(--popover))",
-                            color: "hsl(var(--popover-foreground))",
+                          // Custom content avoids Recharts' default inline-styled
+                          // tooltip, which was rendering as black text with no
+                          // background on the dark theme.
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const p = payload[0];
+                            const dept = String(p.name ?? "Unknown");
+                            const count = Number(p.value ?? 0);
+                            return (
+                              <div className="inline-flex items-center gap-2 rounded-full border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md">
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      getDepartmentChartColor(dept),
+                                  }}
+                                />
+                                <span className="font-medium">{dept}</span>
+                                <span className="text-muted-foreground">
+                                  {count}
+                                </span>
+                              </div>
+                            );
                           }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="flex-1 space-y-2">
-                      {data.byDepartment.map((dept) => (
-                        <div
-                          key={dept.department}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <div className="flex items-center gap-2">
+                    {/* Stat bars mirror the Top Deliverable Types pattern but
+                        colored per department. */}
+                    <div className="flex-1 space-y-2.5">
+                      {(() => {
+                        const max =
+                          data.byDepartment[0]?.count ??
+                          Math.max(...data.byDepartment.map((d) => d.count));
+                        return data.byDepartment.map((dept) => {
+                          const widthPct = Math.max(
+                            (dept.count / (max || 1)) * 100,
+                            2
+                          );
+                          const color = getDepartmentChartColor(dept.department);
+                          return (
                             <div
-                              className="h-3 w-3 rounded-full"
-                              style={{
-                                backgroundColor: getDepartmentChartColor(
-                                  dept.department
-                                ),
-                              }}
-                            />
-                            <span>{dept.department || "Unknown"}</span>
-                          </div>
-                          <span className="font-medium">{dept.count}</span>
-                        </div>
-                      ))}
+                              key={dept.department}
+                              className="flex items-center gap-3"
+                            >
+                              <div
+                                className="w-32 shrink-0 truncate text-xs text-muted-foreground text-right"
+                                title={dept.department}
+                              >
+                                {dept.department || "Unknown"}
+                              </div>
+                              <div className="flex-1 bg-muted/30 rounded-full h-6 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full flex items-center px-2.5 transition-[width] duration-500"
+                                  style={{
+                                    width: `${widthPct}%`,
+                                    backgroundColor: color,
+                                    minWidth: "2rem",
+                                  }}
+                                >
+                                  <span className="text-xs font-semibold text-white">
+                                    {dept.count}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 ) : (
