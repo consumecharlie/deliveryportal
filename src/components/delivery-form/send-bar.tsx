@@ -23,6 +23,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { DeliveryFormState, MergedContent } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
 import type { ScheduledSendPayload } from "@/lib/schedule-send";
@@ -349,23 +355,32 @@ export function SendBar({
                   {testMode ? "Test Send" : "Send"}
                 </Button>
                 {canSchedule && (
-                  <SchedulePicker
-                    busy={isScheduling}
-                    onSchedule={handleSchedule}
-                    trigger={
-                      <Button
-                        disabled={!isReady || isSending || isScheduling}
-                        aria-label="Schedule send"
-                        className="rounded-l-none border-l border-l-white/20 px-2"
-                      >
-                        {isScheduling ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    }
-                  />
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <SchedulePicker
+                        busy={isScheduling}
+                        onSchedule={handleSchedule}
+                        trigger={
+                          <TooltipTrigger asChild>
+                            <Button
+                              disabled={!isReady || isSending || isScheduling}
+                              aria-label="Schedule for later"
+                              className="rounded-l-none border-l border-l-white/20 px-2"
+                            >
+                              {isScheduling ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        Schedule for later
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
 
@@ -646,23 +661,30 @@ export function SendBar({
               </AlertDialogContent>
             </AlertDialog>
               {canSchedule && (
-                <SchedulePicker
-                  busy={isScheduling}
-                  onSchedule={handleSchedule}
-                  trigger={
-                    <Button
-                      disabled={!isReady || isSending || isScheduling}
-                      aria-label="Schedule send"
-                      className="rounded-l-none border-l border-l-white/20 px-2"
-                    >
-                      {isScheduling ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </Button>
-                  }
-                />
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <SchedulePicker
+                      busy={isScheduling}
+                      onSchedule={handleSchedule}
+                      trigger={
+                        <TooltipTrigger asChild>
+                          <Button
+                            disabled={!isReady || isSending || isScheduling}
+                            aria-label="Schedule for later"
+                            className="rounded-l-none border-l border-l-white/20 px-2"
+                          >
+                            {isScheduling ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                      }
+                    />
+                    <TooltipContent side="top">Schedule for later</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           )}
