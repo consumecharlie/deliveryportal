@@ -89,8 +89,11 @@ function extractSlackMentionIds(slackContent: string | null): string[] {
 }
 
 /** Headers get the NAVIGATION-style pixel-7 treatment. */
-const headerClass = "font-pixel text-[11px] tracking-wider";
+const headerClass = "font-pixel text-[13px] tracking-[0.18em] py-3";
 const headerStyle = { color: "#6AC387" };
+
+/** Row cells get extra vertical padding so the table isn't crowded. */
+const cellClass = "py-4";
 
 export function SentTable() {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
@@ -160,6 +163,57 @@ export function SentTable() {
     return map;
   }, [slackData]);
 
+  // Collect every Slack mention ID across visible deliveries, then strip
+  // out the ones we already have from the workspace members list. The
+  // remaining IDs are external Slack Connect users (MarginEdge, AVOXI,
+  // Fullstory, ...) — those only resolve via users.info, not users.list.
+  const unresolvedIds = useMemo(() => {
+    const deliveries = data?.deliveries ?? [];
+    const all = new Set<string>();
+    for (const d of deliveries) {
+      if (!d.slackChannel) continue;
+      for (const id of extractSlackMentionIds(d.slackContent)) {
+        all.add(id);
+      }
+    }
+    return Array.from(all)
+      .filter((id) => !slackByUserId.has(id))
+      .sort();
+  }, [data, slackByUserId]);
+
+  const { data: resolvedData } = useQuery<{
+    users: Array<{ id: string; name: string; avatar?: string }>;
+  }>({
+    queryKey: ["slack", "resolve-users", unresolvedIds],
+    queryFn: async () => {
+      const res = await fetch("/api/slack/resolve-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: unresolvedIds }),
+      });
+      if (!res.ok) throw new Error("Failed to resolve Slack users");
+      return res.json();
+    },
+    enabled: unresolvedIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
+
+  const resolvedById = useMemo(() => {
+    const map = new Map<string, { name: string; avatar?: string }>();
+    for (const u of resolvedData?.users ?? []) {
+      map.set(u.id, { name: u.name, avatar: u.avatar });
+    }
+    return map;
+  }, [resolvedData]);
+
+  // Combined lookup — prefer workspace-members entries (faster, already
+  // cached) over the secondary resolver.
+  function lookupSlackUser(
+    id: string
+  ): { name: string; avatar?: string } | undefined {
+    return slackByUserId.get(id) ?? resolvedById.get(id);
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
@@ -220,7 +274,7 @@ export function SentTable() {
       return (
         <div className="flex items-center gap-2 min-w-0">
           {ids.slice(0, 3).map((id) => {
-            const lookup = slackByUserId.get(id);
+            const lookup = lookupSlackUser(id);
             const name = lookup?.name ?? id;
             return (
               <div key={id} className="flex items-center gap-1.5 min-w-0">
@@ -298,7 +352,7 @@ export function SentTable() {
                   onClick={() => setSelectedDelivery(delivery)}
                   className="cursor-pointer hover:bg-muted/50"
                 >
-                  <TableCell className="font-medium">
+                  <TableCell className={`${cellClass} font-medium`}>
                     <span className="flex items-center gap-2">
                       {hadError && (
                         <AlertCircle
@@ -309,20 +363,28 @@ export function SentTable() {
                       {delivery.clientName || "—"}
                     </span>
                   </TableCell>
-                  <TableCell>{delivery.projectName || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className={cellClass}>
+                    {delivery.projectName || "—"}
+                  </TableCell>
+                  <TableCell className={`${cellClass} text-sm text-muted-foreground`}>
                     {delivery.deliverableType || "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className={cellClass}>
                     <DepartmentBadge department={delivery.department} />
                   </TableCell>
-                  <TableCell>{renderPerson(delivery.sentBy)}</TableCell>
-                  <TableCell>{renderPerson(delivery.senderEmail)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  <TableCell className={cellClass}>
+                    {renderPerson(delivery.sentBy)}
+                  </TableCell>
+                  <TableCell className={cellClass}>
+                    {renderPerson(delivery.senderEmail)}
+                  </TableCell>
+                  <TableCell className={`${cellClass} text-sm text-muted-foreground whitespace-nowrap`}>
                     {formatDate(delivery.sentAt)}
                   </TableCell>
-                  <TableCell>{renderRecipients(delivery)}</TableCell>
-                  <TableCell>
+                  <TableCell className={cellClass}>
+                    {renderRecipients(delivery)}
+                  </TableCell>
+                  <TableCell className={cellClass}>
                     {delivery.slackChannel ? (
                       <Badge variant="outline" className="text-xs">
                         #{delivery.slackChannelName || delivery.slackChannel}
