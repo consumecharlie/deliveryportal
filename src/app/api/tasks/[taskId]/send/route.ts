@@ -58,8 +58,13 @@ export async function POST(
 ) {
   const { taskId } = await params;
 
+  const cronAuth = req.headers.get("authorization");
+  const isCron =
+    Boolean(process.env.CRON_SECRET) &&
+    cronAuth === `Bearer ${process.env.CRON_SECRET}`;
+
   try {
-    const body: SendRequestBody = await req.json();
+    const body: SendRequestBody & { sentBy?: string } = await req.json();
     const {
       formState,
       mergedContent,
@@ -75,7 +80,9 @@ export async function POST(
       taskMeta,
     } = body;
 
-    const userEmail = await getSessionUserEmail();
+    const userEmail = isCron
+      ? body.sentBy?.trim() || "scheduled-send"
+      : await getSessionUserEmail();
 
     // ── Test mode: override recipients based on delivery channel ──
     // Slack mode test: send to test channel only, no email
