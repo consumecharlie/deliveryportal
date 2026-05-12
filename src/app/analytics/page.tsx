@@ -330,8 +330,12 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {data.byDepartment.length > 0 ? (
-                  <div className="flex items-center gap-4">
-                    <ResponsiveContainer width="50%" height={220}>
+                  // Pie sits in a fixed-width slot on the left so it can't
+                  // stretch to half the card; bar list takes the rest. Tighter,
+                  // more balanced layout.
+                  <div className="flex items-center gap-6">
+                    <div className="w-[260px] shrink-0">
+                      <ResponsiveContainer width="100%" height={240}>
                       <PieChart>
                         <Pie
                           data={data.byDepartment}
@@ -339,8 +343,11 @@ export default function AnalyticsPage() {
                           nameKey="department"
                           cx="50%"
                           cy="50%"
-                          outerRadius={90}
-                          innerRadius={50}
+                          outerRadius={110}
+                          innerRadius={62}
+                          // Drop the white separator stroke Recharts draws by
+                          // default between Cells.
+                          stroke="none"
                         >
                           {data.byDepartment.map((entry, index) => (
                             <Cell
@@ -377,6 +384,7 @@ export default function AnalyticsPage() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
+                    </div>
                     {/* Stat bars mirror the Top Deliverable Types pattern but
                         colored per department. */}
                     <div className="flex-1 space-y-2.5">
