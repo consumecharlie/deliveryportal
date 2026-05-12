@@ -87,6 +87,7 @@ async function runFirePass(
 
     try {
       const sendUrl = `${baseUrl}/api/tasks/${encodeURIComponent(d.taskId)}/send`;
+      console.log(`[cron] firing draft ${d.id} via ${sendUrl} testMode=${payload.testMode === true}`);
       const res = await fetch(sendUrl, {
         method: "POST",
         headers: {
@@ -95,9 +96,10 @@ async function runFirePass(
         },
         body: JSON.stringify({ ...payload, sentBy: d.savedBy }),
       });
+      const respText = await res.text().catch(() => "");
+      console.log(`[cron] send route response: ${res.status} body=${respText.slice(0, 300)}`);
       if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`send route returned ${res.status}: ${txt.slice(0, 200)}`);
+        throw new Error(`send route returned ${res.status}: ${respText.slice(0, 200)}`);
       }
       fired++;
       // On a normal send the route deletes the draft entirely. On a test
