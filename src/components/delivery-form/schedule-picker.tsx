@@ -379,7 +379,7 @@ function TimeDropdown({
       value={String(value)}
       onValueChange={(v) => onChange(Number(v))}
     >
-      <SelectTrigger className="h-11 flex-1 font-normal text-base">
+      <SelectTrigger className="h-11 w-full flex-1 font-normal text-base">
         <SelectValue>
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -387,7 +387,11 @@ function TimeDropdown({
           </span>
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="max-h-[280px]">
+      <SelectContent
+        position="popper"
+        align="end"
+        className="max-h-[280px]"
+      >
         {options.length === 0 ? (
           <div className="px-2 py-1.5 text-sm text-muted-foreground">
             No times available today
