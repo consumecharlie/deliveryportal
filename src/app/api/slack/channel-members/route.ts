@@ -78,9 +78,10 @@ export async function GET(req: Request) {
             id: u.id,
             name: u.name,
             realName: u.real_name ?? u.name,
-            // Prefer real_name so we show "Kailey Boucher" rather than the
-            // self-set display_name (which Slack users often set to their handle).
-            displayName: u.real_name ?? u.profile?.display_name ?? u.name,
+            // Slack-style: display_name is the primary label (matches what
+            // teammates see in Slack itself), real_name is shown as a muted
+            // secondary line by the picker UI.
+            displayName: u.profile?.display_name ?? u.real_name ?? u.name,
             avatar: u.profile?.image_48,
             isBot: u.is_bot ?? false,
           };

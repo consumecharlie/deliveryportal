@@ -44,9 +44,10 @@ export async function GET() {
           id: user.id,
           name: user.name,
           realName: user.real_name ?? user.name,
-          // Prefer real_name so we show "Kailey Boucher" rather than the
-          // self-set display_name (which Slack users often set to their handle).
-          displayName: user.real_name || user.profile?.display_name || user.name,
+          // Slack-style: display_name is the primary label (matches what
+          // teammates see in Slack itself), real_name is shown as a muted
+          // secondary line by the picker UI.
+          displayName: user.profile?.display_name || user.real_name || user.name,
           avatar: user.profile?.image_48,
         });
       }

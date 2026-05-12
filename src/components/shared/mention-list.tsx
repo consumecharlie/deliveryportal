@@ -2,11 +2,11 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Avatar } from "@/components/dashboard/assignee-filter";
 
 export interface MentionItem {
   id: string;
-  label: string; // Display name
+  label: string; // Primary label (Slack display_name)
+  realName?: string; // Muted secondary line (Slack real_name); omit if same as label
   slackUserId?: string;
   slackHandle?: string;
   email?: string;
@@ -73,30 +73,67 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
     }
 
     return (
-      <div className="z-50 max-h-96 w-72 overflow-y-auto rounded-md border bg-popover shadow-md">
-        {items.map((item, index) => (
-          <button
-            key={item.id}
-            type="button"
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
-              "hover:bg-accent hover:text-accent-foreground",
-              index === selectedIndex && "bg-accent text-accent-foreground"
-            )}
-            onClick={() => selectItem(index)}
-          >
-            <Avatar src={item.avatar} name={item.label} size={22} />
-            <span className="flex-1 truncate font-medium">{item.label}</span>
-            {item.slackHandle && (
-              <span className="text-xs text-muted-foreground">
-                @{item.slackHandle.replace(/^@/, "")}
-              </span>
-            )}
-            {item.source === "slack" && !item.slackHandle && (
-              <span className="text-xs text-muted-foreground">Slack</span>
-            )}
-          </button>
-        ))}
+      <div className="z-50 max-h-96 w-[420px] overflow-y-auto rounded-md border bg-popover shadow-md">
+        {items.map((item, index) => {
+          const initials = item.label
+            .split(/\s+/)
+            .map((w) => w[0])
+            .filter(Boolean)
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
+          const secondary =
+            item.realName && item.realName !== item.label
+              ? item.realName
+              : item.slackHandle && item.label !== item.slackHandle
+                ? `@${item.slackHandle.replace(/^@/, "")}`
+                : null;
+          const isSelected = index === selectedIndex;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={cn(
+                "flex w-full items-center gap-3 px-3 py-2 text-left",
+                "hover:bg-accent",
+                isSelected && "bg-accent"
+              )}
+              onClick={() => selectItem(index)}
+            >
+              {item.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.avatar}
+                  alt={item.label}
+                  width={36}
+                  height={36}
+                  className="rounded-md object-cover shrink-0"
+                  style={{ width: 36, height: 36 }}
+                />
+              ) : (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground shrink-0"
+                  style={{ width: 36, height: 36 }}
+                >
+                  {initials || "?"}
+                </span>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate">{item.label}</div>
+                {secondary && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {secondary}
+                  </div>
+                )}
+              </div>
+              {isSelected && (
+                <span className="text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
+                  Enter
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     );
   }

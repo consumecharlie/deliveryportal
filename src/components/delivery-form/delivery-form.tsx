@@ -455,6 +455,7 @@ export function DeliveryForm({
       items.push({
         id: member.id,
         label: member.displayName || member.realName || member.name,
+        realName: member.realName,
         slackUserId: member.id,
         slackHandle: member.name,
         avatar: member.avatar,
