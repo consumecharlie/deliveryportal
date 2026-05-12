@@ -58,11 +58,13 @@ import {
   ChevronsUpDown,
   AlertTriangle,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
+import { magicCleanup } from "@/lib/template-cleanup";
 
 /**
  * Replace the old verbose Scope & Timeline section with concise bullet format.
@@ -748,25 +750,45 @@ export default function TemplateEditorPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Delivery Snippet</CardTitle>
-              {snippet.includes("revision round") && snippet.includes("feedback windows") && !snippet.includes("**Revision Rounds:**") && (
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const updated = modernizeScopeSection(snippet);
-                    if (updated === snippet) {
-                      toast.error("Could not find the old Scope/Timeline format to replace.");
+                    const cleaned = magicCleanup(snippet);
+                    if (cleaned === snippet) {
+                      toast.success("Snippet is already clean.");
                       return;
                     }
-                    setSnippet(updated);
+                    setSnippet(cleaned);
                     setHasChanges(true);
+                    toast.success("Cleanup applied.");
                   }}
                   className="text-xs"
                 >
-                  <RefreshCw className="mr-1 h-3 w-3" />
-                  Modernize Scope Section
+                  <Sparkles className="mr-1 h-3 w-3" />
+                  Magic Cleanup
                 </Button>
-              )}
+                {snippet.includes("revision round") && snippet.includes("feedback windows") && !snippet.includes("**Revision Rounds:**") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const updated = modernizeScopeSection(snippet);
+                      if (updated === snippet) {
+                        toast.error("Could not find the old Scope/Timeline format to replace.");
+                        return;
+                      }
+                      setSnippet(updated);
+                      setHasChanges(true);
+                    }}
+                    className="text-xs"
+                  >
+                    <RefreshCw className="mr-1 h-3 w-3" />
+                    Modernize Scope Section
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <RichTextEditor
