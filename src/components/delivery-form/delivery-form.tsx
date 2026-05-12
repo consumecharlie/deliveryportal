@@ -430,27 +430,37 @@ export function DeliveryForm({
     const items: MentionItem[] = [];
     const seenIds = new Set<string>();
 
-    // Build avatar lookup so we can enrich project contacts that match a Slack user.
+    // Build Slack lookup so we can enrich project contacts that match a
+    // Slack user (avatar, real name, and a richer handle). Without this,
+    // a contact entered in ClickUp as just "Adam" would render with the
+    // ClickUp name as primary and only @handle as secondary, even though
+    // we already have "Adam Gunn" available from Slack.
     const slackMembers = slackMembersData?.members ?? [];
-    const slackAvatarById = new Map<string, string>();
-    for (const m of slackMembers) {
-      if (m.avatar) slackAvatarById.set(m.id, m.avatar);
-    }
+    const slackById = new Map<string, (typeof slackMembers)[number]>();
+    for (const m of slackMembers) slackById.set(m.id, m);
 
     // Tier 1: Project contacts (from task detail)
     for (const contact of contacts) {
       const id = contact.slackUserId ?? contact.email;
       if (seenIds.has(id)) continue;
       seenIds.add(id);
+      const slackMatch = contact.slackUserId
+        ? slackById.get(contact.slackUserId)
+        : undefined;
       items.push({
         id,
         label: contact.name,
+        // Enrich the muted secondary line with Slack's real_name when the
+        // contact is also a Slack user and Slack's name differs from the
+        // ClickUp name.
+        realName:
+          slackMatch?.realName && slackMatch.realName !== contact.name
+            ? slackMatch.realName
+            : undefined,
         slackUserId: contact.slackUserId,
-        slackHandle: contact.slackHandle,
+        slackHandle: contact.slackHandle ?? slackMatch?.name,
         email: contact.email,
-        avatar: contact.slackUserId
-          ? slackAvatarById.get(contact.slackUserId)
-          : undefined,
+        avatar: slackMatch?.avatar,
         source: "project",
       });
     }
