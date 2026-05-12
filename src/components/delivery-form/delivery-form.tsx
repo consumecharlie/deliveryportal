@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus, CalendarClock } from "lucide-react";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { Button } from "@/components/ui/button";
+import { SchedulePicker } from "./schedule-picker";
+import type { ScheduledSendPayload } from "@/lib/schedule-send";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
 import { ReviewLinksSection } from "./review-links-section";
 import { ScopeSection } from "./scope-section";
@@ -109,6 +112,10 @@ export function DeliveryForm({
   const [editedToEmail, setEditedToEmail] = useState<string | null>(null);
   const [editedCcEmails, setEditedCcEmails] = useState<string | null>(null);
   const [editedSenderEmail, setEditedSenderEmail] = useState<string | null>(null);
+  const [scheduledFor, setScheduledFor] = useState<string | null>(null);
+  const [scheduleStatus, setScheduleStatus] = useState<string | null>(null);
+  const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
+  const queryClient = useQueryClient();
 
   // ── Delivery mode (email or slack) ──
   // Auto-detect: if primary contact has a Slack user ID → slack, otherwise email
@@ -601,9 +608,17 @@ export function DeliveryForm({
         const res = await fetch(`/api/drafts/${task.id}`);
         if (!res.ok) return;
         const { draft } = await res.json();
-        if (!draft?.formData || cancelled) return;
+        if (!draft || cancelled) return;
 
-        const saved = draft.formData as DeliveryFormState;
+        if (draft.scheduledFor) setScheduledFor(draft.scheduledFor);
+        if (draft.scheduleStatus) setScheduleStatus(draft.scheduleStatus);
+
+        // Prefer the snapshot's formState if scheduled, since that's exactly
+        // what will fire; falls back to draft.formData otherwise.
+        const snapshot = draft.scheduledPayload as ScheduledSendPayload | null;
+        const saved: DeliveryFormState | null =
+          snapshot?.formState ?? (draft.formData as DeliveryFormState | null);
+        if (!saved) return;
         // Only restore if the draft has meaningful data
         if (saved.deliverableType) setDeliverableType(saved.deliverableType);
         if (saved.versionNotes) setVersionNotes(saved.versionNotes);
@@ -632,8 +647,170 @@ export function DeliveryForm({
     return () => { cancelled = true; };
   }, [task.id, draftLoaded]);
 
+  const isScheduled = scheduleStatus === "scheduled" && Boolean(scheduledFor);
+
+  const buildScheduledPayload = useCallback((): ScheduledSendPayload => ({
+    formState,
+    mergedContent,
+    primaryEmail: displayToEmail,
+    ccEmails: displayCcEmails,
+    senderEmail: displaySenderEmail,
+    postToSlack: showSlack,
+    slackChannelId,
+    originalDeliverableType: task.deliverableType,
+    listId: task.listId,
+    taskMeta: {
+      clientName: task.clientName,
+      projectName: task.projectName,
+      department: task.department,
+      slackChannelName: slackChannelName || undefined,
+    },
+    ...(addonProject
+      ? {
+          addonListId: addonProject.listId,
+          addonDeliverableType: addonProject.deliverableType,
+          addonDepartment: addonTaskDetail?.task.department,
+          addonReviewLinks,
+          addonProjectName: addonProject.projectName,
+        }
+      : {}),
+  }), [
+    formState,
+    mergedContent,
+    displayToEmail,
+    displayCcEmails,
+    displaySenderEmail,
+    showSlack,
+    slackChannelId,
+    task.deliverableType,
+    task.listId,
+    task.clientName,
+    task.projectName,
+    task.department,
+    slackChannelName,
+    addonProject,
+    addonTaskDetail?.task.department,
+    addonReviewLinks,
+  ]);
+
+  const handleReschedule = async (iso: string) => {
+    setIsUpdatingSchedule(true);
+    try {
+      const res = await fetch(`/api/drafts/${task.id}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduledFor: iso,
+          payload: buildScheduledPayload(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to reschedule");
+      }
+      setScheduledFor(iso);
+      setScheduleStatus("scheduled");
+      toast.success("Rescheduled");
+      queryClient.invalidateQueries({ queryKey: ["scheduled", "list"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to reschedule");
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  };
+
+  const handleCancelSchedule = async () => {
+    setIsUpdatingSchedule(true);
+    try {
+      const res = await fetch(`/api/drafts/${task.id}/schedule`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to cancel schedule");
+      }
+      setScheduledFor(null);
+      setScheduleStatus(null);
+      toast.success("Schedule cancelled — back in Drafts");
+      queryClient.invalidateQueries({ queryKey: ["scheduled", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["drafts"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to cancel schedule");
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  };
+
+  const handleUpdateSchedule = async () => {
+    if (!scheduledFor) return;
+    setIsUpdatingSchedule(true);
+    try {
+      const res = await fetch(`/api/drafts/${task.id}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduledFor,
+          payload: buildScheduledPayload(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to update schedule");
+      }
+      toast.success("Schedule updated");
+      queryClient.invalidateQueries({ queryKey: ["scheduled", "list"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update schedule");
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  };
+
   return (
     <div className="space-y-4 pb-24">
+      {/* Scheduled banner */}
+      {isScheduled && scheduledFor && (
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-blue-500/10 border-y border-blue-500/30 text-sm flex items-center justify-between gap-3 backdrop-blur">
+          <div className="flex items-center gap-2 min-w-0">
+            <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <div className="truncate">
+              <strong>Scheduled for</strong>{" "}
+              {new Date(scheduledFor).toLocaleString("en-US", {
+                timeZone: "America/New_York",
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                timeZoneName: "short",
+              })}
+              <span className="ml-2 text-muted-foreground">
+                — edits below take effect only when you click "Update schedule".
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <SchedulePicker
+              busy={isUpdatingSchedule}
+              onSchedule={handleReschedule}
+              trigger={
+                <Button variant="outline" size="sm" disabled={isUpdatingSchedule}>
+                  Reschedule
+                </Button>
+              }
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancelSchedule}
+              disabled={isUpdatingSchedule}
+            >
+              Cancel schedule
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/">
@@ -970,6 +1147,9 @@ export function DeliveryForm({
         addonDepartment={addonTaskDetail?.task.department}
         addonReviewLinks={addonProject ? addonReviewLinks : undefined}
         addonProjectName={addonProject?.projectName}
+        scheduledMode={isScheduled}
+        onUpdateSchedule={isScheduled ? handleUpdateSchedule : undefined}
+        isUpdatingSchedule={isUpdatingSchedule}
       />
     </div>
   );

@@ -57,6 +57,9 @@ interface SendBarProps {
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
   addonProjectName?: string;
+  scheduledMode?: boolean;
+  onUpdateSchedule?: () => void | Promise<void>;
+  isUpdatingSchedule?: boolean;
 }
 
 export function SendBar({
@@ -83,6 +86,9 @@ export function SendBar({
   addonDepartment,
   addonReviewLinks,
   addonProjectName,
+  scheduledMode = false,
+  onUpdateSchedule,
+  isUpdatingSchedule = false,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -308,8 +314,22 @@ export function SendBar({
             </Button>
           )}
 
-          {/* Send button — shows lint warning if errors exist, otherwise normal confirm */}
-          {slackLintErrors && slackLintErrors.length > 0 ? (
+          {/* Scheduled mode: replace Send with "Update schedule" — re-captures the
+              payload so the next fire uses the latest form state. */}
+          {scheduledMode ? (
+            <Button
+              disabled={!isReady || isUpdatingSchedule}
+              onClick={() => onUpdateSchedule?.()}
+            >
+              {isUpdatingSchedule ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              Update schedule
+            </Button>
+          ) : /* Send button — shows lint warning if errors exist, otherwise normal confirm */
+          slackLintErrors && slackLintErrors.length > 0 ? (
             <>
               <div className="flex">
                 <Button
