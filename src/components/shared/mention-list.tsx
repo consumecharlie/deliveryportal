@@ -82,11 +82,16 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
             .slice(0, 2)
             .join("")
             .toUpperCase();
-          // Slack-style: show real_name underneath whenever it's set, even
-          // when it equals the bold primary (mirrors Slack's own picker).
-          // No fallback to @handle — if Slack has no real_name, the row
-          // stays single-line.
-          const secondary = item.realName ?? null;
+          // Show real_name muted underneath whenever Slack has one (even when
+          // it equals the bold primary, like "Leo Falkenstein"). For users
+          // with truly no real_name set in Slack (rare: Adam-style profiles
+          // with only a display name), fall back to @handle so the row
+          // doesn't look lonely next to fully-populated peers.
+          const secondary =
+            item.realName ??
+            (item.slackHandle
+              ? `@${item.slackHandle.replace(/^@/, "")}`
+              : null);
           const isSelected = index === selectedIndex;
           return (
             <button
