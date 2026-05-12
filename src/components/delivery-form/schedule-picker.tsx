@@ -379,7 +379,7 @@ function TimeDropdown({
       value={String(value)}
       onValueChange={(v) => onChange(Number(v))}
     >
-      <SelectTrigger className="h-11 w-full flex-1 font-normal text-base">
+      <SelectTrigger className="!h-11 w-full flex-1 font-normal text-base">
         <SelectValue>
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
