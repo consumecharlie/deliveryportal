@@ -185,7 +185,7 @@ export interface SlackChannel {
 export interface SlackMember {
   id: string;
   name: string;
-  realName: string;
+  realName?: string;
   displayName: string;
   avatar?: string;
 }

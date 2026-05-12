@@ -40,14 +40,29 @@ export async function GET() {
         // Skip bots, deleted users, and restricted users
         if (user.deleted || user.is_bot || user.is_restricted) continue;
 
+        // Slack stores the user's name across five fields that don't always
+        // agree. Per Slack's docs, if profile.first_name or last_name are
+        // set, top-level real_name is ignored — so we have to compose the
+        // first/last fallback ourselves. Treat empty strings as missing.
+        const first = user.profile?.first_name?.trim() ?? "";
+        const last = user.profile?.last_name?.trim() ?? "";
+        const composed = [first, last].filter(Boolean).join(" ").trim();
+        const realName =
+          (user.profile?.real_name_normalized?.trim() ||
+            user.profile?.real_name?.trim() ||
+            user.real_name?.trim() ||
+            composed ||
+            "") || undefined;
+
         members.push({
           id: user.id,
           name: user.name,
-          realName: user.real_name ?? user.name,
+          realName,
           // Slack-style: display_name is the primary label (matches what
           // teammates see in Slack itself), real_name is shown as a muted
           // secondary line by the picker UI.
-          displayName: user.profile?.display_name || user.real_name || user.name,
+          displayName:
+            user.profile?.display_name?.trim() || realName || user.name,
           avatar: user.profile?.image_48,
         });
       }

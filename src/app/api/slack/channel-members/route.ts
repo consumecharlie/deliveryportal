@@ -57,7 +57,7 @@ export async function GET(req: Request) {
     const members: Array<{
       id: string;
       name: string;
-      realName: string;
+      realName?: string;
       displayName: string;
       avatar?: string;
       isBot: boolean;
@@ -74,14 +74,29 @@ export async function GET(req: Request) {
           const data = await res.json();
           if (!data.ok || !data.user) return null;
           const u = data.user;
+          // Slack stores the user's name across five fields that don't always
+          // agree. Per Slack's docs, if profile.first_name or last_name are
+          // set, top-level real_name is ignored — so we have to compose the
+          // first/last fallback ourselves. Treat empty strings as missing.
+          const first = u.profile?.first_name?.trim() ?? "";
+          const last = u.profile?.last_name?.trim() ?? "";
+          const composed = [first, last].filter(Boolean).join(" ").trim();
+          const realName =
+            (u.profile?.real_name_normalized?.trim() ||
+              u.profile?.real_name?.trim() ||
+              u.real_name?.trim() ||
+              composed ||
+              "") || undefined;
+
           return {
             id: u.id,
             name: u.name,
-            realName: u.real_name ?? u.name,
+            realName,
             // Slack-style: display_name is the primary label (matches what
             // teammates see in Slack itself), real_name is shown as a muted
             // secondary line by the picker UI.
-            displayName: u.profile?.display_name ?? u.real_name ?? u.name,
+            displayName:
+              u.profile?.display_name?.trim() || realName || u.name,
             avatar: u.profile?.image_48,
             isBot: u.is_bot ?? false,
           };

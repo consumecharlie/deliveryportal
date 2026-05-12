@@ -82,12 +82,11 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
             .slice(0, 2)
             .join("")
             .toUpperCase();
-          const secondary =
-            item.realName && item.realName !== item.label
-              ? item.realName
-              : item.slackHandle && item.label !== item.slackHandle
-                ? `@${item.slackHandle.replace(/^@/, "")}`
-                : null;
+          // Slack-style: show real_name underneath whenever it's set, even
+          // when it equals the bold primary (mirrors Slack's own picker).
+          // No fallback to @handle — if Slack has no real_name, the row
+          // stays single-line.
+          const secondary = item.realName ?? null;
           const isSelected = index === selectedIndex;
           return (
             <button
