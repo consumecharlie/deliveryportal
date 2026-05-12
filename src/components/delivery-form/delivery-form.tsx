@@ -308,6 +308,7 @@ export function DeliveryForm({
         projectPlanLink: addonTaskDetail.projectPlanLink ?? undefined,
         linkLabels: Object.keys(addonLinkLabels).length > 0 ? addonLinkLabels : undefined,
         extraLinks: [] as Array<{ url: string; label: string }>,
+        repeatClient,
       };
 
       const addonEmailContent = mergeAddonDelivery({

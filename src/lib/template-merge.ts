@@ -500,6 +500,7 @@ export interface AddonMergeInput {
     projectPlanLink?: string;
     linkLabels?: Record<string, string>;
     extraLinks?: Array<{ url: string; label: string }>;
+    repeatClient?: boolean;
   };
   // Mode
   isSlack: boolean;
@@ -633,7 +634,8 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
   // 1. Parse primary content into sections
   const primary = parseSections(primaryContent);
 
-  // 2. Merge the addon template (NO repeatClient — keep all sections intact)
+  // 2. Merge the addon template, honoring repeatClient so addon explainer
+  //    sections get stripped the same way the primary's are.
   const addonMerged = mergeTemplate(addonTemplate, "", {
     contacts: addonContacts,
     projectName: addonProjectName,
@@ -649,6 +651,7 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     projectPlanLink: addonVariables.projectPlanLink,
     extraLinks: addonVariables.extraLinks,
     linkLabels: addonVariables.linkLabels,
+    repeatClient: addonVariables.repeatClient,
   });
 
   const addonContent = isSlack
