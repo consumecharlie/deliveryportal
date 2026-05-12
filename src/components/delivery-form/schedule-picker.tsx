@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,8 +17,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
   trigger: React.ReactNode;
@@ -350,9 +357,6 @@ function TimeDropdown({
   /** Earliest selectable minutes for the current date (e.g. now+1 if date is today). */
   minMinutes: number;
 }) {
-  const [open, setOpen] = useState(false);
-  const selectedRef = useRef<HTMLButtonElement | null>(null);
-
   const options = useMemo(() => {
     const out: number[] = [];
     for (let m = 0; m < 24 * 60; m += 15) {
@@ -370,69 +374,33 @@ function TimeDropdown({
     }
   }, [value, minMinutes, options, onChange]);
 
-  useEffect(() => {
-    if (open && selectedRef.current) {
-      selectedRef.current.scrollIntoView({ block: "center" });
-    }
-  }, [open]);
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="h-11 flex-1 justify-between font-normal text-base"
-        >
+    <Select
+      value={String(value)}
+      onValueChange={(v) => onChange(Number(v))}
+    >
+      <SelectTrigger className="h-11 flex-1 font-normal text-base">
+        <SelectValue>
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
             {formatMinutes(value)}
           </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[200px] p-1"
-        align="end"
-        style={{
-          maxHeight: "min(280px, var(--radix-popover-content-available-height))",
-          overflowY: "auto",
-        }}
-      >
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="max-h-[280px]">
         {options.length === 0 ? (
           <div className="px-2 py-1.5 text-sm text-muted-foreground">
             No times available today
           </div>
         ) : (
-          options.map((m) => {
-            const isSelected = m === value;
-            return (
-              <button
-                key={m}
-                ref={isSelected ? selectedRef : null}
-                type="button"
-                onClick={() => {
-                  onChange(m);
-                  setOpen(false);
-                }}
-                className={[
-                  "w-full text-left text-sm px-2 py-1.5 rounded flex items-center gap-2 transition-colors",
-                  isSelected
-                    ? "bg-primary/15 text-foreground font-medium"
-                    : "hover:bg-accent",
-                ].join(" ")}
-              >
-                <Check
-                  className={`h-3.5 w-3.5 ${
-                    isSelected ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-                <span>{formatMinutes(m)}</span>
-              </button>
-            );
-          })
+          options.map((m) => (
+            <SelectItem key={m} value={String(m)}>
+              {formatMinutes(m)}
+            </SelectItem>
+          ))
         )}
-      </PopoverContent>
-    </Popover>
+      </SelectContent>
+    </Select>
   );
 }
 
