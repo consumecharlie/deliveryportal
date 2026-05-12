@@ -23,6 +23,93 @@ describe("magicCleanup", () => {
     );
   });
 
+  it("drops deeper-level markdown sub-headers (### Scope nested inside ## section)", () => {
+    // Matches the real ClickUp template ("Audio Script V1") shape: the
+    // Delta uses header:2 for "Scope & Timeline Reminders" and header:3
+    // for the "Scope" sub-header — quillDeltaToMarkdown produces `###`.
+    const input =
+      `## 🔔 Scope & Timeline Reminders\n### Scope\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`;
+    const out = magicCleanup(input);
+    expect(out).toBe(
+      `## 🔔 Scope & Timeline Reminders\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`
+    );
+  });
+
+  it("cleanup of the real Audio Script V1 template produces the expected output", () => {
+    // Captured 2026-05-12 via a live ClickUp probe of task 86a8krebf,
+    // then run through quillDeltaToMarkdown. Includes:
+    //  - intro greeting (must NOT be bulleted)
+    //  - h2 sections (## ⚡️ What You're Receiving, etc.)
+    //  - h3 sub-header ### Scope (must be DROPPED)
+    //  - bullets with inline **bold** like "**Revision Rounds:**"
+    //  - trailing sign-off paragraph (must be left alone)
+    const input = [
+      "Hey [contacts]! We are excited to share the first version of the [projectName] Audio Script with you 🤸🏻‍♀️",
+      "",
+      "[versionNotes]",
+      "",
+      "## ⚡️ What You're Receiving",
+      "- The Audio Script outlines the spoken dialogue of the video and is used to ensure alignment on messaging before visual development begins.",
+      "",
+      "## 😇 We Need Your Feedback",
+      "- Ensure the dialogue feels natural and on-brand.",
+      "- Identify any phrases that should be adjusted for clarity or emphasis.",
+      "- Flag any missing or incorrect information.",
+      "",
+      "## 📥 How to Submit Feedback",
+      "- Please submit consolidated feedback from all key stakeholders as comments directly in the Google Doc.",
+      "",
+      "## 🔔 Scope & Timeline Reminders",
+      "### Scope",
+      "- **Revision Rounds:** 1 of **[revisionRounds]**",
+      "- **Feedback Windows: [feedbackWindows]**",
+      "- **Feedback Deadline:** EOD **[nextFeedbackDeadline]**",
+      "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
+      "",
+      "## 🔗 Review Link",
+      "- [Audio Script V1 | googleDeliverableLink]",
+      "",
+      "## 🗓️ Project Plan",
+      "- [View real-time progress | projectPlanLink]",
+      "",
+      "We're looking forward to your feedback and next steps!",
+    ].join("\n");
+
+    const expected = [
+      "Hey [contacts]! We are excited to share the first version of the [projectName] Audio Script with you 🤸🏻‍♀️",
+      "",
+      "[versionNotes]",
+      "",
+      "## ⚡️ What You're Receiving",
+      "- The Audio Script outlines the spoken dialogue of the video and is used to ensure alignment on messaging before visual development begins.",
+      "",
+      "## 😇 We Need Your Feedback",
+      "- Ensure the dialogue feels natural and on-brand.",
+      "- Identify any phrases that should be adjusted for clarity or emphasis.",
+      "- Flag any missing or incorrect information.",
+      "",
+      "## 📥 How to Submit Feedback",
+      "- Please submit consolidated feedback from all key stakeholders as comments directly in the Google Doc.",
+      "",
+      "## 🔔 Scope & Timeline Reminders",
+      "- **Revision Rounds:** 1 of **[revisionRounds]**",
+      "- **Feedback Windows: [feedbackWindows]**",
+      "- **Feedback Deadline:** EOD **[nextFeedbackDeadline]**",
+      "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
+      "",
+      "## 🔗 Review Link",
+      "- [Audio Script V1 | googleDeliverableLink]",
+      "",
+      "## 🗓️ Project Plan",
+      "- [View real-time progress | projectPlanLink]",
+      "",
+      "We're looking forward to your feedback and next steps!",
+    ].join("\n");
+
+    const out = magicCleanup(input);
+    expect(out).toBe(expected);
+  });
+
   it("leaves multi-line prose paragraphs alone", () => {
     const input =
       `## What you'll be receiving\nThis is a prose paragraph\nthat spans multiple lines.`;

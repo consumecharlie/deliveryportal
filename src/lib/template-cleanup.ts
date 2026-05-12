@@ -21,10 +21,24 @@
  *  - Idempotent: `magicCleanup(magicCleanup(x)) === magicCleanup(x)`.
  */
 
-const HEADER_HASH = /^#{1,3}\s+\S/;
+const HEADER_HASH = /^(#{1,3})\s+\S/;
 const HEADER_BOLD = /^\*\*[^*]+\*\*\s*$/;
 const BULLET_LINE = /^\s*[-*]\s+\S/;
 const TEMPLATE_VAR = /\[[^\]]+\]/;
+
+/**
+ * Return the header "level" for a line, or `null` if it's not a header.
+ *
+ * - `# ` → 1, `## ` → 2, `### ` → 3
+ * - whole-line `**bold**` → 99 (sentinel — only used as a section boundary
+ *   when no `#`-style headers exist anywhere in the template)
+ */
+function headerLevel(line: string): number | null {
+  const hash = line.match(HEADER_HASH);
+  if (hash) return hash[1].length;
+  if (HEADER_BOLD.test(line.trim())) return 99;
+  return null;
+}
 
 interface Section {
   /** null only for the implicit pre-header section (greeting, etc.). */
@@ -33,27 +47,29 @@ interface Section {
 }
 
 function splitIntoSections(lines: string[]): Section[] {
-  // If the template uses real `##`-style headers for sections, bold-only
-  // lines are redundant sub-headers (e.g. `**Scope**` nested inside
-  // `## 🔔 Scope & Timeline Reminders`) — drop them entirely during cleanup
-  // so the section collapses to header + bullets. If the template has no
-  // hash headers, bold-only lines still act as section boundaries.
-  const hasHashHeaders = lines.some((l) => HEADER_HASH.test(l));
+  // Pick the shallowest header level used anywhere in the template as the
+  // "section boundary" level. Deeper headers — `### Scope` inside `## 🔔
+  // Scope & Timeline Reminders`, or whole-line `**bold**` sub-headers
+  // inside `##` sections — are redundant sub-headers that get dropped
+  // during cleanup so their body stays in the parent section.
+  let primaryLevel = Infinity;
+  for (const line of lines) {
+    const lvl = headerLevel(line);
+    if (lvl !== null && lvl < primaryLevel) primaryLevel = lvl;
+  }
+
   const sections: Section[] = [];
   let current: Section = { header: null, bodyLines: [] };
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, "");
-    if (HEADER_HASH.test(line)) {
+    const lvl = headerLevel(line);
+    if (lvl === primaryLevel) {
       sections.push(current);
       current = { header: line.trim(), bodyLines: [] };
-    } else if (HEADER_BOLD.test(line.trim())) {
-      if (hasHashHeaders) {
-        // Drop the bold sub-header; subsequent lines stay in the current
-        // section so its body absorbs them.
-        continue;
-      }
-      sections.push(current);
-      current = { header: line.trim(), bodyLines: [] };
+    } else if (lvl !== null) {
+      // A header, but deeper than the primary level → sub-header. Drop it.
+      // Its body content stays in the current parent section.
+      continue;
     } else {
       current.bodyLines.push(line);
     }
