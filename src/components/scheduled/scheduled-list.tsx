@@ -1,0 +1,187 @@
+"use client";
+
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { toast } from "sonner";
+import { X, AlertCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
+interface ScheduledRow {
+  id: string;
+  taskId: string;
+  savedBy: string;
+  scheduledFor: string | null;
+  isComplete: boolean;
+  missing: string[];
+  primaryEmail: string;
+  senderEmail: string;
+  deliverableType: string;
+  postToSlack: boolean;
+  slackChannelName: string;
+  subjectLine: string;
+  projectName: string;
+  clientName: string;
+}
+
+function fmtET(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+export function ScheduledList() {
+  const queryClient = useQueryClient();
+  const [pendingCancel, setPendingCancel] = useState<ScheduledRow | null>(null);
+
+  const { data, isLoading, isError } = useQuery<{ scheduled: ScheduledRow[] }>({
+    queryKey: ["scheduled", "list"],
+    queryFn: async () => {
+      const res = await fetch("/api/scheduled");
+      if (!res.ok) throw new Error("Failed to load scheduled");
+      return res.json();
+    },
+    refetchInterval: 60_000,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (row: ScheduledRow) => {
+      const res = await fetch(`/api/drafts/${row.taskId}/schedule`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to cancel schedule");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Schedule cancelled — back in Drafts");
+      queryClient.invalidateQueries({ queryKey: ["scheduled", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["drafts"] });
+      setPendingCancel(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (isLoading) {
+    return <Card className="p-4 text-muted-foreground">Loading…</Card>;
+  }
+  if (isError) {
+    return (
+      <Card className="p-4 text-destructive">Failed to load scheduled items.</Card>
+    );
+  }
+
+  const rows = data?.scheduled ?? [];
+  if (rows.length === 0) {
+    return (
+      <Card className="p-6 text-muted-foreground">
+        Nothing scheduled. Use Send → Schedule send on a delivery to queue one.
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        {rows.map((row) => {
+          const recipient = row.postToSlack
+            ? row.slackChannelName
+              ? `#${row.slackChannelName}`
+              : "(Slack)"
+            : row.primaryEmail || "(no recipient)";
+          const meta = [
+            row.deliverableType || "Unknown type",
+            row.clientName || row.projectName,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <Card
+              key={row.id}
+              className="flex flex-row items-center gap-3 px-4 py-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">
+                  {row.subjectLine || "(no subject)"}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  To <span className="font-mono">{recipient}</span>
+                  {meta ? ` · ${meta}` : ""}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Sends {fmtET(row.scheduledFor)}
+                </div>
+                {!row.isComplete && row.missing.length > 0 && (
+                  <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Incomplete: missing {row.missing.join(", ")}
+                  </div>
+                )}
+              </div>
+              <Link href={`/deliverable/${row.taskId}`}>
+                <Button variant="outline" size="sm">
+                  Edit
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Cancel schedule for ${row.subjectLine || row.taskId}`}
+                onClick={() => setPendingCancel(row)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </Card>
+          );
+        })}
+      </div>
+
+      <AlertDialog
+        open={pendingCancel != null}
+        onOpenChange={(open) =>
+          !cancelMutation.isPending && !open && setPendingCancel(null)
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel scheduled send?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The delivery moves back to Drafts. You can reschedule or send it
+              later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>
+              Keep scheduled
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelMutation.isPending}
+              onClick={() => pendingCancel && cancelMutation.mutate(pendingCancel)}
+            >
+              {cancelMutation.isPending ? "Cancelling…" : "Cancel schedule"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
