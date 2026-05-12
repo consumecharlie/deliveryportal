@@ -19,6 +19,14 @@ export async function GET() {
         payload?.formState?.editedSubjectLine ??
         payload?.mergedContent?.subjectLine ??
         "";
+      const emailContent =
+        payload?.formState?.editedEmailContent ??
+        payload?.mergedContent?.emailContent ??
+        "";
+      const slackContent =
+        payload?.formState?.editedSlackContent ??
+        payload?.mergedContent?.slackContent ??
+        "";
       return {
         id: d.id,
         taskId: d.taskId,
@@ -27,11 +35,14 @@ export async function GET() {
         isComplete: payload ? isFormComplete(payload) : false,
         missing: payload ? missingFields(payload) : ["Schedule payload"],
         primaryEmail: payload?.primaryEmail ?? "",
+        ccEmails: payload?.ccEmails ?? "",
         senderEmail: payload?.senderEmail ?? "",
         deliverableType: payload?.formState?.deliverableType ?? "",
         postToSlack: payload?.postToSlack ?? false,
         slackChannelName: payload?.taskMeta?.slackChannelName ?? "",
         subjectLine,
+        emailContent,
+        slackContent,
         projectName: payload?.taskMeta?.projectName ?? "",
         clientName: payload?.taskMeta?.clientName ?? "",
       };

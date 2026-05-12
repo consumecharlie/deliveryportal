@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, AlertCircle } from "lucide-react";
+import { X, AlertCircle, Eye, Mail, MessageSquare } from "lucide-react";
+import { SchedulePreviewDialog } from "./schedule-preview-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,11 +27,14 @@ interface ScheduledRow {
   isComplete: boolean;
   missing: string[];
   primaryEmail: string;
+  ccEmails: string;
   senderEmail: string;
   deliverableType: string;
   postToSlack: boolean;
   slackChannelName: string;
   subjectLine: string;
+  emailContent: string;
+  slackContent: string;
   projectName: string;
   clientName: string;
 }
@@ -51,6 +55,7 @@ function fmtET(iso: string | null): string {
 export function ScheduledList() {
   const queryClient = useQueryClient();
   const [pendingCancel, setPendingCancel] = useState<ScheduledRow | null>(null);
+  const [previewRow, setPreviewRow] = useState<ScheduledRow | null>(null);
 
   const { data, isLoading, isError } = useQuery<{ scheduled: ScheduledRow[] }>({
     queryKey: ["scheduled", "list"],
@@ -108,24 +113,39 @@ export function ScheduledList() {
               ? `#${row.slackChannelName}`
               : "(Slack)"
             : row.primaryEmail || "(no recipient)";
-          const meta = [
-            row.deliverableType || "Unknown type",
-            row.clientName || row.projectName,
-          ]
+          const projectLine = [row.clientName, row.projectName]
             .filter(Boolean)
-            .join(" · ");
+            .join(" / ");
           return (
             <Card
               key={row.id}
               className="flex flex-row items-center gap-3 px-4 py-3"
             >
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">
-                  {row.subjectLine || "(no subject)"}
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="text-base font-semibold truncate">
+                    {projectLine || row.deliverableType || "(untitled)"}
+                  </div>
+                  {row.postToSlack ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-purple-500/30 shrink-0">
+                      <MessageSquare className="h-3 w-3" />
+                      Slack
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-sky-500/30 shrink-0">
+                      <Mail className="h-3 w-3" />
+                      Email
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">
+                <div className="text-sm truncate mt-0.5">
+                  {row.subjectLine || (
+                    <span className="text-muted-foreground italic">(no subject)</span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                  {row.deliverableType ? `${row.deliverableType} · ` : ""}
                   To <span className="font-mono">{recipient}</span>
-                  {meta ? ` · ${meta}` : ""}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Sends {fmtET(row.scheduledFor)}
@@ -137,6 +157,15 @@ export function ScheduledList() {
                   </div>
                 )}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewRow(row)}
+                aria-label={`Preview scheduled send for ${projectLine || row.taskId}`}
+              >
+                <Eye className="h-4 w-4 mr-1.5" />
+                Preview
+              </Button>
               <Link href={`/deliverable/${row.taskId}`}>
                 <Button variant="outline" size="sm">
                   Edit
@@ -145,7 +174,7 @@ export function ScheduledList() {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`Cancel schedule for ${row.subjectLine || row.taskId}`}
+                aria-label={`Cancel schedule for ${projectLine || row.taskId}`}
                 onClick={() => setPendingCancel(row)}
               >
                 <X className="h-4 w-4" />
@@ -154,6 +183,12 @@ export function ScheduledList() {
           );
         })}
       </div>
+
+      <SchedulePreviewDialog
+        open={previewRow != null}
+        onOpenChange={(open) => !open && setPreviewRow(null)}
+        row={previewRow}
+      />
 
       <AlertDialog
         open={pendingCancel != null}

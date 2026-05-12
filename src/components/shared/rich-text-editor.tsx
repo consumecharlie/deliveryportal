@@ -71,7 +71,7 @@ export type { MentionItem };
  * Convert basic markdown to HTML for TipTap ingestion.
  * Handles bold, italic, links, headers, and bullet lists.
  */
-function markdownToHtml(md: string): string {
+export function markdownToHtml(md: string): string {
   if (!md) return "";
 
   let html = md;
