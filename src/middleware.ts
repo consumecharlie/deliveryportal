@@ -20,6 +20,7 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/cron") ||
     pathname.startsWith("/_next") ||
     pathname.endsWith(".svg") ||
     pathname.endsWith(".png") ||
