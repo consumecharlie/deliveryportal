@@ -63,37 +63,38 @@ export function Sidebar() {
         isCollapsed ? "w-14" : "w-64"
       }`}
     >
-      {/* Toggle row */}
-      <div
-        className={`flex h-10 items-center ${
-          isCollapsed ? "justify-center px-2" : "justify-end px-2"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-[#DBEF00] hover:bg-[#DBEF00]/10 transition-colors"
-        >
-          {isCollapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </button>
-      </div>
-
       {/* Navigation */}
-      <nav className="flex-1 px-0 space-y-0">
-        {/* Section header */}
-        {!isCollapsed && (
-          <div className="px-4 py-2">
-            <span className="font-pixel text-[11px]" style={{ color: "#6AC387" }}>
+      <nav className="flex-1 px-0 space-y-0 pt-2">
+        {/* Section header row — collapse toggle shares the row with the
+            NAVIGATION label when expanded, or sits alone (centered) when
+            collapsed, so the sidebar doesn't have a tall empty gap. */}
+        <div
+          className={`flex items-center py-2 ${
+            isCollapsed ? "justify-center px-2" : "justify-between pl-4 pr-2"
+          }`}
+        >
+          {!isCollapsed && (
+            <span
+              className="font-pixel text-[11px]"
+              style={{ color: "#6AC387" }}
+            >
               NAVIGATION
             </span>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-[#DBEF00] hover:bg-[#DBEF00]/10 transition-colors"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
+        </div>
 
         {navItems.map((item) => {
           const isActive =
