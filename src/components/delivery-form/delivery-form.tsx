@@ -905,6 +905,16 @@ export function DeliveryForm({
             showSlack={showSlack}
             templateTaskId={activeTemplate?.taskId}
             deliverableType={deliverableType}
+            addonTemplateTaskId={
+              addonProject && addonTaskDetail?.template?.taskId
+                ? addonTaskDetail.template.taskId
+                : undefined
+            }
+            addonTemplateLabel={
+              addonProject && addonTaskDetail?.template?.deliverableType
+                ? addonTaskDetail.template.deliverableType
+                : undefined
+            }
             onSlackLintResult={showSlack ? setSlackLintErrors : undefined}
           />
         </div>

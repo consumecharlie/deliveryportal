@@ -11,6 +11,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -49,6 +52,11 @@ interface PreviewPanelProps {
   showSlack?: boolean;
   templateTaskId?: string;
   deliverableType?: string;
+  /** When the delivery has an add-on merged in, the add-on's template
+   *  task ID. Pairs with `addonTemplateLabel` to show a submenu so the
+   *  user can choose which template to edit on merged deliveries. */
+  addonTemplateTaskId?: string;
+  addonTemplateLabel?: string;
   onSlackLintResult?: (errors: SlackLintError[]) => void;
 }
 
@@ -90,6 +98,8 @@ export function PreviewPanel({
   showSlack = true,
   templateTaskId,
   deliverableType,
+  addonTemplateTaskId,
+  addonTemplateLabel,
   onSlackLintResult,
 }: PreviewPanelProps) {
   const router = useRouter();
@@ -99,7 +109,9 @@ export function PreviewPanel({
 
   // Track whether user has made edits since entering edit mode
   const [hasEdited, setHasEdited] = useState(false);
-  const [showTemplateWarning, setShowTemplateWarning] = useState(false);
+  /** Which template task ID the user clicked. When non-null, the confirmation dialog is open. */
+  const [pendingTemplateTaskId, setPendingTemplateTaskId] = useState<string | null>(null);
+  const showTemplateWarning = pendingTemplateTaskId != null;
   const prevEditMode = useRef(isEditMode);
 
   // Reset hasEdited when entering edit mode
@@ -187,20 +199,41 @@ export function PreviewPanel({
                     Edit Message
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      if (templateTaskId) {
-                        setShowTemplateWarning(true);
-                      } else {
-                        router.push(
-                          `/templates/new${deliverableType ? `?type=${encodeURIComponent(deliverableType)}` : ""}`
-                        );
-                      }
-                    }}
-                  >
-                    <FileEdit className="mr-2 h-3.5 w-3.5" />
-                    {templateTaskId ? "Edit Template" : "Create Template"}
-                  </DropdownMenuItem>
+                  {templateTaskId && addonTemplateTaskId ? (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <FileEdit className="mr-2 h-3.5 w-3.5" />
+                        Edit Template
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem
+                          onClick={() => setPendingTemplateTaskId(templateTaskId)}
+                        >
+                          Edit {deliverableType ?? "primary"} template
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setPendingTemplateTaskId(addonTemplateTaskId)}
+                        >
+                          Edit {addonTemplateLabel ?? "addon"} template
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (templateTaskId) {
+                          setPendingTemplateTaskId(templateTaskId);
+                        } else {
+                          router.push(
+                            `/templates/new${deliverableType ? `?type=${encodeURIComponent(deliverableType)}` : ""}`
+                          );
+                        }
+                      }}
+                    >
+                      <FileEdit className="mr-2 h-3.5 w-3.5" />
+                      {templateTaskId ? "Edit Template" : "Create Template"}
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -331,7 +364,7 @@ export function PreviewPanel({
       {/* Template edit confirmation dialog */}
       <AlertDialog
         open={showTemplateWarning}
-        onOpenChange={setShowTemplateWarning}
+        onOpenChange={(open) => !open && setPendingTemplateTaskId(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -345,7 +378,11 @@ export function PreviewPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => router.push(`/templates/${templateTaskId}`)}
+              onClick={() => {
+                if (pendingTemplateTaskId) {
+                  router.push(`/templates/${pendingTemplateTaskId}`);
+                }
+              }}
             >
               Edit Template
             </AlertDialogAction>
