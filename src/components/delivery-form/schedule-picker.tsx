@@ -390,7 +390,7 @@ function TimeDropdown({
       <SelectContent
         position="popper"
         align="end"
-        className="max-h-[280px]"
+        className="max-h-[280px] [&>[data-slot=select-scroll-up-button]]:hidden [&>[data-slot=select-scroll-down-button]]:hidden"
       >
         {options.length === 0 ? (
           <div className="px-2 py-1.5 text-sm text-muted-foreground">
