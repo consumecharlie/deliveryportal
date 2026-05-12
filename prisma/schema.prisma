@@ -60,9 +60,9 @@ model Draft {
   savedBy   String
   savedAt   DateTime @default(now())
   updatedAt DateTime @updatedAt
-  scheduledFor    DateTime?
-  scheduleStatus  String?
-  lastReminderAt  DateTime?
+  scheduledFor      DateTime?
+  scheduleStatus    String?
+  scheduledPayload  Json?
 
   @@index([taskId])
   @@index([scheduledFor])
