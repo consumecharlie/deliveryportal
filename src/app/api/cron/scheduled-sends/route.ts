@@ -31,13 +31,23 @@ function formatET(d: Date): string {
 }
 
 function deriveBaseUrl(req: Request): string {
+  // Prefer a stable alias domain (custom or project alias) over the per-
+  // deployment URL Vercel cron's request lands on. Per-deployment URLs
+  // (deliveryportal-<hash>-<team>.vercel.app) are gated by Vercel Deployment
+  // Protection, which blocks the cron's internal fan-out call with an HTML
+  // 401 before our middleware ever runs.
+  const envUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXTAUTH_URL ??
+    process.env.VERCEL_URL ??
+    "";
+  if (envUrl) {
+    return envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
+  }
   const proto = req.headers.get("x-forwarded-proto");
   const host = req.headers.get("host");
   if (proto && host) return `${proto}://${host}`;
-  const envUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL ?? "";
-  if (!envUrl) return "";
-  return envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
+  return "";
 }
 
 async function bounce(
