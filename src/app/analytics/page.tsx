@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DepartmentBadge, getDepartmentChartColor } from "@/components/dashboard/department-badge";
+import { Avatar } from "@/components/dashboard/assignee-filter";
 import {
   Send,
   Users,
@@ -110,6 +111,41 @@ export default function AnalyticsPage() {
       return res.json();
     },
   });
+
+  // Fetch ClickUp workspace members so we can resolve sender emails to
+  // profile pictures in the Recent Activity feed and Team Leaderboard.
+  const { data: membersData } = useQuery<{
+    members: Array<{
+      id: number;
+      username: string;
+      email: string;
+      profilePicture?: string;
+      initials: string;
+    }>;
+  }>({
+    queryKey: ["settings", "workspace-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/workspace-members");
+      if (!res.ok) throw new Error("Failed to fetch workspace members");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  // email → profile picture lookup (lowercased for case-insensitive match
+  // against the senderEmail values stored on Delivery rows).
+  const memberByEmail = new Map<
+    string,
+    { profilePicture?: string; username: string }
+  >();
+  for (const m of membersData?.members ?? []) {
+    if (m.email) {
+      memberByEmail.set(m.email.toLowerCase(), {
+        profilePicture: m.profilePicture,
+        username: m.username,
+      });
+    }
+  }
 
   const periodLabel =
     period === "30d"
@@ -426,18 +462,27 @@ export default function AnalyticsPage() {
                     {data.teamLeaderboard.map((member, i) => {
                       const maxCount = data.teamLeaderboard[0]?.count ?? 1;
                       const pct = Math.round((member.count / maxCount) * 100);
+                      const displayName = formatSenderName(member.senderEmail);
+                      const profile = memberByEmail.get(
+                        member.senderEmail.toLowerCase()
+                      );
                       return (
                         <div key={member.senderEmail} className="space-y-1">
                           <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs text-muted-foreground w-5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
                                 {i + 1}.
                               </span>
-                              <span className="font-medium">
-                                {formatSenderName(member.senderEmail)}
+                              <Avatar
+                                src={profile?.profilePicture}
+                                name={displayName}
+                                size={24}
+                              />
+                              <span className="font-medium truncate">
+                                {displayName}
                               </span>
                             </div>
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className="text-xs shrink-0">
                               {member.count}{" "}
                               {member.count === 1
                                 ? "delivery"
@@ -477,36 +522,47 @@ export default function AnalyticsPage() {
               <CardContent>
                 {data.recentActivity.length > 0 ? (
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    {data.recentActivity.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-start gap-3 text-sm"
-                      >
-                        <div className="mt-0.5 shrink-0">
-                          <DepartmentBadge department={item.department} />
+                    {data.recentActivity.map((item) => {
+                      const senderDisplayName = formatSenderName(item.sentBy);
+                      const member = memberByEmail.get(item.sentBy.toLowerCase());
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-start gap-3 text-sm"
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            <Avatar
+                              src={member?.profilePicture}
+                              name={senderDisplayName}
+                              size={28}
+                            />
+                          </div>
+                          <div className="mt-0.5 shrink-0">
+                            <DepartmentBadge department={item.department} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p>
+                              <span className="font-medium">
+                                {senderDisplayName}
+                              </span>{" "}
+                              sent{" "}
+                              <span className="text-muted-foreground">
+                                {item.deliverableType}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {item.clientName}
+                              {item.projectName
+                                ? ` / ${item.projectName}`
+                                : ""}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                            {formatRelativeTime(item.sentAt)}
+                          </span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p>
-                            <span className="font-medium">
-                              {formatSenderName(item.sentBy)}
-                            </span>{" "}
-                            sent{" "}
-                            <span className="text-muted-foreground">
-                              {item.deliverableType}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {item.clientName}
-                            {item.projectName
-                              ? ` / ${item.projectName}`
-                              : ""}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
-                          {formatRelativeTime(item.sentAt)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
