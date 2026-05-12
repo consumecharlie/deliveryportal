@@ -362,44 +362,53 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {data.byType.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart
-                      data={data.byType.slice(0, 8)}
-                      layout="vertical"
-                      margin={{ left: 8 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        className="stroke-muted"
-                        horizontal={false}
-                      />
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="deliverableType"
-                        width={140}
-                        tick={{ fontSize: 11 }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: "8px",
-                          border: "1px solid hsl(var(--border))",
-                          background: "hsl(var(--popover))",
-                          color: "hsl(var(--popover-foreground))",
-                        }}
-                      />
-                      <Bar
-                        dataKey="count"
-                        name="Deliveries"
-                        fill="hsl(142, 71%, 45%)"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  // Hand-rolled horizontal bar list — mimics the
+                  // "Department Breakdown" pattern from consume-media-insights:
+                  // fixed-width label on the left, rounded-pill track in the
+                  // middle with value inside the filled bar when wide enough,
+                  // count to the right when the bar is too short. No tooltip.
+                  <div className="space-y-2.5 py-1">
+                    {(() => {
+                      const rows = data.byType.slice(0, 8);
+                      const max = rows[0]?.count ?? 1;
+                      return rows.map((row) => {
+                        const widthPct = Math.max((row.count / max) * 100, 2);
+                        const showInside = widthPct > 18;
+                        return (
+                          <div
+                            key={row.deliverableType}
+                            className="flex items-center gap-3"
+                          >
+                            <div
+                              className="w-40 shrink-0 truncate text-xs text-muted-foreground text-right"
+                              title={row.deliverableType}
+                            >
+                              {row.deliverableType}
+                            </div>
+                            <div className="flex-1 bg-muted/30 rounded-full h-6 overflow-hidden">
+                              <div
+                                className="h-full rounded-full flex items-center px-2.5 transition-[width] duration-500"
+                                style={{
+                                  width: `${widthPct}%`,
+                                  backgroundColor: "#6AC387",
+                                  minWidth: "1.75rem",
+                                }}
+                              >
+                                {showInside && (
+                                  <span className="text-xs font-semibold text-[#151919]">
+                                    {row.count}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="w-8 text-right text-xs text-muted-foreground shrink-0">
+                              {!showInside && <span>{row.count}</span>}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
                     No data.
