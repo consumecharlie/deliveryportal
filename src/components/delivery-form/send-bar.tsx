@@ -14,10 +14,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Save, Send, Loader2, FlaskConical, AlertTriangle } from "lucide-react";
+import {
+  Save,
+  Send,
+  Loader2,
+  FlaskConical,
+  AlertTriangle,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { DeliveryFormState, MergedContent } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
+import type { ScheduledSendPayload } from "@/lib/schedule-send";
+import { SchedulePicker } from "./schedule-picker";
 
 interface SendBarProps {
   taskId: string;
@@ -78,8 +87,68 @@ export function SendBar({
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
   const [showLintWarning, setShowLintWarning] = useState(false);
   const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
+
+  const canSchedule = !adhocMode && !testMode;
+
+  const buildSchedulePayload = (): ScheduledSendPayload => ({
+    formState,
+    mergedContent,
+    primaryEmail,
+    ccEmails,
+    senderEmail,
+    postToSlack,
+    slackChannelId,
+    originalDeliverableType,
+    listId,
+    taskMeta,
+    ...(addonListId
+      ? {
+          addonListId,
+          addonDeliverableType,
+          addonDepartment,
+          addonReviewLinks,
+          addonProjectName,
+        }
+      : {}),
+  });
+
+  const handleSchedule = async (isoString: string) => {
+    if (!canSchedule) return;
+    setIsScheduling(true);
+    try {
+      const res = await fetch(`/api/drafts/${taskId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduledFor: isoString,
+          payload: buildSchedulePayload(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to schedule");
+      }
+      toast.success("Scheduled", {
+        description: `Will send ${new Date(isoString).toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        })}`,
+      });
+      router.push("/scheduled");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to schedule");
+    } finally {
+      setIsScheduling(false);
+    }
+  };
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
@@ -242,24 +311,43 @@ export function SendBar({
           {/* Send button — shows lint warning if errors exist, otherwise normal confirm */}
           {slackLintErrors && slackLintErrors.length > 0 ? (
             <>
-              <Button
-                disabled={!isReady || isSending}
-                onClick={() => setShowLintWarning(true)}
-                className={
-                  testMode
-                    ? "bg-amber-600 hover:bg-amber-700 text-white"
-                    : undefined
-                }
-              >
-                {isSending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : testMode ? (
-                  <FlaskConical className="mr-2 h-4 w-4" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
+              <div className="flex">
+                <Button
+                  disabled={!isReady || isSending || isScheduling}
+                  onClick={() => setShowLintWarning(true)}
+                  className={`${canSchedule ? "rounded-r-none" : ""} ${
+                    testMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+                  }`}
+                >
+                  {isSending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : testMode ? (
+                    <FlaskConical className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {testMode ? "Test Send" : "Send"}
+                </Button>
+                {canSchedule && (
+                  <SchedulePicker
+                    busy={isScheduling}
+                    onSchedule={handleSchedule}
+                    trigger={
+                      <Button
+                        disabled={!isReady || isSending || isScheduling}
+                        aria-label="Schedule send"
+                        className="rounded-l-none border-l border-l-white/20 px-2"
+                      >
+                        {isScheduling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    }
+                  />
                 )}
-                {testMode ? "Test Send" : "Send"}
-              </Button>
+              </div>
 
               {/* Lint warning dialog */}
               <AlertDialog open={showLintWarning} onOpenChange={setShowLintWarning}>
@@ -413,26 +501,25 @@ export function SendBar({
               </AlertDialog>
             </>
           ) : (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  disabled={!isReady || isSending}
-                  className={
-                    testMode
-                      ? "bg-amber-600 hover:bg-amber-700 text-white"
-                      : undefined
-                  }
-                >
-                  {isSending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : testMode ? (
-                    <FlaskConical className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
-                  {testMode ? "Test Send" : "Send"}
-                </Button>
-              </AlertDialogTrigger>
+            <div className="flex">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    disabled={!isReady || isSending || isScheduling}
+                    className={`${canSchedule ? "rounded-r-none" : ""} ${
+                      testMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+                    }`}
+                  >
+                    {isSending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : testMode ? (
+                      <FlaskConical className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    {testMode ? "Test Send" : "Send"}
+                  </Button>
+                </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">
@@ -538,6 +625,26 @@ export function SendBar({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+              {canSchedule && (
+                <SchedulePicker
+                  busy={isScheduling}
+                  onSchedule={handleSchedule}
+                  trigger={
+                    <Button
+                      disabled={!isReady || isSending || isScheduling}
+                      aria-label="Schedule send"
+                      className="rounded-l-none border-l border-l-white/20 px-2"
+                    >
+                      {isScheduling ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           )}
         </div>
       </div>

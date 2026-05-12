@@ -46,19 +46,31 @@ export async function POST(
     if (parsed.error || !parsed.scheduledFor || !parsed.payload) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
-    const updated = await prisma.draft.update({
+    const payloadJson = parsed.payload as unknown as Prisma.InputJsonValue;
+    // Persist the DeliveryFormState portion of the payload as the draft's
+    // formData so the form restore path still works if the user later cancels
+    // the schedule.
+    const formDataJson = JSON.parse(
+      JSON.stringify(parsed.payload.formState)
+    ) as Prisma.InputJsonValue;
+    const updated = await prisma.draft.upsert({
       where: { taskId },
-      data: {
+      update: {
         scheduledFor: parsed.scheduledFor,
         scheduleStatus: "scheduled",
-        scheduledPayload: parsed.payload as unknown as Prisma.InputJsonValue,
+        scheduledPayload: payloadJson,
+      },
+      create: {
+        taskId,
+        formData: formDataJson,
+        savedBy: parsed.payload.senderEmail || "portal-user",
+        scheduledFor: parsed.scheduledFor,
+        scheduleStatus: "scheduled",
+        scheduledPayload: payloadJson,
       },
     });
     return NextResponse.json({ ok: true, draft: updated });
   } catch (e) {
-    if ((e as { code?: string })?.code === "P2025") {
-      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
-    }
     console.error("Failed to schedule draft:", e);
     return NextResponse.json({ error: "Failed to schedule" }, { status: 500 });
   }
