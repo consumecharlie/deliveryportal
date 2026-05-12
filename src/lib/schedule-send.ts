@@ -75,3 +75,31 @@ export function isFormComplete(payload: ScheduledSendPayload): boolean {
 export function missingFields(payload: ScheduledSendPayload): string[] {
   return CHECKS.filter((c) => !c.validate(payload)).map((c) => c.label);
 }
+
+export interface SchedulableDraft {
+  id: string;
+  taskId: string;
+  savedBy: string;
+  scheduledFor: Date | null;
+  scheduleStatus: string | null;
+  scheduledPayload: ScheduledSendPayload | null;
+}
+
+export function findDueDrafts(drafts: SchedulableDraft[], now: Date): SchedulableDraft[] {
+  return drafts.filter(
+    (d) =>
+      d.scheduleStatus === "scheduled" &&
+      d.scheduledFor != null &&
+      d.scheduledFor.getTime() <= now.getTime()
+  );
+}
+
+export function findStaleDrafts(drafts: SchedulableDraft[], now: Date): SchedulableDraft[] {
+  const cutoffMs = now.getTime() - 30 * 60_000;
+  return drafts.filter(
+    (d) =>
+      (d.scheduleStatus === "scheduled" || d.scheduleStatus === "firing") &&
+      d.scheduledFor != null &&
+      d.scheduledFor.getTime() < cutoffMs
+  );
+}
