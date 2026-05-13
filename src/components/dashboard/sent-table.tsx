@@ -18,9 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
-import { ExternalLink, AlertCircle } from "lucide-react";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { ExternalLink, AlertCircle, Mail, MessageSquare } from "lucide-react";
 
 interface DeliveryLink {
   id: string;
@@ -86,6 +88,39 @@ function extractSlackMentionIds(slackContent: string | null): string[] {
     ids.add(m[1]);
   }
   return Array.from(ids);
+}
+
+/**
+ * Adapt Slack mrkdwn → markdown the RichTextEditor can render.
+ *
+ * Reverses the transformations applied at send time by
+ * `convertToSlackFormat()` so we can preview a saved slack message:
+ *   - `<@UXXXX>`     → `@[Display Name](UXXXX)` (TipTap mention chip)
+ *   - `<url|text>`   → `[text](url)`
+ *   - `<url>`        → plain url
+ *   - `*bold*`       → `**bold**` (single-asterisk → markdown double)
+ */
+function slackContentToMarkdown(
+  slack: string,
+  lookupSlackUser: (
+    id: string
+  ) => { name: string; avatar?: string } | undefined
+): string {
+  let out = slack;
+  // Mentions
+  out = out.replace(/<@([A-Z0-9]+)>/g, (_, id) => {
+    const name = lookupSlackUser(id)?.name ?? id;
+    return `@[${name}](${id})`;
+  });
+  // Slack links with display text: <url|text>
+  out = out.replace(/<([^|>\s]+)\|([^>]+)>/g, (_, url, text) => `[${text}](${url})`);
+  // Plain bracketed urls: <https://…>
+  out = out.replace(/<(https?:\/\/[^>\s]+)>/g, (_, url) => url);
+  // Slack single-asterisk bold → markdown double-asterisk bold. Match
+  // `*text*` where the surrounding chars aren't asterisks (so we don't
+  // disturb existing `**bold**` pairs).
+  out = out.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1**$2**");
+  return out;
 }
 
 /** Headers get the NAVIGATION-style pixel-7 treatment. */
@@ -405,76 +440,194 @@ export function SentTable() {
         open={!!selectedDelivery}
         onOpenChange={(open) => !open && setSelectedDelivery(null)}
       >
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Delivery Details</DialogTitle>
-          </DialogHeader>
-          {selectedDelivery && (
-            <div className="space-y-4">
-              <div className="space-y-1 text-sm">
-                <div>
-                  <strong>To: </strong>
-                  {selectedDelivery.primaryEmail}
-                </div>
-                {selectedDelivery.ccEmails && (
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          {selectedDelivery && (() => {
+            const sentByLookup = clickupByEmail.get(
+              selectedDelivery.sentBy?.toLowerCase() ?? ""
+            );
+            const sentAsLookup = clickupByEmail.get(
+              selectedDelivery.senderEmail?.toLowerCase() ?? ""
+            );
+            const hasSlack = Boolean(
+              selectedDelivery.slackChannel && selectedDelivery.slackContent
+            );
+            const slackMarkdown = hasSlack
+              ? slackContentToMarkdown(
+                  selectedDelivery.slackContent ?? "",
+                  lookupSlackUser
+                )
+              : "";
+            const defaultTab = hasSlack ? "slack" : "email";
+            const channelLabel = selectedDelivery.slackChannel
+              ? `#${selectedDelivery.slackChannelName || selectedDelivery.slackChannel}`
+              : null;
+            return (
+              <>
+                <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                  <DialogTitle className="text-base">
+                    {selectedDelivery.clientName || "Delivery"}
+                    {selectedDelivery.projectName ? (
+                      <span className="text-muted-foreground font-normal">
+                        {" "}
+                        / {selectedDelivery.projectName}
+                      </span>
+                    ) : null}
+                  </DialogTitle>
+                </DialogHeader>
+
+                {/* Metadata header */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 border-b text-sm">
                   <div>
-                    <strong>CC: </strong>
-                    {selectedDelivery.ccEmails}
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                      SENT BY
+                    </p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar
+                        src={sentByLookup?.avatar}
+                        name={sentByLookup?.name ?? selectedDelivery.sentBy}
+                        size={22}
+                      />
+                      <span className="truncate" title={selectedDelivery.sentBy}>
+                        {sentByLookup?.name ?? selectedDelivery.sentBy}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                      SENT AS
+                    </p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar
+                        src={sentAsLookup?.avatar}
+                        name={sentAsLookup?.name ?? selectedDelivery.senderEmail}
+                        size={22}
+                      />
+                      <span className="truncate" title={selectedDelivery.senderEmail}>
+                        {sentAsLookup?.name ?? selectedDelivery.senderEmail}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                      SENT AT
+                    </p>
+                    <p>{formatDate(selectedDelivery.sentAt)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                      DEPARTMENT
+                    </p>
+                    <DepartmentBadge department={selectedDelivery.department} />
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                      RECIPIENTS
+                    </p>
+                    <div className="space-y-0.5">
+                      <p>
+                        <span className="text-muted-foreground">To: </span>
+                        {selectedDelivery.primaryEmail || "—"}
+                      </p>
+                      {selectedDelivery.ccEmails && (
+                        <p>
+                          <span className="text-muted-foreground">CC: </span>
+                          {selectedDelivery.ccEmails}
+                        </p>
+                      )}
+                      {channelLabel && (
+                        <p>
+                          <span className="text-muted-foreground">Slack: </span>
+                          <Badge variant="outline" className="text-xs">
+                            {channelLabel}
+                          </Badge>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {selectedDelivery.wasEdited && (
+                    <div className="col-span-2">
+                      <Badge variant="outline" className="text-xs">
+                        Edited from template
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subject */}
+                <div className="px-6 py-3 border-b">
+                  <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                    SUBJECT
+                  </p>
+                  <p className="font-medium">
+                    {selectedDelivery.emailSubject || "—"}
+                  </p>
+                </div>
+
+                {/* Rendered preview — uses the same RichTextEditor as the
+                    delivery form's preview panel, in read-only mode. */}
+                <Tabs defaultValue={defaultTab}>
+                  {hasSlack && (
+                    <div className="px-6 pt-3 border-b">
+                      <TabsList className="h-9">
+                        <TabsTrigger value="email" className="text-xs">
+                          <Mail className="mr-1 h-3 w-3" /> Email
+                        </TabsTrigger>
+                        <TabsTrigger value="slack" className="text-xs">
+                          <MessageSquare className="mr-1 h-3 w-3" /> Slack
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+                  )}
+
+                  <TabsContent value="email" className="m-0 px-6 py-4">
+                    <RichTextEditor
+                      content={selectedDelivery.emailContent}
+                      onChange={() => {}}
+                      editable={false}
+                      outputFormat="markdown"
+                      showToolbar={false}
+                      minHeight="auto"
+                    />
+                  </TabsContent>
+                  {hasSlack && (
+                    <TabsContent value="slack" className="m-0 px-6 py-4">
+                      <RichTextEditor
+                        content={slackMarkdown}
+                        onChange={() => {}}
+                        editable={false}
+                        outputFormat="markdown"
+                        showToolbar={false}
+                        minHeight="auto"
+                      />
+                    </TabsContent>
+                  )}
+                </Tabs>
+
+                {selectedDelivery.links.length > 0 && (
+                  <div className="px-6 py-4 border-t">
+                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-2" style={{ color: "#6AC387" }}>
+                      REVIEW LINKS
+                    </p>
+                    <ul className="space-y-1">
+                      {selectedDelivery.links.map((link) => (
+                        <li key={link.id} className="text-sm">
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary inline-flex items-center gap-1 hover:underline"
+                          >
+                            {link.label || link.url}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-                <div>
-                  <strong>Sent As: </strong>
-                  {selectedDelivery.senderEmail}
-                </div>
-                <div>
-                  <strong>Sent By: </strong>
-                  {selectedDelivery.sentBy}
-                </div>
-                <div>
-                  <strong>Sent At: </strong>
-                  {formatDate(selectedDelivery.sentAt)}
-                </div>
-                {selectedDelivery.slackChannel && (
-                  <div>
-                    <strong>Slack: </strong>#
-                    {selectedDelivery.slackChannelName ||
-                      selectedDelivery.slackChannel}
-                  </div>
-                )}
-                {selectedDelivery.wasEdited && (
-                  <Badge variant="outline">Edited from template</Badge>
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-medium mb-1">
-                  Subject: {selectedDelivery.emailSubject}
-                </p>
-                <pre className="text-sm bg-muted p-3 rounded whitespace-pre-wrap font-sans">
-                  {selectedDelivery.emailContent}
-                </pre>
-              </div>
-              {selectedDelivery.links.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">Review Links:</p>
-                  <ul className="space-y-1">
-                    {selectedDelivery.links.map((link) => (
-                      <li key={link.id} className="text-sm">
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary inline-flex items-center gap-1 hover:underline"
-                        >
-                          {link.label || link.url}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </>
