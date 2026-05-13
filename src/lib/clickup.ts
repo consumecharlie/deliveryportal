@@ -86,6 +86,16 @@ export async function updateTaskStatus(
   });
 }
 
+export async function updateTaskName(
+  taskId: string,
+  name: string
+): Promise<void> {
+  await clickupFetch(`/task/${taskId}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function createTask(
   listId: string,
   data: {

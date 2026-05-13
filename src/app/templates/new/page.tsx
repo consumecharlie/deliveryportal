@@ -24,7 +24,7 @@ export default function NewTemplatePage() {
 
 /**
  * Auto-creates a blank template task in ClickUp and redirects to the full editor.
- * Accepts ?type= query param to pre-fill the deliverable type.
+ * Requires a ?type= query param — the template's name IS its deliverable type.
  */
 function AutoCreateTemplate() {
   const router = useRouter();
@@ -32,11 +32,21 @@ function AutoCreateTemplate() {
   const creatingRef = useRef(false);
 
   const deliverableType = searchParams.get("type") ?? "";
-  const templateName = deliverableType || "New Template";
 
   useEffect(() => {
     if (creatingRef.current) return;
     creatingRef.current = true;
+
+    // No deliverable type → can't name the template. Send the user back
+    // to /templates rather than creating a "New Template"-named task.
+    if (!deliverableType.trim()) {
+      toast.error("Pick a deliverable type first", {
+        description:
+          "Templates are named after their deliverable type — open a delivery and use Edit Template → Create instead.",
+      });
+      router.replace("/templates");
+      return;
+    }
 
     async function create() {
       try {
@@ -44,7 +54,6 @@ function AutoCreateTemplate() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: templateName,
             snippet: "",
             subjectLine: "",
             deliverableType,
@@ -71,7 +80,7 @@ function AutoCreateTemplate() {
     }
 
     create();
-  }, [deliverableType, templateName, router]);
+  }, [deliverableType, router]);
 
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">

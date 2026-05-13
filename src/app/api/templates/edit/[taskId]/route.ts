@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getTask,
   updateTaskCustomField,
+  updateTaskName,
   extractCustomFieldValue,
   resolveDropdownOptionId,
 } from "@/lib/clickup";
@@ -204,6 +205,13 @@ export async function PUT(
             optionId
           )
         );
+      }
+      // Keep the template task's name in sync with its deliverable type
+      // so the templates grid renders the right label. The snippet name
+      // is auto-managed — never separately editable.
+      const desiredName = String(deliverableType).trim();
+      if (desiredName && desiredName !== currentTask.name) {
+        updates.push(updateTaskName(taskId, desiredName));
       }
     }
 
