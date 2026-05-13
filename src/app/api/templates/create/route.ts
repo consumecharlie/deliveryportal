@@ -16,11 +16,15 @@ import { LISTS, TEMPLATE_FIELDS } from "@/lib/custom-field-ids";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, snippet, subjectLine, deliverableType, department } = body;
+    const { snippet, subjectLine, deliverableType, department } = body;
 
-    if (!name?.trim()) {
+    // The template's name IS its deliverable type — there's no separate
+    // template name in this app's mental model. Require a deliverable
+    // type up front so we never end up with a "New Template" task.
+    const dt = typeof deliverableType === "string" ? deliverableType.trim() : "";
+    if (!dt) {
       return NextResponse.json(
-        { error: "Template name is required" },
+        { error: "deliverableType is required to create a template" },
         { status: 400 }
       );
     }
@@ -35,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     const newTask = await createTask(LISTS.DELIVERY_SNIPPETS, {
-      name: name.trim(),
+      name: dt,
       custom_fields: customFields,
     });
 
