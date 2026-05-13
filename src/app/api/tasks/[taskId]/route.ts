@@ -111,39 +111,60 @@ export async function GET(
           extractCustomFieldUrl(sibling.custom_fields, CUSTOM_FIELDS.PROJECT_PLAN_LINK) ?? null;
       }
 
-      // Find the paired feedback deadline (same deliverable type, future due date)
+      // Find the paired feedback deadline.
+      //
+      // CRITICAL: must share the same PARENT TASK as the delivery we're
+      // sending. Without this, two projects in the same list with the
+      // same deliverable type (e.g. "Post Script V1") will collapse into
+      // one — and we'll pull the wrong deadline. Bug surfaced 2026-05-13
+      // when a same-day delivery picked another project's May 26 deadline.
+      //
+      // We also DON'T filter by future date here. Same-day deadlines
+      // (e.g. due_date=8am UTC, send happens at 6pm ET) were getting
+      // filtered out and the lookup was falling back to a stranger.
+      // Within true siblings + matching deliverable type, just pick the
+      // soonest one; date filtering should rely on ClickUp keeping the
+      // task list current.
       if (
         (taskType === "Feedback Deadline" ||
           String(rawTaskType) === PROJECT_TASK_TYPES.FEEDBACK_DEADLINE) &&
-        sibling.due_date &&
-        Number(sibling.due_date) > Date.now()
+        sibling.due_date
       ) {
+        // A "true sibling" shares the main task's parent. If the main
+        // task is a top-level task with no parent, accept its direct
+        // children as siblings instead.
+        const isTrueSibling =
+          (task.parent && sibling.parent === task.parent) ||
+          sibling.parent === task.id;
+        if (!isTrueSibling) continue;
+
         const sibDeliverableType = extractCustomFieldValue(
           sibling.custom_fields,
           CUSTOM_FIELDS.DELIVERABLE_TYPE
         );
-        if (sibDeliverableType === deliverableType) {
-          // Pick the nearest future deadline
-          if (
-            !feedbackDeadline ||
-            Number(sibling.due_date) < Number(feedbackDeadline.dueDate)
-          ) {
-            const dueMs = Number(sibling.due_date);
-            const date = new Date(dueMs);
-            feedbackDeadline = {
-              taskId: sibling.id,
-              name: sibling.name,
-              deliverableType: sibDeliverableType ?? "",
-              department:
-                extractCustomFieldValue(sibling.custom_fields, CUSTOM_FIELDS.DEPARTMENT) ?? "",
-              dueDate: sibling.due_date,
-              formattedDate: date.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              }),
-            };
-          }
+        if (sibDeliverableType !== deliverableType) continue;
+
+        // Pick the soonest match (defensive — there should usually be
+        // exactly one matching sibling).
+        if (
+          !feedbackDeadline ||
+          Number(sibling.due_date) < Number(feedbackDeadline.dueDate)
+        ) {
+          const dueMs = Number(sibling.due_date);
+          const date = new Date(dueMs);
+          feedbackDeadline = {
+            taskId: sibling.id,
+            name: sibling.name,
+            deliverableType: sibDeliverableType ?? "",
+            department:
+              extractCustomFieldValue(sibling.custom_fields, CUSTOM_FIELDS.DEPARTMENT) ?? "",
+            dueDate: sibling.due_date,
+            formattedDate: date.toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            }),
+          };
         }
       }
     }

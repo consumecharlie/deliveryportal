@@ -102,13 +102,19 @@ export async function GET(
           extractCustomFieldUrl(sibling.custom_fields, CUSTOM_FIELDS.PROJECT_PLAN_LINK) ?? null;
       }
 
-      // Find the paired feedback deadline (same deliverable type, future due date)
+      // Find the paired feedback deadline (same deliverable type).
+      //
+      // Ad-hoc mode: there's no specific main task to anchor parent
+      // siblinghood to, so we can't enforce the parent constraint we use
+      // in /api/tasks/[taskId]. If the list has multiple project parents
+      // with the same deliverable type, we just pick the soonest match.
+      // The future-date filter is NOT applied — same-day deadlines must
+      // be included regardless of clock time (bug surfaced 2026-05-13).
       if (
         deliverableType &&
         (taskType === "Feedback Deadline" ||
           String(rawTaskType) === PROJECT_TASK_TYPES.FEEDBACK_DEADLINE) &&
-        sibling.due_date &&
-        Number(sibling.due_date) > Date.now()
+        sibling.due_date
       ) {
         const sibDeliverableType = extractCustomFieldValue(
           sibling.custom_fields,
