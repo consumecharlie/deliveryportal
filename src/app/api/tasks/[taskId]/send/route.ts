@@ -84,11 +84,16 @@ export async function POST(
       ? body.sentBy?.trim() || "scheduled-send"
       : await getSessionUserEmail();
 
-    // ── Test mode: override recipients based on delivery channel ──
+    // ── Test mode: override recipients + sender ──
     // Slack mode test: send to test channel only, no email
     // Email mode test: send to test email only, no Slack
+    // Sender is also overridden so test posts always go via a sender known
+    // to be in #delivery-testing (otherwise Slack rejects with not_in_channel
+    // when the configured sender isn't a channel member).
     const testSlackChannel = process.env.TEST_SLACK_CHANNEL_ID || "";
     const resolvedTestEmail = testEmail || process.env.TEST_EMAIL || userEmail;
+    const testSenderEmail =
+      process.env.TEST_SENDER_EMAIL || "michael@consume-media.com";
 
     const effectiveEmail = testMode
       ? (postToSlack ? "" : resolvedTestEmail)  // Slack mode → no email; Email mode → test email
@@ -100,6 +105,7 @@ export async function POST(
     const effectivePostToSlack = testMode
       ? postToSlack && !!testSlackChannel        // Only post to Slack if in Slack delivery mode
       : postToSlack;
+    const effectiveSender = testMode ? testSenderEmail : senderEmail;
 
     // ── 1. Write form fields to ClickUp (skip in test mode) ──
 
@@ -285,7 +291,7 @@ export async function POST(
       primary_email: effectiveEmail,
       cc_emails: effectiveCcEmails,
       email_subject: testMode ? `[TEST] ${emailSubject}` : emailSubject,
-      sender_email: senderEmail,
+      sender_email: effectiveSender,
       post_to_slack: effectivePostToSlack,
       communication_log: communicationLog,
       tasks_waiting_count: tasksWaitingCount,
