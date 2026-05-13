@@ -128,29 +128,28 @@ export function DeliveryForm({
   const [testMode, setTestMode] = useState(false);
   const testEmail = session?.user?.email ?? "michael@consume-media.com";
   const testSlackChannelId = "C0AJF6GBPK9"; // #delivery-testing
-  const [savedSlackChannelId, setSavedSlackChannelId] = useState<string | null>(null);
-  const [savedToEmail, setSavedToEmail] = useState<string | null>(null);
-  const [savedCcEmails, setSavedCcEmails] = useState<string | null>(null);
 
   const handleTestModeToggle = useCallback(() => {
     setTestMode((prev) => {
       if (!prev) {
-        // Entering test mode — save current values and override
-        setSavedSlackChannelId(slackChannelId);
-        setSavedToEmail(editedToEmail);
-        setSavedCcEmails(editedCcEmails);
+        // Entering test mode — override the recipient fields.
         setSlackChannelId(testSlackChannelId);
         setEditedToEmail(testEmail);
         setEditedCcEmails("");
       } else {
-        // Leaving test mode — restore original values
-        setSlackChannelId(savedSlackChannelId ?? taskDetail.slackChannelId ?? "");
-        setEditedToEmail(savedToEmail);
-        setEditedCcEmails(savedCcEmails);
+        // Leaving test mode — always reset back to canonical ClickUp
+        // values. Previously we restored whatever the user had typed
+        // before entering test mode, which is wrong if they entered test
+        // mode while in a half-edited state (they expect "reset", not
+        // "restore-last-input"). null on the edited fields lets the
+        // form fall back to the primary contact's email from taskDetail.
+        setSlackChannelId(taskDetail.slackChannelId ?? "");
+        setEditedToEmail(null);
+        setEditedCcEmails(null);
       }
       return !prev;
     });
-  }, [slackChannelId, editedToEmail, editedCcEmails, savedSlackChannelId, savedToEmail, savedCcEmails, taskDetail.slackChannelId, testEmail, testSlackChannelId]);
+  }, [taskDetail.slackChannelId, testEmail, testSlackChannelId]);
 
   const showEmail = deliveryMode === "email";
   const showSlack = deliveryMode === "slack";
