@@ -1,63 +1,86 @@
 /**
  * Magic cleanup for delivery templates.
  *
- * Rules:
- *  - Section headers are markdown ATX headings (`#`, `##`, `###`) or a whole
- *    line wrapped in `**bold**` markers. If the template uses real `##`
- *    headers, bold-only lines are treated as redundant sub-headers (e.g.
- *    `**Scope**` inside `## 🔔 Scope & Timeline Reminders`) and dropped.
- *  - Under each header, single-line content blocks become bullet items
- *    (`- text`). Multi-line prose blocks are left alone.
- *  - Already-bulleted blocks are preserved; `* ` markers are normalized to
- *    `- ` for consistency.
- *  - Content above the first header (greetings, intros) is left untouched.
- *  - At the END of the LAST section, trailing prose blocks (no `[...]`
- *    variables, no bullet markers) are left alone — same treatment as the
- *    intro greeting. Only applies when the section also contains at least
- *    one bullet block, so a section that's purely a single prose line
- *    still becomes a bullet.
- *  - Exactly one blank line separates sections. Header rows sit directly
- *    above their body — no blank line between a header and its content.
- *  - Idempotent: `magicCleanup(magicCleanup(x)) === magicCleanup(x)`.
+ * This is more than a markdown formatter — it enforces the Consume Media
+ * delivery-template standard. Pass it a snippet (plus optional context
+ * like the deliverable type and department) and it returns a reshaped
+ * snippet matching the canonical structure.
+ *
+ * Behaviour summary:
+ *
+ *  1. Structural cleanup
+ *     - Section headers = the shallowest `#`-level used in the template.
+ *       Anything deeper (`###`, `**bold**` whole-line) is dropped as a
+ *       redundant sub-header. `**[varName]**` (bold-wrapped template
+ *       variable) is NOT treated as a header.
+ *     - Under each header, every non-blank line becomes a bullet item.
+ *       Lines ending with `:` stay as prose intros (e.g. "we're most
+ *       focused on:"). Already-bulleted lines are preserved; `* ` markers
+ *       normalize to `- `.
+ *     - Content above the first header (greeting) is left mostly alone.
+ *     - Exactly one blank line between sections. Header rows sit directly
+ *       above their body.
+ *
+ *  2. Section-specific rewrites
+ *     - `## 🔔 Scope & Timeline Reminders` → canonical bullets
+ *       (Revision Rounds / Feedback Windows / Feedback Deadline / +1).
+ *     - `## ⏭️ Next Step` → removed entirely (header + body).
+ *     - `## 🗓 Project Plan` → canonical
+ *       `- [View real-time progress | projectPlanLink]`.
+ *     - `## 🔗 Review Link` → auto-filled with the right review-link
+ *       variable for the deliverable. Default mapping:
+ *         * Final Delivery → `[Final delivery | googleDeliverableLink]`
+ *         * Pre-Pro / Pre-Production → `[Document | googleDeliverableLink]`
+ *         * Animatic-named → `[Animatic | animaticReviewLink]`
+ *         * Otherwise (post-pro non-final) → `[Frame review | frameReviewLink]`
+ *       Plus: if "loom" appears anywhere in the snippet, also include
+ *       `[Loom walkthrough | loomReviewLink]`.
+ *
+ *  3. Greeting/preamble fixes
+ *     - Deprecated `[contact]` (no 's') in the greeting → `[contactFirstName]`.
+ *     - `[versionNotes]` is guaranteed to live between the greeting and
+ *       the first section header. If it already exists, kept in place.
+ *
+ *  Idempotent: `magicCleanup(magicCleanup(x)) === magicCleanup(x)`.
  */
 
 const HEADER_HASH = /^(#{1,3})\s+\S/;
-const HEADER_BOLD = /^\*\*[^*]+\*\*\s*$/;
+const HEADER_BOLD_LINE = /^\*\*[^*]+\*\*\s*$/;
 const BULLET_LINE = /^\s*[-*]\s+\S/;
 const TEMPLATE_VAR = /\[[^\]]+\]/;
+const VERSION_NOTES_LINE = /\[versionNotes\]/;
 
-/**
- * Return the header "level" for a line, or `null` if it's not a header.
- *
- * - `# ` → 1, `## ` → 2, `### ` → 3
- * - whole-line `**bold**` → 99 (sentinel — only used as a section boundary
- *   when no `#`-style headers exist anywhere in the template)
- */
+interface MagicCleanupOptions {
+  /** ClickUp Deliverable Type (e.g. "Edit V1", "Final Delivery", "Animatic V1"). */
+  deliverableType?: string;
+  /** ClickUp Department (e.g. "Post", "Pre-Pro", "Design"). */
+  department?: string;
+}
+
+/** Hash level (1/2/3), 99 for bold-only-line, null otherwise. */
 function headerLevel(line: string): number | null {
   const hash = line.match(HEADER_HASH);
   if (hash) return hash[1].length;
-  if (HEADER_BOLD.test(line.trim())) return 99;
+  const trimmed = line.trim();
+  // A whole-line bold counts as a section header ONLY if it doesn't wrap
+  // a template variable. `**[versionNotes]**` is a bolded variable, not
+  // a sub-header — dropping it as a header would silently delete the var.
+  if (HEADER_BOLD_LINE.test(trimmed) && !TEMPLATE_VAR.test(trimmed)) return 99;
   return null;
 }
 
 interface Section {
-  /** null only for the implicit pre-header section (greeting, etc.). */
+  /** null for the implicit pre-header section (greeting). */
   header: string | null;
   bodyLines: string[];
 }
 
 function splitIntoSections(lines: string[]): Section[] {
-  // Pick the shallowest header level used anywhere in the template as the
-  // "section boundary" level. Deeper headers — `### Scope` inside `## 🔔
-  // Scope & Timeline Reminders`, or whole-line `**bold**` sub-headers
-  // inside `##` sections — are redundant sub-headers that get dropped
-  // during cleanup so their body stays in the parent section.
   let primaryLevel = Infinity;
   for (const line of lines) {
     const lvl = headerLevel(line);
     if (lvl !== null && lvl < primaryLevel) primaryLevel = lvl;
   }
-
   const sections: Section[] = [];
   let current: Section = { header: null, bodyLines: [] };
   for (const raw of lines) {
@@ -67,8 +90,7 @@ function splitIntoSections(lines: string[]): Section[] {
       sections.push(current);
       current = { header: line.trim(), bodyLines: [] };
     } else if (lvl !== null) {
-      // A header, but deeper than the primary level → sub-header. Drop it.
-      // Its body content stays in the current parent section.
+      // Deeper header — drop it; body stays in parent.
       continue;
     } else {
       current.bodyLines.push(line);
@@ -100,70 +122,203 @@ function isBulletList(block: string[]): boolean {
 }
 
 /**
- * Heuristic for "does this block carry real list content?" — an existing
- * bullet list, or a single-line block that contains a template variable
- * (and is therefore going to be bulleted by `processBlock`). Used to
- * decide whether the section has enough real content to flip the
- * sign-off-skip behavior on.
+ * Under a header, walk each line in a multi-line block. Lines that look
+ * like a "prose intro" (end with `:`) stay as prose; everything else
+ * becomes a `- ` bullet item. Already-bulleted lines stay bullets.
  */
-function isContentBlock(block: string[]): boolean {
-  if (isBulletList(block)) return true;
-  if (block.length === 1 && TEMPLATE_VAR.test(block[0])) return true;
-  return false;
-}
-
-function looksLikeTailProse(block: string[]): boolean {
-  // A bulleted block ends the tail.
-  if (isBulletList(block)) return false;
-  // A block that contains a template variable / link ends the tail
-  // (it's a single-line bullet candidate, not a sign-off paragraph).
-  if (block.some((l) => TEMPLATE_VAR.test(l))) return false;
-  return true;
+function bulletizeUnderHeader(block: string[]): string[] {
+  return block.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    if (/^[-*]\s+/.test(trimmed)) {
+      return trimmed.replace(/^[*]\s+/, "- ");
+    }
+    // Prose intro line (ends with colon) stays as prose
+    if (trimmed.endsWith(":")) return trimmed;
+    return `- ${trimmed}`;
+  });
 }
 
 function processBlock(block: string[], underHeader: boolean): string[] {
-  // Already a bullet list — normalize markers to `-`.
   if (isBulletList(block)) {
-    return block.map((l) => l.replace(/^(\s*)[-*]\s+/, "$1- "));
+    return block.map((l) => l.replace(/^(\s*)[*]\s+/, "$1- "));
   }
-  // Single-line item under a section header → bullet it.
-  if (block.length === 1 && underHeader) {
-    return [`- ${block[0].trim()}`];
+  if (!underHeader) {
+    // Greeting / pre-header content — leave alone.
+    return block;
   }
-  // Multi-line prose, or anything before the first header → leave alone.
-  return block;
+  // Under a header — aggressively bullet.
+  if (block.length === 1) {
+    const trimmed = block[0].trim();
+    return trimmed.endsWith(":") ? [trimmed] : [`- ${trimmed}`];
+  }
+  return bulletizeUnderHeader(block);
 }
 
-export function magicCleanup(input: string): string {
-  const lines = input.split("\n");
-  const sections = splitIntoSections(lines);
+/** Strip emoji, markdown markers, and trim — used for matching section titles. */
+function normalizeHeader(s: string): string {
+  return s
+    .replace(/[​‌‍﻿]/g, "")
+    .replace(/[#*_`]/g, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F100}-\u{1F1FF}]/gu, "")
+    .toLowerCase()
+    .trim();
+}
 
-  const output: string[] = [];
+const SCOPE_BULLETS = [
+  "- **Revision Rounds:** 1 of [revisionRounds]",
+  "- **Feedback Windows:** [feedbackWindows]",
+  "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
+  "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
+];
+
+const PROJECT_PLAN_BULLET = "- [View real-time progress | projectPlanLink]";
+
+function buildReviewLinkBullets(
+  fullText: string,
+  options: MagicCleanupOptions
+): string[] {
+  const dt = (options.deliverableType ?? "").toLowerCase();
+  const dept = (options.department ?? "").toLowerCase();
+  const text = fullText.toLowerCase();
+
+  const bullets: string[] = [];
+
+  // Primary link — single deliverable per template
+  if (dt.includes("final delivery")) {
+    bullets.push("- [Final delivery | googleDeliverableLink]");
+  } else if (dt.includes("animatic")) {
+    bullets.push("- [Animatic | animaticReviewLink]");
+  } else if (dept.includes("pre")) {
+    bullets.push("- [Document | googleDeliverableLink]");
+  } else {
+    bullets.push("- [Frame review | frameReviewLink]");
+  }
+
+  // Loom is additive — if mentioned anywhere in the snippet, include a
+  // loom walkthrough bullet too.
+  if (text.includes("loom")) {
+    bullets.push("- [Loom walkthrough | loomReviewLink]");
+  }
+
+  return bullets;
+}
+
+/**
+ * Apply our section-specific rewrites. Operates on parsed sections; the
+ * caller is responsible for rendering them back to markdown.
+ */
+function applySectionTransforms(
+  sections: Section[],
+  options: MagicCleanupOptions,
+  fullText: string
+): Section[] {
+  const out: Section[] = [];
+  for (const section of sections) {
+    if (!section.header) {
+      out.push(section);
+      continue;
+    }
+    const name = normalizeHeader(section.header);
+
+    // Drop "Next Step" sections entirely (header + body)
+    if (/next ?step/.test(name)) continue;
+
+    // Scope & Timeline → canonical bullets
+    if (/scope/.test(name) && /timeline/.test(name)) {
+      out.push({ header: section.header, bodyLines: SCOPE_BULLETS.slice() });
+      continue;
+    }
+
+    // Project Plan → canonical bullet
+    if (/project ?plan/.test(name)) {
+      out.push({ header: section.header, bodyLines: [PROJECT_PLAN_BULLET] });
+      continue;
+    }
+
+    // Review Link → injected variable(s)
+    if (/review ?link/.test(name)) {
+      out.push({
+        header: section.header,
+        bodyLines: buildReviewLinkBullets(fullText, options),
+      });
+      continue;
+    }
+
+    out.push(section);
+  }
+  return out;
+}
+
+/**
+ * Ensure `[versionNotes]` lives in the greeting (pre-header) section.
+ * If it already does, no-op. If it lives elsewhere, move it to the end
+ * of the pre-header section. If it doesn't exist at all, append it.
+ */
+function ensureVersionNotesPlacement(sections: Section[]): Section[] {
+  let foundInPreHeader = false;
+  const moves: Array<{ si: number; li: number }> = [];
+
   for (let si = 0; si < sections.length; si++) {
-    const section = sections[si];
-    const blocks = splitIntoBlocks(section.bodyLines);
-    const isLastSection = si === sections.length - 1;
-    // Only invoke the sign-off-skip behavior when the last section has
-    // actual bullet content. Otherwise a single-line note section stays
-    // bulletable per the normal rules.
-    const sectionHasBullets = blocks.some(isContentBlock);
-    const applySignoffSkip = isLastSection && sectionHasBullets;
-
-    // Walk blocks from the end so we can leave trailing prose blocks alone
-    // until we hit something that's clearly content (a bullet list or a
-    // line carrying a template variable). After that point, process the
-    // remaining blocks with the normal rules.
-    const processed: string[][] = new Array(blocks.length);
-    let inTail = applySignoffSkip;
-    for (let bi = blocks.length - 1; bi >= 0; bi--) {
-      const block = blocks[bi];
-      if (inTail && looksLikeTailProse(block)) {
-        processed[bi] = block;
-      } else {
-        inTail = false;
-        processed[bi] = processBlock(block, section.header !== null);
+    const s = sections[si];
+    for (let li = 0; li < s.bodyLines.length; li++) {
+      if (VERSION_NOTES_LINE.test(s.bodyLines[li])) {
+        if (s.header === null) foundInPreHeader = true;
+        else moves.push({ si, li });
       }
     }
+  }
+
+  const result = sections.map((s, si) => ({
+    header: s.header,
+    bodyLines: s.bodyLines.filter(
+      (_, li) => !moves.some((m) => m.si === si && m.li === li)
+    ),
+  }));
+
+  const preHeaderIdx = result.findIndex((s) => s.header === null);
+  // Only insert [versionNotes] if there's an actual greeting in the pre-
+  // header section. Templates that start straight with a `##` section
+  // shouldn't have version notes auto-injected.
+  const hasGreeting =
+    preHeaderIdx >= 0 &&
+    result[preHeaderIdx].bodyLines.some((l) => l.trim().length > 0);
+
+  if (hasGreeting && !foundInPreHeader) {
+    if (
+      result[preHeaderIdx].bodyLines.length > 0 &&
+      result[preHeaderIdx].bodyLines[
+        result[preHeaderIdx].bodyLines.length - 1
+      ] !== ""
+    ) {
+      result[preHeaderIdx].bodyLines.push("");
+    }
+    result[preHeaderIdx].bodyLines.push("[versionNotes]");
+  }
+  return result;
+}
+
+/** Replace deprecated greeting variables in the pre-header section only. */
+function fixGreetingVariables(sections: Section[]): Section[] {
+  return sections.map((s) => {
+    if (s.header !== null) return s;
+    return {
+      header: null,
+      bodyLines: s.bodyLines.map((line) =>
+        // [contact] (without trailing 's') → [contactFirstName]
+        line.replace(/\[contact\](?!s|FirstName|Name|Names)/gi, "[contactFirstName]")
+      ),
+    };
+  });
+}
+
+function renderSections(sections: Section[]): string {
+  const output: string[] = [];
+  for (const section of sections) {
+    const blocks = splitIntoBlocks(section.bodyLines);
+    const processed = blocks.map((b) =>
+      processBlock(b, section.header !== null)
+    );
 
     if (section.header !== null) {
       if (output.length > 0) output.push("");
@@ -175,9 +330,19 @@ export function magicCleanup(input: string): string {
       if (i < processed.length - 1) output.push("");
     }
   }
-
   while (output.length > 0 && output[output.length - 1] === "") output.pop();
   while (output.length > 0 && output[0] === "") output.shift();
-
   return output.join("\n");
+}
+
+export function magicCleanup(
+  input: string,
+  options: MagicCleanupOptions = {}
+): string {
+  const lines = input.split("\n");
+  let sections = splitIntoSections(lines);
+  sections = fixGreetingVariables(sections);
+  sections = ensureVersionNotesPlacement(sections);
+  sections = applySectionTransforms(sections, options, input);
+  return renderSections(sections);
 }

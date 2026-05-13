@@ -1,206 +1,171 @@
 import { describe, it, expect } from "vitest";
 import { magicCleanup } from "../template-cleanup";
 
-describe("magicCleanup", () => {
-  it("bullets a single-line item under a markdown header (no blank line between)", () => {
+describe("magicCleanup — structural", () => {
+  it("bullets a single-line item under a markdown header (no blank between)", () => {
     const input = `## Final cut\n[Final cut | googleDeliverableLink]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## Final cut\n- [Final cut | googleDeliverableLink]`);
-  });
-
-  it("bullets a single-line item under a bold-only line header when no ## headers exist", () => {
-    const input = `**Project Plan**\n[Plan | projectPlanLink]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`**Project Plan**\n- [Plan | projectPlanLink]`);
-  });
-
-  it("drops bold sub-headers inside a section when the template uses ## headers", () => {
-    const input =
-      `## 🔔 Scope & Timeline Reminders\n\n**Scope**\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(
-      `## 🔔 Scope & Timeline Reminders\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`
+    expect(magicCleanup(input)).toBe(
+      `## Final cut\n- [Final cut | googleDeliverableLink]`
     );
   });
 
-  it("drops deeper-level markdown sub-headers (### Scope nested inside ## section)", () => {
-    // Matches the real ClickUp template ("Audio Script V1") shape: the
-    // Delta uses header:2 for "Scope & Timeline Reminders" and header:3
-    // for the "Scope" sub-header — quillDeltaToMarkdown produces `###`.
+  it("bullets every line of a multi-line block under a header", () => {
+    // Previously this was treated as multi-line prose; now we bullet each.
     const input =
-      `## 🔔 Scope & Timeline Reminders\n### Scope\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(
-      `## 🔔 Scope & Timeline Reminders\n- Revision Rounds: 1 of [revisionRounds]\n- Feedback Windows: [feedbackWindows]`
+      `## We Need Your Feedback\nStory clarity and overall flow\nPacing and energy\nMusic and tone fit`;
+    expect(magicCleanup(input)).toBe(
+      `## We Need Your Feedback\n- Story clarity and overall flow\n- Pacing and energy\n- Music and tone fit`
     );
   });
 
-  it("cleanup of the real Audio Script V1 template produces the expected output", () => {
-    // Captured 2026-05-12 via a live ClickUp probe of task 86a8krebf,
-    // then run through quillDeltaToMarkdown. Includes:
-    //  - intro greeting (must NOT be bulleted)
-    //  - h2 sections (## ⚡️ What You're Receiving, etc.)
-    //  - h3 sub-header ### Scope (must be DROPPED)
-    //  - bullets with inline **bold** like "**Revision Rounds:**"
-    //  - trailing sign-off paragraph (must be left alone)
-    const input = [
-      "Hey [contacts]! We are excited to share the first version of the [projectName] Audio Script with you 🤸🏻‍♀️",
-      "",
-      "[versionNotes]",
-      "",
-      "## ⚡️ What You're Receiving",
-      "- The Audio Script outlines the spoken dialogue of the video and is used to ensure alignment on messaging before visual development begins.",
-      "",
-      "## 😇 We Need Your Feedback",
-      "- Ensure the dialogue feels natural and on-brand.",
-      "- Identify any phrases that should be adjusted for clarity or emphasis.",
-      "- Flag any missing or incorrect information.",
-      "",
-      "## 📥 How to Submit Feedback",
-      "- Please submit consolidated feedback from all key stakeholders as comments directly in the Google Doc.",
-      "",
-      "## 🔔 Scope & Timeline Reminders",
-      "### Scope",
-      "- **Revision Rounds:** 1 of **[revisionRounds]**",
-      "- **Feedback Windows: [feedbackWindows]**",
-      "- **Feedback Deadline:** EOD **[nextFeedbackDeadline]**",
-      "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
-      "",
-      "## 🔗 Review Link",
-      "- [Audio Script V1 | googleDeliverableLink]",
-      "",
-      "## 🗓️ Project Plan",
-      "- [View real-time progress | projectPlanLink]",
-      "",
-      "We're looking forward to your feedback and next steps!",
-    ].join("\n");
-
-    const expected = [
-      "Hey [contacts]! We are excited to share the first version of the [projectName] Audio Script with you 🤸🏻‍♀️",
-      "",
-      "[versionNotes]",
-      "",
-      "## ⚡️ What You're Receiving",
-      "- The Audio Script outlines the spoken dialogue of the video and is used to ensure alignment on messaging before visual development begins.",
-      "",
-      "## 😇 We Need Your Feedback",
-      "- Ensure the dialogue feels natural and on-brand.",
-      "- Identify any phrases that should be adjusted for clarity or emphasis.",
-      "- Flag any missing or incorrect information.",
-      "",
-      "## 📥 How to Submit Feedback",
-      "- Please submit consolidated feedback from all key stakeholders as comments directly in the Google Doc.",
-      "",
-      "## 🔔 Scope & Timeline Reminders",
-      "- **Revision Rounds:** 1 of **[revisionRounds]**",
-      "- **Feedback Windows: [feedbackWindows]**",
-      "- **Feedback Deadline:** EOD **[nextFeedbackDeadline]**",
-      "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
-      "",
-      "## 🔗 Review Link",
-      "- [Audio Script V1 | googleDeliverableLink]",
-      "",
-      "## 🗓️ Project Plan",
-      "- [View real-time progress | projectPlanLink]",
-      "",
-      "We're looking forward to your feedback and next steps!",
-    ].join("\n");
-
-    const out = magicCleanup(input);
-    expect(out).toBe(expected);
-  });
-
-  it("leaves multi-line prose paragraphs alone", () => {
+  it("keeps a prose intro line (ending with `:`) and bullets the rest", () => {
     const input =
-      `## What you'll be receiving\nThis is a prose paragraph\nthat spans multiple lines.`;
-    const out = magicCleanup(input);
-    expect(out).toBe(
-      `## What you'll be receiving\nThis is a prose paragraph\nthat spans multiple lines.`
+      `## We Need Your Feedback\nPlease take a full pass and let us know your thoughts! Most focused on:\nStory clarity\nPacing`;
+    expect(magicCleanup(input)).toBe(
+      `## We Need Your Feedback\nPlease take a full pass and let us know your thoughts! Most focused on:\n- Story clarity\n- Pacing`
     );
   });
 
-  it("preserves already-bulleted lines and normalizes `*` markers to `-`", () => {
+  it("preserves already-bulleted lines and normalizes * to -", () => {
     const input = `## Items\n- already\n* with asterisk`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## Items\n- already\n- with asterisk`);
-  });
-
-  it("does not bullet content before the first header (greetings)", () => {
-    const input = `Hi @[Adam](U123),\nHope your week is great!\n\n## Final cut\n[Final cut | googleDeliverableLink]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(
-      `Hi @[Adam](U123),\nHope your week is great!\n\n## Final cut\n- [Final cut | googleDeliverableLink]`
+    expect(magicCleanup(input)).toBe(
+      `## Items\n- already\n- with asterisk`
     );
   });
 
-  it("handles a section with both prose and single-line items", () => {
+  it("does not bullet content before the first header", () => {
+    const input = `Hi @[Adam](U123),\nHope your week is great!\n\n## Final cut\n[Final cut | x]`;
+    expect(magicCleanup(input)).toBe(
+      `Hi @[Adam](U123),\nHope your week is great!\n\n[versionNotes]\n\n## Final cut\n- [Final cut | x]`
+    );
+  });
+
+  it("drops bold-only sub-headers but preserves bold-wrapped template variables", () => {
+    // `**Scope**` is a sub-header → dropped.
+    // `**[versionNotes]**` is a bold variable → kept (and moved to pre-header).
     const input =
-      `## Mixed\nA multi-line prose\nblock here.\n\n[Link | foo]`;
+      `**[versionNotes]**\n\n## Scope & Timeline Reminders\n**Scope**\nThis is the first revision round.`;
     const out = magicCleanup(input);
-    expect(out).toBe(
-      `## Mixed\nA multi-line prose\nblock here.\n\n- [Link | foo]`
-    );
+    // versionNotes preserved (in pre-header position); **Scope** dropped;
+    // scope/timeline section is rewritten to canonical bullets.
+    expect(out).toContain("[versionNotes]");
+    expect(out).not.toContain("**Scope**");
+    expect(out).toContain("- **Revision Rounds:** 1 of [revisionRounds]");
   });
 
   it("normalizes blank lines to exactly one between sections", () => {
     const input = `## A\n[a | x]\n\n\n\n## B\n[b | y]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## A\n- [a | x]\n\n## B\n- [b | y]`);
-  });
-
-  it("collapses pre-existing blank lines between header and its body", () => {
-    const input = `## A\n\n- a`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## A\n- a`);
-  });
-
-  it("leaves a trailing sign-off paragraph alone at the end of the last section", () => {
-    const input =
-      `## Project Plan\n[View | x]\n\nWe're looking forward to your feedback and next steps!`;
-    const out = magicCleanup(input);
-    expect(out).toBe(
-      `## Project Plan\n- [View | x]\n\nWe're looking forward to your feedback and next steps!`
+    expect(magicCleanup(input)).toBe(
+      `## A\n- [a | x]\n\n## B\n- [b | y]`
     );
   });
 
-  it("leaves a multi-block sign-off (e.g. 'Thanks!' + 'Best, Michael') alone", () => {
-    const input = `## End\n[a | x]\n\nThanks!\n\nBest,\nMichael`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## End\n- [a | x]\n\nThanks!\n\nBest,\nMichael`);
-  });
-
-  it("still bullets a single-line note in a section that has no bullets at all", () => {
-    // Sign-off skip only kicks in when the last section already has bullet
-    // content. A pure-prose section keeps the existing bullet-it behavior.
-    const input = `## Note\nThis is the only line.`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## Note\n- This is the only line.`);
-  });
-
-  it("does not treat prose in non-last sections as a sign-off", () => {
-    // Middle-section single-line prose still gets bulleted per the normal
-    // rules; sign-off skip is reserved for the final section.
-    const input = `## A\nMiddle prose line here.\n\n## B\n[b | y]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## A\n- Middle prose line here.\n\n## B\n- [b | y]`);
-  });
-
   it("is idempotent: running twice produces the same result", () => {
-    const input = `## Final cut\n[Final cut | x]\n## Project Plan\n[Plan | y]\n\nThanks!`;
+    const input = `## Items\n- a\n- b\n\n## ⏭️ Next Step\nremoved.`;
     const once = magicCleanup(input);
     const twice = magicCleanup(once);
     expect(twice).toBe(once);
   });
+});
 
-  it("handles back-to-back headers with no body in between", () => {
-    const input = `## Empty\n## Next\n[item | z]`;
-    const out = magicCleanup(input);
-    expect(out).toBe(`## Empty\n\n## Next\n- [item | z]`);
+describe("magicCleanup — section-specific transforms", () => {
+  it("removes the Next Step section entirely", () => {
+    const input =
+      `## ⚡ What You're Receiving\nSomething.\n\n## ⏭️ Next Step\nOnce we receive feedback, we'll send V2.\n\n## 🔗 Review Link\n[Edit V1 | frameReviewLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "Edit V1",
+      department: "Post-Production",
+    });
+    expect(out).not.toContain("Next Step");
+    expect(out).not.toContain("Once we receive feedback");
   });
 
-  it("trims trailing whitespace and blank lines", () => {
-    const input = `## A\n[a | x]\n\n\n`;
+  it("replaces the Scope & Timeline section with canonical bullets", () => {
+    const input =
+      `## 🔔 Scope & Timeline Reminders\nSome old text about scope.\nMore old text about timeline.`;
     const out = magicCleanup(input);
-    expect(out).toBe(`## A\n- [a | x]`);
+    expect(out).toBe(
+      `## 🔔 Scope & Timeline Reminders\n- **Revision Rounds:** 1 of [revisionRounds]\n- **Feedback Windows:** [feedbackWindows]\n- **Feedback Deadline:** EOD [nextFeedbackDeadline]\n- Additional revisions beyond the included revision rounds will require a scope adjustment.`
+    );
+  });
+
+  it("standardizes the Project Plan section to one canonical bullet", () => {
+    const input = `## 🗓 Project Plan\nView real-time progress\nhttps://example.com`;
+    const out = magicCleanup(input);
+    expect(out).toBe(
+      `## 🗓 Project Plan\n- [View real-time progress | projectPlanLink]`
+    );
+  });
+
+  it("injects frameReviewLink for Post-Production non-final deliverables", () => {
+    const input = `## 🔗 Review Link\nEdit01`;
+    const out = magicCleanup(input, {
+      deliverableType: "Edit V1",
+      department: "Post-Production",
+    });
+    expect(out).toContain("[Frame review | frameReviewLink]");
+  });
+
+  it("injects google link + 'Final delivery' label for Final Delivery", () => {
+    const input = `## 🔗 Review Link\n(empty)`;
+    const out = magicCleanup(input, {
+      deliverableType: "Final Delivery",
+      department: "Post-Production",
+    });
+    expect(out).toContain("[Final delivery | googleDeliverableLink]");
+  });
+
+  it("injects google link + 'Document' label for Pre-Pro deliverables", () => {
+    const input = `## 🔗 Review Link\n`;
+    const out = magicCleanup(input, {
+      deliverableType: "Set Design Moodboard",
+      department: "Pre-Pro",
+    });
+    expect(out).toContain("[Document | googleDeliverableLink]");
+  });
+
+  it("adds a loomReviewLink bullet when 'loom' appears in the snippet", () => {
+    const input =
+      `## ⚡ What You're Receiving\nWe've included a loom walkthrough.\n\n## 🔗 Review Link\nEdit01`;
+    const out = magicCleanup(input, {
+      deliverableType: "Edit V1",
+      department: "Post-Production",
+    });
+    expect(out).toContain("[Frame review | frameReviewLink]");
+    expect(out).toContain("[Loom walkthrough | loomReviewLink]");
+  });
+});
+
+describe("magicCleanup — greeting + versionNotes", () => {
+  it("replaces deprecated [contact] with [contactFirstName]", () => {
+    const input = `Hello [contact]!\n\n## ⚡ Items\nfoo`;
+    const out = magicCleanup(input);
+    expect(out).toContain("Hello [contactFirstName]!");
+    expect(out).not.toContain("[contact]!");
+  });
+
+  it("leaves [contacts] / [contactFirstName] / [contactName] alone", () => {
+    const input = `Hello [contacts] and [contactName]!\n\n## A\nfoo`;
+    const out = magicCleanup(input);
+    expect(out).toContain("[contacts]");
+    expect(out).toContain("[contactName]");
+  });
+
+  it("inserts [versionNotes] between greeting and first header when missing", () => {
+    const input = `Hello [contactFirstName]!\nWe're excited to share...\n\n## A\nfoo`;
+    const out = magicCleanup(input);
+    const lines = out.split("\n");
+    const headerIdx = lines.findIndex((l) => l.startsWith("## A"));
+    const vnIdx = lines.findIndex((l) => l.includes("[versionNotes]"));
+    expect(vnIdx).toBeGreaterThanOrEqual(0);
+    expect(vnIdx).toBeLessThan(headerIdx);
+  });
+
+  it("preserves [versionNotes] when already in the right place (even when bold-wrapped)", () => {
+    const input = `Hello!\n\n**[versionNotes]**\n\n## A\nfoo`;
+    const out = magicCleanup(input);
+    expect(out).toContain("[versionNotes]");
+    // Should only appear once
+    expect(out.match(/\[versionNotes\]/g)!.length).toBe(1);
   });
 });

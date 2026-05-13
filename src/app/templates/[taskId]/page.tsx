@@ -57,7 +57,6 @@ import {
   Check,
   ChevronsUpDown,
   AlertTriangle,
-  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -65,58 +64,6 @@ import { cn } from "@/lib/utils";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
 import { magicCleanup } from "@/lib/template-cleanup";
-
-/**
- * Replace the old verbose Scope & Timeline section with concise bullet format.
- * Finds the "Scope & Timeline Reminders" parent header and replaces everything
- * after it (Scope sub-section + Timeline sub-section) up to the next ## header
- * with the concise bullet format.
- */
-function modernizeScopeSection(content: string): string {
-  const NEW_BULLETS = [
-    "- **Revision Rounds:** 1 of [revisionRounds]",
-    "- **Feedback Windows:** [feedbackWindows]",
-    "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
-    "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
-  ].join("\n");
-
-  const lines = content.split("\n");
-
-  // Clean helper: strip zero-width chars, bold/header markers, emoji, and trim
-  const clean = (s: string) =>
-    s.replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/[*#]/g, "").trim();
-
-  // Find the "Scope & Timeline Reminders" parent header
-  const parentIdx = lines.findIndex((l) =>
-    clean(l).toLowerCase().includes("scope") && clean(l).toLowerCase().includes("timeline")
-  );
-
-  if (parentIdx < 0) return content;
-
-  // Find the start of content after the parent header (skip the header itself)
-  const contentStart = parentIdx + 1;
-
-  // Find the end: the next ## header that is NOT part of the scope/timeline section
-  // (i.e., not "### Scope" or "### Timeline")
-  let endIdx = contentStart;
-  while (endIdx < lines.length) {
-    const c = clean(lines[endIdx]).toLowerCase();
-    // Stop at a ## header that isn't "scope" or "timeline"
-    if (/^#{1,3}\s/.test(lines[endIdx]) && c !== "scope" && c !== "timeline" && c !== "scope:" && c !== "timeline:") {
-      break;
-    }
-    endIdx++;
-  }
-
-  // Skip trailing blank lines before the next section
-  while (endIdx > contentStart && lines[endIdx - 1].trim() === "") {
-    endIdx--;
-  }
-
-  // Replace everything between the parent header and the next section
-  lines.splice(contentStart, endIdx - contentStart, NEW_BULLETS);
-  return lines.join("\n");
-}
 
 // Template variables grouped by category
 const VARIABLE_GROUPS: {
@@ -755,7 +702,15 @@ export default function TemplateEditorPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const cleaned = magicCleanup(snippet);
+                    // Magic Cleanup is now opinionated about the template
+                    // structure — it modernizes the Scope/Timeline section,
+                    // drops Next Step, standardizes Project Plan, and
+                    // auto-fills the Review Link based on department +
+                    // deliverable type.
+                    const cleaned = magicCleanup(snippet, {
+                      deliverableType,
+                      department,
+                    });
                     if (cleaned === snippet) {
                       toast.success("Snippet is already clean.");
                       return;
@@ -769,25 +724,6 @@ export default function TemplateEditorPage() {
                   <Sparkles className="mr-1 h-3 w-3" />
                   Magic Cleanup
                 </Button>
-                {snippet.includes("revision round") && snippet.includes("feedback windows") && !snippet.includes("**Revision Rounds:**") && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const updated = modernizeScopeSection(snippet);
-                      if (updated === snippet) {
-                        toast.error("Could not find the old Scope/Timeline format to replace.");
-                        return;
-                      }
-                      setSnippet(updated);
-                      setHasChanges(true);
-                    }}
-                    className="text-xs"
-                  >
-                    <RefreshCw className="mr-1 h-3 w-3" />
-                    Modernize Scope Section
-                  </Button>
-                )}
               </div>
             </CardHeader>
             <CardContent>
