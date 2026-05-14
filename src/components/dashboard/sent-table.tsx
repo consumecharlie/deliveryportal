@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SLACK_EMOJI_MAP } from "@/lib/template-merge";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
@@ -90,10 +91,19 @@ function extractSlackMentionIds(slackContent: string | null): string[] {
 }
 
 /**
+ * Slack shortcode → Unicode emoji map. Inverted from SLACK_EMOJI_MAP so
+ * we can render shortcodes back to their actual emoji in the preview.
+ */
+const SHORTCODE_TO_EMOJI: Record<string, string> = Object.fromEntries(
+  Object.entries(SLACK_EMOJI_MAP).map(([unicode, code]) => [code, unicode])
+);
+
+/**
  * Adapt Slack mrkdwn → markdown the RichTextEditor can render.
  *
  * Reverses the transformations applied at send time by
  * `convertToSlackFormat()` so we can preview a saved slack message:
+ *   - `:shortcode:`  → unicode emoji (when in our SLACK_EMOJI_MAP)
  *   - `<@UXXXX>`     → `@[Display Name](UXXXX)` (TipTap mention chip)
  *   - `<url|text>`   → `[text](url)`
  *   - `<url>`        → plain url
@@ -106,6 +116,10 @@ function slackContentToMarkdown(
   ) => { name: string; avatar?: string } | undefined
 ): string {
   let out = slack;
+  // Emoji shortcodes — apply BEFORE link/mention conversions so that
+  // emoji codes adjacent to brackets aren't accidentally caught by the
+  // other regexes.
+  out = out.replace(/:[a-z0-9_+\-]+:/gi, (m) => SHORTCODE_TO_EMOJI[m] ?? m);
   // Mentions
   out = out.replace(/<@([A-Z0-9]+)>/g, (_, id) => {
     const name = lookupSlackUser(id)?.name ?? id;
@@ -439,7 +453,7 @@ export function SentTable() {
         open={!!selectedDelivery}
         onOpenChange={(open) => !open && setSelectedDelivery(null)}
       >
-        <DialogContent className="max-w-6xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="!max-w-[min(1500px,95vw)] !w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden">
           {selectedDelivery && (() => {
             const sentByLookup = clickupByEmail.get(
               selectedDelivery.sentBy?.toLowerCase() ?? ""
