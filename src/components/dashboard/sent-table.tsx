@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import PacmanLoader from "@/components/ui/pacman-loader";
@@ -147,13 +147,15 @@ const headerStyle = { color: "#6AC387" };
 const cellClass = "py-4";
 
 export function SentTable() {
-  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
-    null
-  );
-  // Lets other pages link to a specific delivery's dialog via
-  // /sent?open=<deliveryId> — used by the analytics activity log.
+  // We track WHICH delivery is open by id and DERIVE the dialog payload
+  // from the loaded data. The id is initialized from the URL's `?open=`
+  // param so other pages can deep-link straight into a delivery's
+  // dialog (used by the analytics activity log). Avoids the setState-
+  // inside-useEffect cascading-renders lint error.
   const searchParams = useSearchParams();
-  const openIdFromUrl = searchParams.get("open");
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(
+    () => searchParams.get("open")
+  );
 
   const { data, isLoading, error } = useQuery<{
     deliveries: Delivery[];
@@ -167,13 +169,10 @@ export function SentTable() {
     },
   });
 
-  // Once the deliveries load (and whenever the ?open= param changes),
-  // pop the matching delivery's dialog open.
-  useEffect(() => {
-    if (!openIdFromUrl || !data?.deliveries) return;
-    const found = data.deliveries.find((d) => d.id === openIdFromUrl);
-    if (found) setSelectedDelivery(found);
-  }, [openIdFromUrl, data]);
+  const selectedDelivery = useMemo(() => {
+    if (!selectedDeliveryId || !data?.deliveries) return null;
+    return data.deliveries.find((d) => d.id === selectedDeliveryId) ?? null;
+  }, [selectedDeliveryId, data]);
 
   // ClickUp workspace members — used to resolve Sent By / Sent As emails
   // to real names and profile pictures.
@@ -412,7 +411,7 @@ export function SentTable() {
               return (
                 <TableRow
                   key={delivery.id}
-                  onClick={() => setSelectedDelivery(delivery)}
+                  onClick={() => setSelectedDeliveryId(delivery.id)}
                   className="cursor-pointer hover:bg-muted/50"
                 >
                   <TableCell className={`${cellClass} font-medium`}>
@@ -466,7 +465,7 @@ export function SentTable() {
       {/* Delivery detail dialog */}
       <Dialog
         open={!!selectedDelivery}
-        onOpenChange={(open) => !open && setSelectedDelivery(null)}
+        onOpenChange={(open) => !open && setSelectedDeliveryId(null)}
       >
         <DialogContent className="!max-w-[min(1350px,85vw)] !w-[85vw] max-h-[90vh] p-0 gap-0 overflow-hidden">
           {selectedDelivery && (() => {

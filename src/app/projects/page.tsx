@@ -26,6 +26,7 @@ import {
   Send,
 } from "lucide-react";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
+import { Avatar } from "@/components/dashboard/assignee-filter";
 
 /* ── Types ── */
 
@@ -111,6 +112,33 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
       return res.json();
     },
   });
+
+  // Workspace members for resolving sentBy email → profile picture in
+  // the Delivery History column.
+  const { data: membersData } = useQuery<{
+    members: Array<{ email: string; profilePicture?: string; username: string }>;
+  }>({
+    queryKey: ["settings", "workspace-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/workspace-members");
+      if (!res.ok) throw new Error("Failed to fetch workspace members");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const memberByEmail = useMemo(() => {
+    const m = new Map<string, { profilePicture?: string; username: string }>();
+    for (const member of membersData?.members ?? []) {
+      if (member.email) {
+        m.set(member.email.toLowerCase(), {
+          profilePicture: member.profilePicture,
+          username: member.username,
+        });
+      }
+    }
+    return m;
+  }, [membersData]);
 
   const deliveries = data?.deliveries ?? [];
   const allLinks = data?.allLinks ?? [];
@@ -214,8 +242,14 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                   className="flex items-center justify-between rounded-md border px-3 py-2 transition-colors hover:bg-[#6AC387]/10 hover:border-[#6AC387]/30 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
+                    {/* Deliverable type is the primary scan target — show
+                        it bold/large. Link-type label (Google Deliverable,
+                        Frame.io Review, etc.) is secondary context. */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold">
+                        {link.deliverableType}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
                         {LINK_LABELS[link.variableName ?? ""] ?? link.label}
                       </span>
                       {link.count > 1 && (
@@ -223,9 +257,6 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                           Sent {link.count}x
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-xs">
-                        {link.deliverableType}
-                      </Badge>
                     </div>
                     <span className="text-xs text-muted-foreground truncate block mt-0.5">
                       {link.url}
@@ -252,7 +283,8 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="pl-4">Date</TableHead>
+                  <TableHead>By</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Dept</TableHead>
                   <TableHead>Subject</TableHead>
@@ -261,55 +293,67 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deliveries.map((delivery) => (
-                  <TableRow key={delivery.id}>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm">
-                        {formatDate(delivery.sentAt)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatTime(delivery.sentAt)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {delivery.deliverableType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DepartmentBadge department={delivery.department} />
-                    </TableCell>
-                    <TableCell className="max-w-[160px] truncate text-sm">
-                      {delivery.emailSubject}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "—")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 flex-wrap">
-                        {delivery.links.map((link) => (
-                          <a
-                            key={link.id}
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs hover:bg-muted/80"
-                            title={link.url}
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            {LINK_LABELS[link.variableName ?? ""] ??
-                              link.label}
-                          </a>
-                        ))}
-                        {delivery.links.length === 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            —
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {deliveries.map((delivery) => {
+                  const senderLookup = memberByEmail.get(
+                    delivery.sentBy?.toLowerCase() ?? ""
+                  );
+                  return (
+                    <TableRow key={delivery.id}>
+                      <TableCell className="whitespace-nowrap pl-4">
+                        <div className="text-sm">
+                          {formatDate(delivery.sentAt)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatTime(delivery.sentAt)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Avatar
+                          src={senderLookup?.profilePicture}
+                          name={senderLookup?.username ?? delivery.sentBy}
+                          size={22}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {delivery.deliverableType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DepartmentBadge department={delivery.department} />
+                      </TableCell>
+                      <TableCell className="max-w-[160px] truncate text-sm">
+                        {delivery.emailSubject}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "—")}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 flex-wrap">
+                          {delivery.links.map((link) => (
+                            <a
+                              key={link.id}
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs hover:bg-muted/80"
+                              title={link.url}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              {LINK_LABELS[link.variableName ?? ""] ??
+                                link.label}
+                            </a>
+                          ))}
+                          {delivery.links.length === 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -582,7 +626,7 @@ export default function ProjectsPage() {
               {selectedProjectId && (
                 <>
                   {selectedProjectName && (
-                    <h2 className="font-eighties text-xl mb-4">{selectedProjectName}</h2>
+                    <h2 className="font-eighties text-3xl mb-6">{selectedProjectName}</h2>
                   )}
                   <ProjectDetailPanel
                     key={selectedProjectId}
