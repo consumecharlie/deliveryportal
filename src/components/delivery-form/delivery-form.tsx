@@ -5,7 +5,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus, CalendarClock } from "lucide-react";
+import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus, CalendarClock, RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { Button } from "@/components/ui/button";
 import { SchedulePicker } from "./schedule-picker";
@@ -128,6 +138,67 @@ export function DeliveryForm({
   const [testMode, setTestMode] = useState(false);
   const testEmail = session?.user?.email ?? "michael@consume-media.com";
   const testSlackChannelId = "C0AJF6GBPK9"; // #delivery-testing
+
+  // ── Reset-to-ClickUp confirmation state ──
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetBlocked, setResetBlocked] = useState(false);
+
+  const handleResetToClickUp = useCallback(() => {
+    // Block reset if the delivery is currently scheduled — user must
+    // cancel the schedule first so they don't accidentally lose work
+    // that's queued to fire.
+    if (scheduleStatus === "scheduled") {
+      setResetBlocked(true);
+      return;
+    }
+    setShowResetConfirm(true);
+  }, [scheduleStatus]);
+
+  const performReset = useCallback(async () => {
+    // 1. Clear every form-state override back to the canonical taskDetail
+    //    values. Same shape as the initial useState calls.
+    setDeliverableType(task.deliverableType);
+    setReviewLinks({
+      googleDeliverableLink: taskDetail.reviewLinks.googleDeliverableLink ?? "",
+      frameReviewLink: taskDetail.reviewLinks.frameReviewLink ?? "",
+      loomReviewLink: taskDetail.reviewLinks.loomReviewLink ?? "",
+      animaticReviewLink: taskDetail.reviewLinks.animaticReviewLink ?? "",
+      flexLink: taskDetail.reviewLinks.flexLink ?? "",
+    });
+    setLinkLabels({});
+    setExtraLinks([]);
+    setRevisionRounds(taskDetail.revisionRounds);
+    setFeedbackWindows(taskDetail.feedbackWindows);
+    setVersionNotes(taskDetail.versionNotes);
+    setRushedProject(false);
+    setRepeatClient(false);
+    setSlackChannelId(taskDetail.slackChannelId ?? "");
+    setEditedEmailContent(null);
+    setEditedSubjectLine(null);
+    setEditedSlackContent(null);
+    setIsEditMode(false);
+    setEditedToEmail(null);
+    setEditedCcEmails(null);
+    setEditedSenderEmail(null);
+    setAddonProject(null);
+    setAddonReviewLinks({});
+    setAddonLinkLabels({});
+    setAddonRevisionRounds("");
+    setAddonFeedbackWindows("");
+    setTestMode(false);
+    setDeliveryMode(detectedMode);
+
+    // 2. Delete the auto-saved draft so the next 30s tick doesn't
+    //    re-create the old state we just cleared.
+    try {
+      await fetch(`/api/drafts/${task.id}`, { method: "DELETE" });
+    } catch {
+      /* non-fatal — auto-save will overwrite shortly with the clean state */
+    }
+
+    setShowResetConfirm(false);
+    toast.success("Reset to ClickUp defaults");
+  }, [task.id, task.deliverableType, taskDetail.reviewLinks, taskDetail.revisionRounds, taskDetail.feedbackWindows, taskDetail.versionNotes, taskDetail.slackChannelId, detectedMode]);
 
   const handleTestModeToggle = useCallback(() => {
     setTestMode((prev) => {
@@ -865,6 +936,17 @@ export function DeliveryForm({
           </button>
         </div>
 
+        {/* Reset to ClickUp defaults */}
+        <button
+          type="button"
+          onClick={handleResetToClickUp}
+          title="Discard all edits and reload from ClickUp"
+          className="flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:border-border"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset to ClickUp
+        </button>
+
         {/* Test mode toggle */}
         <button
           type="button"
@@ -1125,6 +1207,45 @@ export function DeliveryForm({
         deliverableTypeOptions={deliverableTypeOptions}
         onConfirm={handleAddonConfirm}
       />
+
+      {/* Reset-to-ClickUp confirmation */}
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset to ClickUp defaults?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Any unsaved edits to subject, body, links, recipients, scope,
+              sender, and channel will be discarded. The form will reload
+              with the canonical values from ClickUp.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={performReset}>
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset-blocked notice (delivery is scheduled) */}
+      <AlertDialog open={resetBlocked} onOpenChange={setResetBlocked}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel the scheduled send first</AlertDialogTitle>
+            <AlertDialogDescription>
+              This delivery is currently scheduled to auto-send. Cancel the
+              schedule from the form&apos;s scheduled banner before resetting
+              so you don&apos;t accidentally discard a queued send.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setResetBlocked(false)}>
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Bottom bar */}
       <SendBar
