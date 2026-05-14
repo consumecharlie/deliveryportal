@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
 import PacmanLoader from "@/components/ui/pacman-loader";
@@ -17,11 +18,11 @@ import {
 import {
   ArrowLeft,
   ExternalLink,
-  Loader2,
   Link as LinkIcon,
   Send,
 } from "lucide-react";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
+import { Avatar } from "@/components/dashboard/assignee-filter";
 
 interface DeliveryLink {
   id: string;
@@ -40,6 +41,8 @@ interface ProjectDelivery {
   senderEmail: string;
   primaryEmail: string;
   emailSubject: string;
+  slackChannel: string | null;
+  slackChannelName: string | null;
   links: DeliveryLink[];
 }
 
@@ -82,6 +85,7 @@ export default function ProjectDetailPage() {
   const listId = params.listId as string;
 
   const { data, isLoading, error } = useQuery<{
+    projectName: string | null;
     deliveries: ProjectDelivery[];
     allLinks: FlatLink[];
     total: number;
@@ -94,6 +98,34 @@ export default function ProjectDetailPage() {
     },
   });
 
+  // Workspace members for resolving sentBy email → profile picture in the
+  // Delivery History "By" column.
+  const { data: membersData } = useQuery<{
+    members: Array<{ email: string; profilePicture?: string; username: string }>;
+  }>({
+    queryKey: ["settings", "workspace-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/workspace-members");
+      if (!res.ok) throw new Error("Failed to fetch workspace members");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const memberByEmail = useMemo(() => {
+    const m = new Map<string, { profilePicture?: string; username: string }>();
+    for (const member of membersData?.members ?? []) {
+      if (member.email) {
+        m.set(member.email.toLowerCase(), {
+          profilePicture: member.profilePicture,
+          username: member.username,
+        });
+      }
+    }
+    return m;
+  }, [membersData]);
+
+  const projectName = data?.projectName ?? null;
   const deliveries = data?.deliveries ?? [];
   const allLinks = data?.allLinks ?? [];
 
@@ -123,7 +155,9 @@ export default function ProjectDetailPage() {
           Back
         </Button>
         <div>
-          <h1 className="text-xl font-bold">Project Deliveries</h1>
+          <h1 className="font-eighties text-3xl">
+            {projectName ?? "Project Deliveries"}
+          </h1>
           <p className="text-sm text-muted-foreground">
             All deliveries and links sent for this project.
           </p>
@@ -200,43 +234,35 @@ export default function ProjectDetailPage() {
               <CardContent>
                 <div className="space-y-2">
                   {Array.from(uniqueLinks.values()).map((link, i) => (
-                    <div
+                    <a
                       key={i}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between rounded-md border px-3 py-2 transition-colors hover:bg-[#6AC387]/10 hover:border-[#6AC387]/30 cursor-pointer"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {LINK_LABELS[link.variableName ?? ""] ??
-                              link.label}
+                        {/* Deliverable type is the primary scan target — show it
+                            bold/large. Link-type label is secondary context. */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">
+                            {link.deliverableType}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {LINK_LABELS[link.variableName ?? ""] ?? link.label}
                           </span>
                           {link.count > 1 && (
                             <Badge variant="secondary" className="text-xs">
                               Sent {link.count}x
                             </Badge>
                           )}
-                          <Badge variant="outline" className="text-xs">
-                            {link.deliverableType}
-                          </Badge>
                         </div>
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground hover:text-primary hover:underline truncate block mt-0.5"
-                        >
+                        <span className="text-xs text-muted-foreground truncate block mt-0.5">
                           {link.url}
-                        </a>
+                        </span>
                       </div>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
+                      <ExternalLink className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </a>
                   ))}
                 </div>
               </CardContent>
@@ -256,24 +282,36 @@ export default function ProjectDetailPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
+                      <TableHead className="pl-4">Date</TableHead>
+                      <TableHead>By</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Department</TableHead>
+                      <TableHead>Dept</TableHead>
                       <TableHead>Subject</TableHead>
                       <TableHead>To</TableHead>
                       <TableHead>Links</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deliveries.map((delivery) => (
+                    {deliveries.map((delivery) => {
+                      const senderLookup = memberByEmail.get(
+                        delivery.sentBy?.toLowerCase() ?? ""
+                      );
+                      return (
                       <TableRow key={delivery.id}>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell className="whitespace-nowrap pl-4">
                           <div className="text-sm">
                             {formatDate(delivery.sentAt)}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {formatTime(delivery.sentAt)}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Avatar
+                            src={senderLookup?.profilePicture}
+                            name={senderLookup?.username ?? delivery.sentBy}
+                            size={22}
+                          />
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
@@ -287,7 +325,7 @@ export default function ProjectDetailPage() {
                           {delivery.emailSubject}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {delivery.primaryEmail}
+                          {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "—")}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
@@ -313,7 +351,8 @@ export default function ProjectDetailPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>

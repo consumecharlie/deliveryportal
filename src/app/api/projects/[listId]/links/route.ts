@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getList } from "@/lib/clickup";
 
 /**
  * GET /api/projects/[listId]/links
@@ -14,15 +15,24 @@ export async function GET(
   const { listId } = await params;
 
   try {
-    // Fetch all deliveries for this project, including their links
+    // Fetch the project name from ClickUp alongside the deliveries.
+    // If the ClickUp call fails, we still return the deliveries.
+    const [listResult, deliveriesResult] = await Promise.allSettled([
+      getList(listId),
+      prisma.delivery.findMany({
+        where: { projectListId: listId },
+        orderBy: { sentAt: "desc" },
+        include: { links: true },
+      }),
+    ]);
+
+    const projectName =
+      listResult.status === "fulfilled"
+        ? (listResult.value as { name?: string })?.name ?? null
+        : null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const deliveries: any[] = await prisma.delivery.findMany({
-      where: { projectListId: listId },
-      orderBy: { sentAt: "desc" },
-      include: {
-        links: true,
-      },
-    });
+    const deliveries: any[] =
+      deliveriesResult.status === "fulfilled" ? deliveriesResult.value : [];
 
     // Also collect a flat list of all unique links across deliveries
     const allLinks: Array<{
@@ -50,6 +60,7 @@ export async function GET(
     }
 
     return NextResponse.json({
+      projectName,
       deliveries: deliveries.map((d) => ({
         id: d.id,
         deliverableType: d.deliverableType,
@@ -68,6 +79,6 @@ export async function GET(
     });
   } catch (error) {
     console.error("Failed to fetch project links:", error);
-    return NextResponse.json({ deliveries: [], allLinks: [], total: 0 });
+    return NextResponse.json({ projectName: null, deliveries: [], allLinks: [], total: 0 });
   }
 }
