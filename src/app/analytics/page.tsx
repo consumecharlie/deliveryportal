@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   BarChart,
@@ -574,9 +575,10 @@ export default function AnalyticsPage() {
                       const senderDisplayName = formatSenderName(item.sentBy);
                       const member = memberByEmail.get(item.sentBy.toLowerCase());
                       return (
-                        <div
+                        <Link
                           key={item.id}
-                          className="flex items-start gap-3 text-sm"
+                          href={`/sent?open=${item.id}`}
+                          className="flex items-start gap-3 text-sm rounded-md -mx-2 px-2 py-1.5 hover:bg-muted/50 transition-colors"
                         >
                           <div className="mt-0.5 shrink-0">
                             <Avatar
@@ -608,7 +610,7 @@ export default function AnalyticsPage() {
                           <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
                             {formatRelativeTime(item.sentAt)}
                           </span>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>

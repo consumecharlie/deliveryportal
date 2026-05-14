@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import {
@@ -149,6 +150,10 @@ export function SentTable() {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
     null
   );
+  // Lets other pages link to a specific delivery's dialog via
+  // /sent?open=<deliveryId> — used by the analytics activity log.
+  const searchParams = useSearchParams();
+  const openIdFromUrl = searchParams.get("open");
 
   const { data, isLoading, error } = useQuery<{
     deliveries: Delivery[];
@@ -161,6 +166,14 @@ export function SentTable() {
       return res.json();
     },
   });
+
+  // Once the deliveries load (and whenever the ?open= param changes),
+  // pop the matching delivery's dialog open.
+  useEffect(() => {
+    if (!openIdFromUrl || !data?.deliveries) return;
+    const found = data.deliveries.find((d) => d.id === openIdFromUrl);
+    if (found) setSelectedDelivery(found);
+  }, [openIdFromUrl, data]);
 
   // ClickUp workspace members — used to resolve Sent By / Sent As emails
   // to real names and profile pictures.
