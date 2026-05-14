@@ -453,7 +453,7 @@ export function SentTable() {
         open={!!selectedDelivery}
         onOpenChange={(open) => !open && setSelectedDelivery(null)}
       >
-        <DialogContent className="!max-w-[min(1500px,95vw)] !w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="!max-w-[min(1350px,85vw)] !w-[85vw] max-h-[90vh] p-0 gap-0 overflow-hidden">
           {selectedDelivery && (() => {
             const sentByLookup = clickupByEmail.get(
               selectedDelivery.sentBy?.toLowerCase() ?? ""
@@ -478,7 +478,7 @@ export function SentTable() {
               : null;
             return (
               <>
-                <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                <DialogHeader className="px-8 pt-6 pb-4 border-b">
                   <DialogTitle className="text-base flex items-center gap-2">
                     <span>
                       {selectedDelivery.clientName || "Delivery"}
@@ -506,10 +506,10 @@ export function SentTable() {
                 {/* Two-column layout: details left, preview right. The
                     preview column is the only thing that scrolls, so
                     long messages don't drag the metadata out of view. */}
-                <div className="flex max-h-[calc(90vh-3.5rem)]">
+                <div className="flex max-h-[calc(90vh-4.25rem)]">
                   {/* LEFT — details column */}
-                  <div className="w-[300px] shrink-0 border-r overflow-y-auto">
-                    <div className="px-5 py-4 space-y-4 text-sm">
+                  <div className="w-[320px] shrink-0 border-r overflow-y-auto">
+                    <div className="px-7 py-6 space-y-6 text-sm">
                       <div>
                         <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
                           SENT BY
@@ -622,7 +622,7 @@ export function SentTable() {
                   </div>
 
                   {/* RIGHT — rendered preview, scrolls independently */}
-                  <div className="flex-1 overflow-y-auto px-6 py-4 min-w-0">
+                  <div className="flex-1 overflow-y-auto px-10 py-6 min-w-0">
                     <RichTextEditor
                       content={
                         wasSlack ? slackMarkdown : selectedDelivery.emailContent
