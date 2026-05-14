@@ -7,7 +7,7 @@ import {
 import { SPACES } from "@/lib/custom-field-ids";
 import { prisma } from "@/lib/db";
 
-const projectsCache: Record<string, { data: any; timestamp: number }> = {};
+const projectsCache: Record<string, { data: unknown; timestamp: number }> = {};
 const PROJECTS_CACHE_TTL = 10 * 60_000; // 10 minutes
 
 /**

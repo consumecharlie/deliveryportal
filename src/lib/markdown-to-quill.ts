@@ -263,7 +263,7 @@ export function markdownToQuillDelta(markdown: string): QuillDelta {
   // Pre-process: strip links inside template-variable brackets that TipTap
   // may have auto-linked (e.g. [[Frame.io](http://frame.io/) | frameReviewLink])
   // Handles plain, bold (**), and double-bold (****) wrapping around the link.
-  let cleaned = markdown.replace(
+  const cleaned = markdown.replace(
     /\[\*{0,4}\[([^\]]+)\]\([^)]+\)\*{0,4}\s*\|\s*(\w+)\]/g,
     "[$1 | $2]"
   );

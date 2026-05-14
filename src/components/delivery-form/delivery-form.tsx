@@ -980,7 +980,7 @@ export function DeliveryForm({
             {showSlack
               ? " Slack will send to #delivery-testing."
               : ` Email will send to ${testEmail} with no CCs.`}
-            {" "}No ClickUp changes. Task won't be marked complete.
+            {" "}No ClickUp changes. Task won&apos;t be marked complete.
           </span>
         </div>
       )}
