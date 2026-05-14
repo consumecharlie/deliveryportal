@@ -22,7 +22,8 @@ import { SLACK_EMOJI_MAP } from "@/lib/template-merge";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
-import { ExternalLink, AlertCircle, Mail, MessageSquare } from "lucide-react";
+import { ExternalLink, AlertCircle, Mail, MessageSquare, Bookmark } from "lucide-react";
+import Link from "next/link";
 
 interface DeliveryLink {
   id: string;
@@ -50,6 +51,7 @@ interface Delivery {
   sentBy: string;
   sentAt: string;
   n8nStatus: string | null;
+  projectListId: string | null;
   links: DeliveryLink[];
 }
 
@@ -479,7 +481,7 @@ export function SentTable() {
             return (
               <>
                 <DialogHeader className="px-8 pt-6 pb-4 border-b">
-                  <DialogTitle className="text-base flex items-center gap-2">
+                  <DialogTitle className="text-base flex items-center gap-2 pr-10">
                     <span>
                       {selectedDelivery.clientName || "Delivery"}
                       {selectedDelivery.projectName ? (
@@ -500,6 +502,16 @@ export function SentTable() {
                         </>
                       )}
                     </span>
+                    {selectedDelivery.projectListId && (
+                      <Link
+                        href={`/projects/${selectedDelivery.projectListId}`}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                        title="Open project links"
+                      >
+                        <Bookmark className="h-3.5 w-3.5" />
+                        Project links
+                      </Link>
+                    )}
                   </DialogTitle>
                 </DialogHeader>
 
