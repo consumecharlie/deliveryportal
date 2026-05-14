@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
@@ -440,7 +439,7 @@ export function SentTable() {
         open={!!selectedDelivery}
         onOpenChange={(open) => !open && setSelectedDelivery(null)}
       >
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        <DialogContent className="max-w-6xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           {selectedDelivery && (() => {
             const sentByLookup = clickupByEmail.get(
               selectedDelivery.sentBy?.toLowerCase() ?? ""
@@ -448,183 +447,180 @@ export function SentTable() {
             const sentAsLookup = clickupByEmail.get(
               selectedDelivery.senderEmail?.toLowerCase() ?? ""
             );
-            const hasSlack = Boolean(
+            // A delivery was sent via Slack iff it has BOTH a channel and
+            // slack body. Everything else was an email send. We never
+            // send both routes, so we show one preview only.
+            const wasSlack = Boolean(
               selectedDelivery.slackChannel && selectedDelivery.slackContent
             );
-            const slackMarkdown = hasSlack
+            const slackMarkdown = wasSlack
               ? slackContentToMarkdown(
                   selectedDelivery.slackContent ?? "",
                   lookupSlackUser
                 )
               : "";
-            const defaultTab = hasSlack ? "slack" : "email";
             const channelLabel = selectedDelivery.slackChannel
               ? `#${selectedDelivery.slackChannelName || selectedDelivery.slackChannel}`
               : null;
             return (
               <>
                 <DialogHeader className="px-6 pt-5 pb-3 border-b">
-                  <DialogTitle className="text-base">
-                    {selectedDelivery.clientName || "Delivery"}
-                    {selectedDelivery.projectName ? (
-                      <span className="text-muted-foreground font-normal">
-                        {" "}
-                        / {selectedDelivery.projectName}
-                      </span>
-                    ) : null}
+                  <DialogTitle className="text-base flex items-center gap-2">
+                    <span>
+                      {selectedDelivery.clientName || "Delivery"}
+                      {selectedDelivery.projectName ? (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          / {selectedDelivery.projectName}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-pixel tracking-[0.18em] text-muted-foreground">
+                      {wasSlack ? (
+                        <>
+                          <MessageSquare className="h-3 w-3" /> SLACK
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="h-3 w-3" /> EMAIL
+                        </>
+                      )}
+                    </span>
                   </DialogTitle>
                 </DialogHeader>
 
-                {/* Metadata header */}
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 border-b text-sm">
-                  <div>
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                      SENT BY
-                    </p>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar
-                        src={sentByLookup?.avatar}
-                        name={sentByLookup?.name ?? selectedDelivery.sentBy}
-                        size={22}
-                      />
-                      <span className="truncate" title={selectedDelivery.sentBy}>
-                        {sentByLookup?.name ?? selectedDelivery.sentBy}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                      SENT AS
-                    </p>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar
-                        src={sentAsLookup?.avatar}
-                        name={sentAsLookup?.name ?? selectedDelivery.senderEmail}
-                        size={22}
-                      />
-                      <span className="truncate" title={selectedDelivery.senderEmail}>
-                        {sentAsLookup?.name ?? selectedDelivery.senderEmail}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                      SENT AT
-                    </p>
-                    <p>{formatDate(selectedDelivery.sentAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                      DEPARTMENT
-                    </p>
-                    <DepartmentBadge department={selectedDelivery.department} />
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                      RECIPIENTS
-                    </p>
-                    <div className="space-y-0.5">
-                      <p>
-                        <span className="text-muted-foreground">To: </span>
-                        {selectedDelivery.primaryEmail || "—"}
-                      </p>
-                      {selectedDelivery.ccEmails && (
-                        <p>
-                          <span className="text-muted-foreground">CC: </span>
-                          {selectedDelivery.ccEmails}
+                {/* Two-column layout: details left, preview right. The
+                    preview column is the only thing that scrolls, so
+                    long messages don't drag the metadata out of view. */}
+                <div className="flex max-h-[calc(90vh-3.5rem)]">
+                  {/* LEFT — details column */}
+                  <div className="w-[300px] shrink-0 border-r overflow-y-auto">
+                    <div className="px-5 py-4 space-y-4 text-sm">
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          SENT BY
                         </p>
-                      )}
-                      {channelLabel && (
-                        <p>
-                          <span className="text-muted-foreground">Slack: </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar
+                            src={sentByLookup?.avatar}
+                            name={sentByLookup?.name ?? selectedDelivery.sentBy}
+                            size={22}
+                          />
+                          <span className="truncate" title={selectedDelivery.sentBy}>
+                            {sentByLookup?.name ?? selectedDelivery.sentBy}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          SENT AS
+                        </p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar
+                            src={sentAsLookup?.avatar}
+                            name={sentAsLookup?.name ?? selectedDelivery.senderEmail}
+                            size={22}
+                          />
+                          <span className="truncate" title={selectedDelivery.senderEmail}>
+                            {sentAsLookup?.name ?? selectedDelivery.senderEmail}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          SENT AT
+                        </p>
+                        <p>{formatDate(selectedDelivery.sentAt)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          DEPARTMENT
+                        </p>
+                        <DepartmentBadge department={selectedDelivery.department} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          RECIPIENTS
+                        </p>
+                        <div className="space-y-0.5">
+                          {wasSlack ? (
+                            channelLabel && (
+                              <p>
+                                <Badge variant="outline" className="text-xs">
+                                  {channelLabel}
+                                </Badge>
+                              </p>
+                            )
+                          ) : (
+                            <>
+                              <p className="break-all">
+                                <span className="text-muted-foreground">To: </span>
+                                {selectedDelivery.primaryEmail || "—"}
+                              </p>
+                              {selectedDelivery.ccEmails && (
+                                <p className="break-all">
+                                  <span className="text-muted-foreground">CC: </span>
+                                  {selectedDelivery.ccEmails}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          SUBJECT
+                        </p>
+                        <p className="font-medium">
+                          {selectedDelivery.emailSubject || "—"}
+                        </p>
+                      </div>
+                      {selectedDelivery.wasEdited && (
+                        <div>
                           <Badge variant="outline" className="text-xs">
-                            {channelLabel}
+                            Edited from template
                           </Badge>
-                        </p>
+                        </div>
+                      )}
+                      {selectedDelivery.links.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-pixel tracking-[0.18em] mb-1.5" style={{ color: "#6AC387" }}>
+                            REVIEW LINKS
+                          </p>
+                          <ul className="space-y-1">
+                            {selectedDelivery.links.map((link) => (
+                              <li key={link.id} className="text-sm">
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary inline-flex items-center gap-1 hover:underline break-all"
+                                >
+                                  {link.label || link.url}
+                                  <ExternalLink className="h-3 w-3 shrink-0" />
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                     </div>
                   </div>
-                  {selectedDelivery.wasEdited && (
-                    <div className="col-span-2">
-                      <Badge variant="outline" className="text-xs">
-                        Edited from template
-                      </Badge>
-                    </div>
-                  )}
-                </div>
 
-                {/* Subject */}
-                <div className="px-6 py-3 border-b">
-                  <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
-                    SUBJECT
-                  </p>
-                  <p className="font-medium">
-                    {selectedDelivery.emailSubject || "—"}
-                  </p>
-                </div>
-
-                {/* Rendered preview — uses the same RichTextEditor as the
-                    delivery form's preview panel, in read-only mode. */}
-                <Tabs defaultValue={defaultTab}>
-                  {hasSlack && (
-                    <div className="px-6 pt-3 border-b">
-                      <TabsList className="h-9">
-                        <TabsTrigger value="email" className="text-xs">
-                          <Mail className="mr-1 h-3 w-3" /> Email
-                        </TabsTrigger>
-                        <TabsTrigger value="slack" className="text-xs">
-                          <MessageSquare className="mr-1 h-3 w-3" /> Slack
-                        </TabsTrigger>
-                      </TabsList>
-                    </div>
-                  )}
-
-                  <TabsContent value="email" className="m-0 px-6 py-4">
+                  {/* RIGHT — rendered preview, scrolls independently */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 min-w-0">
                     <RichTextEditor
-                      content={selectedDelivery.emailContent}
+                      content={
+                        wasSlack ? slackMarkdown : selectedDelivery.emailContent
+                      }
                       onChange={() => {}}
                       editable={false}
                       outputFormat="markdown"
                       showToolbar={false}
                       minHeight="auto"
                     />
-                  </TabsContent>
-                  {hasSlack && (
-                    <TabsContent value="slack" className="m-0 px-6 py-4">
-                      <RichTextEditor
-                        content={slackMarkdown}
-                        onChange={() => {}}
-                        editable={false}
-                        outputFormat="markdown"
-                        showToolbar={false}
-                        minHeight="auto"
-                      />
-                    </TabsContent>
-                  )}
-                </Tabs>
-
-                {selectedDelivery.links.length > 0 && (
-                  <div className="px-6 py-4 border-t">
-                    <p className="text-[10px] font-pixel tracking-[0.18em] mb-2" style={{ color: "#6AC387" }}>
-                      REVIEW LINKS
-                    </p>
-                    <ul className="space-y-1">
-                      {selectedDelivery.links.map((link) => (
-                        <li key={link.id} className="text-sm">
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary inline-flex items-center gap-1 hover:underline"
-                          >
-                            {link.label || link.url}
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-                )}
+                </div>
               </>
             );
           })()}
