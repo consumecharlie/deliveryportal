@@ -134,6 +134,20 @@ export function quillDeltaToMarkdown(input: string | QuillDelta): string {
   let orderedIdx = 1;
   let prevWasList = false;
 
+  // Wrap text with a markdown emphasis marker, peeling any leading/trailing
+  // whitespace OUTSIDE the marker. CommonMark requires the closing delimiter
+  // to be immediately preceded by a non-whitespace char (right-flanking);
+  // `**Word: **` would otherwise render the asterisks literally in strict
+  // parsers like the one n8n uses for our email pipeline. Returns the input
+  // unchanged if the content is empty or whitespace-only.
+  function wrapEmphasis(text: string, marker: string): string {
+    if (!text || /^\s*$/.test(text)) return text;
+    const lead = text.match(/^\s+/)?.[0] ?? "";
+    const trail = text.match(/\s+$/)?.[0] ?? "";
+    const inner = text.slice(lead.length, text.length - trail.length);
+    return `${lead}${marker}${inner}${marker}${trail}`;
+  }
+
   for (const line of lines) {
     // Build inline markdown from segments
     const inlineMd = line.segments
@@ -147,10 +161,10 @@ export function quillDeltaToMarkdown(input: string | QuillDelta): string {
           t = `[${t}](${seg.attrs.link})`;
         }
         if (seg.attrs.bold) {
-          t = `**${t}**`;
+          t = wrapEmphasis(t, "**");
         }
         if (seg.attrs.italic) {
-          t = `*${t}*`;
+          t = wrapEmphasis(t, "*");
         }
         return t;
       })
@@ -158,8 +172,16 @@ export function quillDeltaToMarkdown(input: string | QuillDelta): string {
 
     const la = line.lineAttrs;
 
-    // Heading
+    // Heading. Skip entirely if the header has no inline content \u2014 ClickUp
+    // can store empty header lines (e.g. when a heading's text was deleted
+    // but the line attribute remained), which would otherwise emit a bare
+    // "## " artifact into the template editor.
     if (la?.header) {
+      if (!inlineMd.trim()) {
+        prevWasList = false;
+        orderedIdx = 1;
+        continue;
+      }
       const level = Number(la.header);
       const prefix = "#".repeat(Math.min(level, 3));
       mdLines.push(`${prefix} ${inlineMd}`);
