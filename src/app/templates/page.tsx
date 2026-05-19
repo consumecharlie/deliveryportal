@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   departmentColors,
   DEPARTMENT_ORDER,
@@ -11,8 +12,14 @@ import {
 import { TemplatesGrid } from "@/components/templates/templates-grid";
 import { groupTemplatesByFamily } from "@/lib/template-families";
 import { cn } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { Plus, AlertCircle, ShieldCheck } from "lucide-react";
 import type { DeliverySnippetTemplate } from "@/lib/types";
+
+interface AuditTemplateSummary {
+  taskId: string;
+  errors: number;
+  warnings: number;
+}
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -33,6 +40,27 @@ export default function TemplatesPage() {
   });
 
   const templates = data?.templates ?? [];
+
+  // Audit summary — separate query so the templates list isn't blocked
+  // on the lint pass. Refetched every minute via the API's own cache.
+  const { data: auditData } = useQuery<{ templates: AuditTemplateSummary[] }>({
+    queryKey: ["templates-audit"],
+    queryFn: async () => {
+      const res = await fetch("/api/templates/audit");
+      if (!res.ok) throw new Error("Failed to load audit");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
+  const auditSummary = useMemo(() => {
+    const list = auditData?.templates ?? [];
+    const withErrors = list.filter((t) => t.errors > 0).length;
+    const withWarnings = list.filter(
+      (t) => t.errors === 0 && t.warnings > 0
+    ).length;
+    return { withErrors, withWarnings };
+  }, [auditData]);
 
   // Extract unique departments, ordered by DEPARTMENT_ORDER
   const departments = useMemo(() => {
@@ -84,11 +112,57 @@ export default function TemplatesPage() {
             Manage delivery snippet templates used for client communications.
           </p>
         </div>
-        <Button onClick={() => router.push("/templates/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/templates/audit")}
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Audit
+            {auditSummary.withErrors > 0 && (
+              <Badge className="ml-2 bg-red-500/15 text-red-700 border-red-500/30">
+                {auditSummary.withErrors}
+              </Badge>
+            )}
+          </Button>
+          <Button onClick={() => router.push("/templates/new")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Template
+          </Button>
+        </div>
       </div>
+
+      {/* Audit banner — surfaces backlog without forcing the user to
+          visit the audit page. Only shown when there's something to act on. */}
+      {auditSummary.withErrors + auditSummary.withWarnings > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-800 dark:bg-amber-950">
+          <div className="flex items-center gap-2 text-sm">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <span>
+              {auditSummary.withErrors > 0 && (
+                <strong>
+                  {auditSummary.withErrors} template
+                  {auditSummary.withErrors === 1 ? " has" : "s have"} formatting
+                  errors
+                </strong>
+              )}
+              {auditSummary.withErrors > 0 && auditSummary.withWarnings > 0 && " · "}
+              {auditSummary.withWarnings > 0 && (
+                <span className="text-amber-800 dark:text-amber-300">
+                  {auditSummary.withWarnings} with warnings
+                </span>
+              )}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => router.push("/templates/audit")}
+          >
+            Review
+          </Button>
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-12 text-muted-foreground">

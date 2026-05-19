@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ import { cn } from "@/lib/utils";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
 import { magicCleanup } from "@/lib/template-cleanup";
+import { lintTemplate, countBySeverity, type LintIssue } from "@/lib/template-lint";
 
 // Template variables grouped by category
 const VARIABLE_GROUPS: {
@@ -353,6 +354,18 @@ export default function TemplateEditorPage() {
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
   const [showLintWarning, setShowLintWarning] = useState(false);
 
+  // Template-level lint (formatting + variable hygiene + cleanup
+  // compliance). Recomputed live as the snippet changes; gates the
+  // Save button the same way slack-lint does.
+  const templateLintIssues: LintIssue[] = useMemo(
+    () => lintTemplate(snippet),
+    [snippet]
+  );
+  const templateLintCounts = useMemo(
+    () => countBySeverity(templateLintIssues),
+    [templateLintIssues]
+  );
+
   // Track when we just saved so we can skip overwriting local state
   // on the next refetch (ClickUp may not have processed the update yet).
   const justSavedRef = useRef(false);
@@ -539,7 +552,10 @@ export default function TemplateEditorPage() {
           </Button>
           <Button
             onClick={() => {
-              if (slackLintErrors.length > 0) {
+              if (
+                slackLintErrors.length > 0 ||
+                templateLintCounts.errors > 0
+              ) {
                 setShowLintWarning(true);
               } else {
                 saveMutation.mutate();
@@ -977,37 +993,87 @@ export default function TemplateEditorPage() {
         </div>
       </div>
 
-      {/* Slack Lint Warning Dialog */}
+      {/* Lint Warning Dialog (slack lint + template lint, unified) */}
       <AlertDialog open={showLintWarning} onOpenChange={setShowLintWarning}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Slack Formatting Issues
+              Formatting Issues Detected
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>
-                  This template has {slackLintErrors.length} formatting{" "}
-                  {slackLintErrors.length === 1 ? "issue" : "issues"} that may
-                  not render correctly in Slack:
+                  This template has issues that may not render correctly when
+                  sent. Run Magic Cleanup to auto-fix, or save anyway.
                 </p>
-                <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
-                  {slackLintErrors.map((err, i) => (
-                    <li
-                      key={i}
-                      className="text-xs text-amber-700 dark:text-amber-400"
-                    >
-                      <span className="font-mono">Line {err.line}:</span>{" "}
-                      {err.message}
-                    </li>
-                  ))}
-                </ul>
+
+                {templateLintCounts.errors > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-1.5">
+                      Template errors ({templateLintCounts.errors})
+                    </p>
+                    <ul className="space-y-1 rounded border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950 max-h-48 overflow-y-auto">
+                      {templateLintIssues
+                        .filter((i) => i.severity === "error")
+                        .map((err, i) => (
+                          <li
+                            key={i}
+                            className="text-xs text-red-700 dark:text-red-400"
+                          >
+                            {err.lineNumber !== undefined && (
+                              <span className="font-mono">
+                                Line {err.lineNumber}:
+                              </span>
+                            )}{" "}
+                            {err.message}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+
+                {slackLintErrors.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 mb-1.5">
+                      Slack formatting ({slackLintErrors.length})
+                    </p>
+                    <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950 max-h-48 overflow-y-auto">
+                      {slackLintErrors.map((err, i) => (
+                        <li
+                          key={i}
+                          className="text-xs text-amber-700 dark:text-amber-400"
+                        >
+                          <span className="font-mono">Line {err.line}:</span>{" "}
+                          {err.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
             <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const cleaned = magicCleanup(snippet, {
+                  deliverableType,
+                  department,
+                });
+                setSnippet(cleaned);
+                setHasChanges(true);
+                setShowLintWarning(false);
+                toast.success("Magic Cleanup applied", {
+                  description: "Review the cleaned snippet, then click Save.",
+                });
+              }}
+            >
+              <Sparkles className="mr-1.5 h-4 w-4" />
+              Fix with Magic Cleanup
+            </Button>
             <AlertDialogAction
               onClick={() => {
                 setShowLintWarning(false);
