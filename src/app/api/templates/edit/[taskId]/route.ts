@@ -114,7 +114,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { snippet, subjectLine, deliverableType, department, sender } = body;
+    const { name, snippet, subjectLine, deliverableType, department, sender } = body;
 
     // First, get the current task for version history + dropdown resolution
     let currentTask: Awaited<ReturnType<typeof getTask>> | null = null;
@@ -206,12 +206,16 @@ export async function PUT(
           )
         );
       }
-      // Keep the template task's name in sync with its deliverable type
-      // so the templates grid renders the right label. The snippet name
-      // is auto-managed — never separately editable.
-      const desiredName = String(deliverableType).trim();
-      if (desiredName && desiredName !== currentTask.name) {
-        updates.push(updateTaskName(taskId, desiredName));
+    }
+
+    // Template name. Only updated when the editor explicitly sends a
+    // `name` field. We used to auto-rename the task to match the
+    // deliverable type on every save, which overwrote custom names like
+    // "Interactive Flowchart Diagram V2" → "Flowchart V2".
+    if (typeof name === "string" && currentTask) {
+      const trimmed = name.trim();
+      if (trimmed && trimmed !== currentTask.name) {
+        updates.push(updateTaskName(taskId, trimmed));
       }
     }
 

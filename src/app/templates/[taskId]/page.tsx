@@ -334,6 +334,7 @@ export default function TemplateEditorPage() {
   const queryClient = useQueryClient();
   const taskId = params.taskId as string;
 
+  const [templateName, setTemplateName] = useState("");
   const [snippet, setSnippet] = useState("");
   const [subjectLine, setSubjectLine] = useState("");
   const snippetEditorRef = useRef<Editor | null>(null);
@@ -414,6 +415,7 @@ export default function TemplateEditorPage() {
         justSavedRef.current = false;
         return;
       }
+      setTemplateName(template.name);
       setSnippet(template.snippet);
       setSubjectLine(template.subjectLine);
       setDeliverableType(template.deliverableType);
@@ -434,6 +436,7 @@ export default function TemplateEditorPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name: templateName,
           snippet,
           subjectLine,
           deliverableType,
@@ -521,8 +524,17 @@ export default function TemplateEditorPage() {
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back
           </Button>
-          <div>
-            <h1 className="text-xl font-bold">{template.name}</h1>
+          <div className="min-w-0">
+            <Input
+              value={templateName}
+              onChange={(e) => {
+                setTemplateName(e.target.value);
+                setHasChanges(true);
+              }}
+              placeholder="Template name"
+              aria-label="Template name"
+              className="h-auto border-0 bg-transparent px-0 text-xl font-bold shadow-none focus-visible:ring-0 focus-visible:border-b focus-visible:border-border md:text-xl"
+            />
             <div className="flex items-center gap-2 mt-1">
               <DepartmentBadge department={department || template.department} />
               {(deliverableType || template.deliverableType) && (
@@ -561,7 +573,11 @@ export default function TemplateEditorPage() {
                 saveMutation.mutate();
               }
             }}
-            disabled={!hasChanges || saveMutation.isPending}
+            disabled={
+              !hasChanges ||
+              saveMutation.isPending ||
+              templateName.trim() === ""
+            }
           >
             {saveMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
