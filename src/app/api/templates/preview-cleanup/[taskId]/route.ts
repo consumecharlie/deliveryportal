@@ -6,7 +6,16 @@ import { magicCleanup } from "@/lib/template-cleanup";
 import { lintTemplate, type LintIssue } from "@/lib/template-lint";
 
 /**
- * GET /api/templates/[taskId]/preview-cleanup
+ * GET /api/templates/preview-cleanup/[taskId]
+ *
+ * Mounted under `preview-cleanup/[taskId]` rather than the more
+ * intuitive `[taskId]/preview-cleanup` to avoid a Next.js slug-name
+ * conflict at the /api/templates/ level: the sibling
+ * `[deliverableType]/route.ts` already owns the dynamic slot, and
+ * mixing slug names at the same level (`[deliverableType]` vs
+ * `[taskId]`) compiles silently but throws an unhandled rejection at
+ * runtime that hangs every route — including /api/auth/*. Learned the
+ * hard way on commit c0b0b80.
  *
  * Read-only: returns the current snippet markdown and what Magic Cleanup
  * would produce. Does NOT mutate ClickUp. The audit page uses this to

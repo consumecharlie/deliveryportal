@@ -333,7 +333,7 @@ function PreviewFixDialog({
   const { data, isLoading, error } = useQuery<PreviewResponse>({
     queryKey: ["preview-cleanup", taskId],
     queryFn: async () => {
-      const res = await fetch(`/api/templates/${taskId}/preview-cleanup`);
+      const res = await fetch(`/api/templates/preview-cleanup/${taskId}`);
       if (!res.ok) throw new Error("Failed to load preview");
       return res.json();
     },
