@@ -58,6 +58,7 @@ import {
   ChevronsUpDown,
   AlertTriangle,
   Sparkles,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -335,6 +336,7 @@ export default function TemplateEditorPage() {
   const taskId = params.taskId as string;
 
   const [templateName, setTemplateName] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
   const [snippet, setSnippet] = useState("");
   const [subjectLine, setSubjectLine] = useState("");
   const snippetEditorRef = useRef<Editor | null>(null);
@@ -450,7 +452,13 @@ export default function TemplateEditorPage() {
     onSuccess: () => {
       justSavedRef.current = true;
       setHasChanges(false);
+      // Bust the server-side caches (templates + audit) so the
+      // templates list and the audit page reflect the rename
+      // immediately. Fire-and-forget — we don't need to await.
+      fetch("/api/templates?noCache=true").catch(() => {});
+      fetch("/api/templates/audit?noCache=true").catch(() => {});
       queryClient.invalidateQueries({ queryKey: ["templates"] });
+      queryClient.invalidateQueries({ queryKey: ["templates-audit"] });
       queryClient.invalidateQueries({ queryKey: ["template", taskId] });
       queryClient.invalidateQueries({
         queryKey: ["template-history", taskId],
@@ -525,16 +533,37 @@ export default function TemplateEditorPage() {
             Back
           </Button>
           <div className="min-w-0">
-            <Input
-              value={templateName}
-              onChange={(e) => {
-                setTemplateName(e.target.value);
-                setHasChanges(true);
-              }}
-              placeholder="Template name"
-              aria-label="Template name"
-              className="h-auto border-0 bg-transparent px-0 text-xl font-bold shadow-none focus-visible:ring-0 focus-visible:border-b focus-visible:border-border md:text-xl"
-            />
+            {isEditingName ? (
+              <Input
+                value={templateName}
+                onChange={(e) => {
+                  setTemplateName(e.target.value);
+                  setHasChanges(true);
+                }}
+                onBlur={() => setIsEditingName(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") {
+                    e.currentTarget.blur();
+                  }
+                }}
+                onFocus={(e) => e.currentTarget.select()}
+                autoFocus
+                placeholder="Template name"
+                aria-label="Template name"
+                className="h-auto border-0 border-b border-border bg-transparent px-0 text-xl font-bold shadow-none rounded-none focus-visible:ring-0 focus-visible:border-b focus-visible:border-[#6AC387] md:text-xl"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsEditingName(true)}
+                aria-label="Edit template name"
+                title="Click to rename"
+                className="group flex items-center gap-1.5 text-xl font-bold text-left transition-colors hover:text-[#6AC387]"
+              >
+                <span className="truncate">{templateName || "Untitled"}</span>
+                <Pencil className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+              </button>
+            )}
             <div className="flex items-center gap-2 mt-1">
               <DepartmentBadge department={department || template.department} />
               {(deliverableType || template.deliverableType) && (

@@ -4,16 +4,24 @@ import { LISTS, TEMPLATE_FIELDS } from "@/lib/custom-field-ids";
 import type { DeliverySnippetTemplate } from "@/lib/types";
 
 let templatesCache: { data: DeliverySnippetTemplate[]; timestamp: number } | null = null;
-const TEMPLATES_CACHE_TTL = 10 * 60_000; // 10 minutes
+const TEMPLATES_CACHE_TTL = 60_000; // 1 minute — short enough that a save shows up fast
 
 /**
  * GET /api/templates
  *
  * List all delivery snippet templates from the Delivery Snippets list.
+ * Pass ?noCache=true to bypass the in-memory cache — used by the editor
+ * after a save so the templates page reflects the new state immediately.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    if (templatesCache && Date.now() - templatesCache.timestamp < TEMPLATES_CACHE_TTL) {
+    const url = new URL(req.url);
+    const noCache = url.searchParams.get("noCache") === "true";
+    if (
+      !noCache &&
+      templatesCache &&
+      Date.now() - templatesCache.timestamp < TEMPLATES_CACHE_TTL
+    ) {
       return NextResponse.json({ templates: templatesCache.data });
     }
 
