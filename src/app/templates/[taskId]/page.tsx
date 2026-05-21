@@ -359,8 +359,8 @@ export default function TemplateEditorPage() {
   // compliance). Recomputed live as the snippet changes; gates the
   // Save button the same way slack-lint does.
   const templateLintIssues: LintIssue[] = useMemo(
-    () => lintTemplate(snippet),
-    [snippet]
+    () => lintTemplate(snippet, { deliverableType, department }),
+    [snippet, deliverableType, department]
   );
   const templateLintCounts = useMemo(
     () => countBySeverity(templateLintIssues),

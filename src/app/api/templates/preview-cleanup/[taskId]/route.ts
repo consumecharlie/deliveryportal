@@ -53,8 +53,14 @@ export async function GET(
 
     const after = magicCleanup(before, { deliverableType, department });
 
-    const beforeIssues: LintIssue[] = lintTemplate(before);
-    const afterIssues: LintIssue[] = lintTemplate(after);
+    const beforeIssues: LintIssue[] = lintTemplate(before, {
+      deliverableType,
+      department,
+    });
+    const afterIssues: LintIssue[] = lintTemplate(after, {
+      deliverableType,
+      department,
+    });
 
     return NextResponse.json({
       taskId,

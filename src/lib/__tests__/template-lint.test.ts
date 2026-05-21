@@ -126,6 +126,63 @@ describe("variable hygiene rules (warnings)", () => {
     // the cleanup-compliance rule will surface it instead.
     expect(issues.filter((i) => i.rule === "unknown-variable")).toEqual([]);
   });
+
+  it("does NOT flag TitleCase script placeholders like [Interviewee] or [Topic]", () => {
+    // Sample placeholder text inside "Typical feedback might include"
+    // sections — meant to be human-edited, not portal variables.
+    const issues = lintTemplate(
+      '- "Did [Interviewee] mention anything about [Topic]?"'
+    );
+    expect(issues.filter((i) => i.rule === "unknown-variable")).toEqual([]);
+  });
+
+  it("does NOT flag single-letter placeholders like [X] or [Speaker]", () => {
+    const issues = lintTemplate(
+      '- "Can we remove the part where [Speaker] talks about [X]?"'
+    );
+    expect(issues.filter((i) => i.rule === "unknown-variable")).toEqual([]);
+  });
+
+  it("still flags genuine camelCase typos like [projetName]", () => {
+    const issues = lintTemplate("Hey [projetName]");
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        rule: "unknown-variable",
+        severity: "warning",
+      })
+    );
+  });
+});
+
+describe("cleanup compliance respects deliverableType/department options", () => {
+  it("Pre-Pro template with Document link is cleanup-compliant", () => {
+    const md = `Hey [contactFirstName],
+
+[versionNotes]
+
+## 🔔 Scope & Timeline Reminders
+- **Revision Rounds:** 1 of [revisionRounds]
+- **Feedback Windows:** [feedbackWindows]
+- **Feedback Deadline:** EOD [nextFeedbackDeadline]
+- Additional revisions beyond the included revision rounds will require a scope adjustment.
+
+## 🔗 Review Link
+- [Document | googleDeliverableLink]
+
+## 🗓 Project Plan
+- [View real-time progress | projectPlanLink]`;
+    // Without options, cleanup defaults to Frame.io → this template
+    // would look "non-compliant". With Pre-Pro department, the same
+    // canonical bullet is what Magic Cleanup produces.
+    const issuesNoOpts = lintTemplate(md);
+    const issuesWithOpts = lintTemplate(md, { department: "Pre-Pro" });
+    expect(
+      issuesNoOpts.some((i) => i.rule === "not-cleanup-compliant")
+    ).toBe(true);
+    expect(
+      issuesWithOpts.some((i) => i.rule === "not-cleanup-compliant")
+    ).toBe(false);
+  });
 });
 
 describe("cleanup compliance rules (warnings)", () => {

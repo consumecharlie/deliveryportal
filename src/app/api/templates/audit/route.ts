@@ -51,22 +51,25 @@ export async function GET(req: Request) {
             TEMPLATE_FIELDS.DELIVERY_SNIPPET
           ) ?? "");
 
-      const issues = lintTemplate(markdown);
+      const deliverableType =
+        extractCustomFieldValue(
+          snippet.custom_fields,
+          TEMPLATE_FIELDS.DELIVERABLE_TYPE
+        ) ?? "";
+      const department =
+        extractCustomFieldValue(
+          snippet.custom_fields,
+          TEMPLATE_FIELDS.DEPARTMENT
+        ) ?? "";
+
+      const issues = lintTemplate(markdown, { deliverableType, department });
       const { errors, warnings } = countBySeverity(issues);
 
       return {
         taskId: snippet.id,
         name: snippet.name,
-        deliverableType:
-          extractCustomFieldValue(
-            snippet.custom_fields,
-            TEMPLATE_FIELDS.DELIVERABLE_TYPE
-          ) ?? "",
-        department:
-          extractCustomFieldValue(
-            snippet.custom_fields,
-            TEMPLATE_FIELDS.DEPARTMENT
-          ) ?? "",
+        deliverableType,
+        department,
         errors,
         warnings,
         issues,

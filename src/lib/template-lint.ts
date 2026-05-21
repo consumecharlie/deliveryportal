@@ -166,8 +166,16 @@ function findVariableIssues(line: string, lineNumber: number): LintIssue[] {
       continue;
     }
 
-    // Solo variable: `[varName]` where varName looks like an identifier
-    const soloMatch = inside.match(/^\s*([A-Za-z_][\w]*)\s*$/);
+    // Solo variable: `[varName]` where varName looks like an identifier.
+    //
+    // Only treat camelCase-style brackets (starts with a lowercase letter)
+    // as template-variable ATTEMPTS. Real template variables all follow
+    // that convention (`contacts`, `projectName`, `frameReviewLink`).
+    // TitleCase or single-letter brackets like `[Interviewee]`, `[Topic]`,
+    // `[X]`, `[Speaker]` are conventional script/template placeholders
+    // meant to be human-edited, not portal variables — flagging them
+    // produces noise on every script template that contains them.
+    const soloMatch = inside.match(/^\s*([a-z][\w]*)\s*$/);
     if (soloMatch) {
       const varName = soloMatch[1];
       if (
@@ -194,9 +202,23 @@ function findVariableIssues(line: string, lineNumber: number): LintIssue[] {
  * Cleanup compliance: does Magic Cleanup leave this template alone?
  * If not, the differences are flagged as a single warning so the audit
  * UI can offer a preview-and-fix flow.
+ *
+ * Pass through `deliverableType` and `department` if the caller knows
+ * them — Magic Cleanup's Review Link transform depends on both, so
+ * checking compliance without them produces false positives (the
+ * canonical bullet for a Pre-Pro template is `[Document | …]`, but
+ * without the department option cleanup defaults to `[Frame review | …]`).
  */
-function findCleanupComplianceIssues(input: string): LintIssue[] {
-  const cleaned = magicCleanup(input);
+export interface LintOptions {
+  deliverableType?: string;
+  department?: string;
+}
+
+function findCleanupComplianceIssues(
+  input: string,
+  opts: LintOptions
+): LintIssue[] {
+  const cleaned = magicCleanup(input, opts);
   if (cleaned.trim() === input.trim()) return [];
   return [
     {
@@ -208,7 +230,10 @@ function findCleanupComplianceIssues(input: string): LintIssue[] {
   ];
 }
 
-export function lintTemplate(markdown: string): LintIssue[] {
+export function lintTemplate(
+  markdown: string,
+  opts: LintOptions = {}
+): LintIssue[] {
   if (!markdown) return [];
   const issues: LintIssue[] = [];
   const lines = markdown.split("\n");
@@ -225,7 +250,7 @@ export function lintTemplate(markdown: string): LintIssue[] {
     issues.push(...findVariableIssues(line, lineNumber));
   }
 
-  issues.push(...findCleanupComplianceIssues(markdown));
+  issues.push(...findCleanupComplianceIssues(markdown, opts));
   return issues;
 }
 
