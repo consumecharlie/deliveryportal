@@ -368,7 +368,7 @@ function PreviewFixDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[min(1400px,90vw)] max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-[min(1700px,95vw)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{data?.name ?? "Preview cleanup"}</DialogTitle>
           <DialogDescription>
@@ -425,6 +425,25 @@ function DiffPanel({
 }) {
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
+
+  // Group line-anchored issues by line number for fast lookup. Issues
+  // without a lineNumber (e.g. the `not-cleanup-compliant` whole-doc
+  // rule) are surfaced as a callout above the preview, since there's
+  // no specific row to highlight.
+  const issuesByLine = new Map<number, LintIssue[]>();
+  const wholeDocIssues: LintIssue[] = [];
+  for (const issue of issues) {
+    if (issue.lineNumber === undefined) {
+      wholeDocIssues.push(issue);
+      continue;
+    }
+    const existing = issuesByLine.get(issue.lineNumber) ?? [];
+    existing.push(issue);
+    issuesByLine.set(issue.lineNumber, existing);
+  }
+
+  const lines = text.split("\n");
+
   return (
     <div className="flex flex-col min-h-0 border rounded-md overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b shrink-0">
@@ -447,9 +466,45 @@ function DiffPanel({
           )}
         </div>
       </div>
-      <pre className="flex-1 overflow-auto m-0 p-3 text-[12px] leading-snug font-mono whitespace-pre-wrap break-words">
-        {text}
-      </pre>
+
+      {wholeDocIssues.length > 0 && (
+        <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 shrink-0">
+          {wholeDocIssues.map((issue, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+              <span>{issue.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto text-[12px] leading-snug font-mono">
+        {lines.map((line, i) => {
+          const lineIssues = issuesByLine.get(i + 1) ?? [];
+          const hasError = lineIssues.some((x) => x.severity === "error");
+          const hasWarning =
+            !hasError && lineIssues.some((x) => x.severity === "warning");
+          const tooltip = lineIssues
+            .map((x) => `${x.severity.toUpperCase()}: ${x.message}`)
+            .join("\n");
+
+          return (
+            <div
+              key={i}
+              title={tooltip || undefined}
+              className={
+                hasError
+                  ? "border-l-2 border-red-500 bg-red-500/10 pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
+                  : hasWarning
+                    ? "border-l-2 border-amber-500 bg-amber-500/10 pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
+                    : "border-l-2 border-transparent pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
+              }
+            >
+              {line.length > 0 ? line : " "}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
