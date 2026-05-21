@@ -160,16 +160,16 @@ describe("cleanup compliance respects deliverableType/department options", () =>
 
 [versionNotes]
 
-## 🔔 Scope & Timeline Reminders
+### **🔔 Scope & Timeline Reminders**
 - **Revision Rounds:** 1 of [revisionRounds]
 - **Feedback Windows:** [feedbackWindows]
 - **Feedback Deadline:** EOD [nextFeedbackDeadline]
 - Additional revisions beyond the included revision rounds will require a scope adjustment.
 
-## 🔗 Review Link
+### **🔗 Review Link**
 - [Document | googleDeliverableLink]
 
-## 🗓 Project Plan
+### **🗓 Project Plan**
 - [View real-time progress | projectPlanLink]`;
     // Without options, cleanup defaults to Frame.io → this template
     // would look "non-compliant". With Pre-Pro department, the same
@@ -202,16 +202,16 @@ describe("cleanup compliance rules (warnings)", () => {
 
 [versionNotes]
 
-## 🔔 Scope & Timeline Reminders
+### **🔔 Scope & Timeline Reminders**
 - **Revision Rounds:** 1 of [revisionRounds]
 - **Feedback Windows:** [feedbackWindows]
 - **Feedback Deadline:** EOD [nextFeedbackDeadline]
 - Additional revisions beyond the included revision rounds will require a scope adjustment.
 
-## 🔗 Review Link
+### **🔗 Review Link**
 - [Frame review | frameReviewLink]
 
-## 🗓 Project Plan
+### **🗓 Project Plan**
 - [View real-time progress | projectPlanLink]`;
     const warnings = lintTemplate(compliant).filter(
       (i) => i.rule === "not-cleanup-compliant"
@@ -232,16 +232,16 @@ describe("issue metadata", () => {
 
 [versionNotes]
 
-## 🔔 Scope & Timeline Reminders
+### **🔔 Scope & Timeline Reminders**
 - **Revision Rounds:** 1 of [revisionRounds]
 - **Feedback Windows:** [feedbackWindows]
 - **Feedback Deadline:** EOD [nextFeedbackDeadline]
 - Additional revisions beyond the included revision rounds will require a scope adjustment.
 
-## 🔗 Review Link
+### **🔗 Review Link**
 - [Frame review | frameReviewLink]
 
-## 🗓 Project Plan
+### **🗓 Project Plan**
 - [View real-time progress | projectPlanLink]`;
     expect(lintTemplate(compliant)).toEqual([]);
   });

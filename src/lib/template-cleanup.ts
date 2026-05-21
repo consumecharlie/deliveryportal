@@ -222,34 +222,95 @@ function buildScopeBullets(
 
 const PROJECT_PLAN_BULLET = "- [View real-time progress | projectPlanLink]";
 
-function buildReviewLinkBullets(
+interface ReviewLinkSpec {
+  varName: string;
+  defaultLabel: string;
+}
+
+/**
+ * Which link variables MUST appear in the Review Link section for this
+ * deliverable type / department. The label paired with each is only a
+ * default — if the section already has a bullet using that variable,
+ * the human-chosen label is preserved by `reconcileReviewLinkBullets`.
+ */
+function getRequiredReviewLinks(
   fullText: string,
   options: MagicCleanupOptions
-): string[] {
+): ReviewLinkSpec[] {
   const dt = (options.deliverableType ?? "").toLowerCase();
   const dept = (options.department ?? "").toLowerCase();
   const text = fullText.toLowerCase();
 
-  const bullets: string[] = [];
+  const required: ReviewLinkSpec[] = [];
 
-  // Primary link — single deliverable per template
   if (dt.includes("final delivery")) {
-    bullets.push("- [Final delivery | googleDeliverableLink]");
+    required.push({
+      varName: "googleDeliverableLink",
+      defaultLabel: "Final delivery",
+    });
   } else if (dt.includes("animatic")) {
-    bullets.push("- [Animatic | animaticReviewLink]");
+    required.push({ varName: "animaticReviewLink", defaultLabel: "Animatic" });
   } else if (dept.includes("pre")) {
-    bullets.push("- [Document | googleDeliverableLink]");
+    required.push({
+      varName: "googleDeliverableLink",
+      defaultLabel: "Document",
+    });
   } else {
-    bullets.push("- [Frame review | frameReviewLink]");
+    required.push({ varName: "frameReviewLink", defaultLabel: "Frame review" });
   }
 
   // Loom is additive — if mentioned anywhere in the snippet, include a
   // loom walkthrough bullet too.
   if (text.includes("loom")) {
-    bullets.push("- [Loom walkthrough | loomReviewLink]");
+    required.push({
+      varName: "loomReviewLink",
+      defaultLabel: "Loom walkthrough",
+    });
   }
 
-  return bullets;
+  return required;
+}
+
+/**
+ * Build the Review Link section's body lines.
+ *
+ *   For each REQUIRED link variable:
+ *     - if the existing section already has a bullet using that
+ *       variable, preserve it (label and any trailing CTA text).
+ *       Normalize the bullet marker to `-`.
+ *     - otherwise, inject a canonical bullet with the default label.
+ *
+ * Bullets that use variables NOT in the required set are dropped —
+ * Magic Cleanup's job is to enforce which links are present.
+ */
+function reconcileReviewLinkBullets(
+  existingLines: string[],
+  fullText: string,
+  options: MagicCleanupOptions
+): string[] {
+  const required = getRequiredReviewLinks(fullText, options);
+
+  const existingByVar = new Map<string, string>();
+  for (const rawLine of existingLines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(
+      /^[-*]?\s*\[([^|\]]+?)\s*\|\s*(\w+)\](.*)$/
+    );
+    if (!m) continue;
+    const label = m[1].trim();
+    const variable = m[2];
+    const trailing = m[3].trim();
+    const bullet = trailing
+      ? `- [${label} | ${variable}] ${trailing}`
+      : `- [${label} | ${variable}]`;
+    existingByVar.set(variable, bullet);
+  }
+
+  return required.map(
+    ({ varName, defaultLabel }) =>
+      existingByVar.get(varName) ?? `- [${defaultLabel} | ${varName}]`
+  );
 }
 
 /**
@@ -288,11 +349,18 @@ function applySectionTransforms(
       continue;
     }
 
-    // Review Link → injected variable(s)
+    // Review Link → reconcile existing bullets against required link
+    // variables. Preserves human-chosen labels (e.g. "Final Audio
+    // Script") whenever the existing bullet already uses the correct
+    // link variable; only injects defaults for missing required links.
     if (/review ?link/.test(name)) {
       out.push({
         header: section.header,
-        bodyLines: buildReviewLinkBullets(fullText, options),
+        bodyLines: reconcileReviewLinkBullets(
+          section.bodyLines,
+          fullText,
+          options
+        ),
       });
       continue;
     }
@@ -399,6 +467,20 @@ function fixDeadlineAutomatedPlaceholder(sections: Section[]): Section[] {
   }));
 }
 
+/**
+ * All section headers render as bold H3 (`### **content**`) regardless
+ * of the level they arrived at. Strips any existing `#` prefix and any
+ * outer `**…**` wrapping before re-wrapping, so the transform is
+ * idempotent on its own output.
+ */
+function normalizeSectionHeader(header: string): string {
+  let content = header.replace(/^#+\s*/, "").trim();
+  // Strip outer bold wrapper if present (handles `## **🔔 Foo**` inputs)
+  const boldMatch = content.match(/^\*\*(.+)\*\*$/);
+  if (boldMatch) content = boldMatch[1].trim();
+  return `### **${content}**`;
+}
+
 function renderSections(sections: Section[]): string {
   const output: string[] = [];
   for (const section of sections) {
@@ -409,7 +491,7 @@ function renderSections(sections: Section[]): string {
 
     if (section.header !== null) {
       if (output.length > 0) output.push("");
-      output.push(section.header);
+      output.push(normalizeSectionHeader(section.header));
     }
 
     for (let i = 0; i < processed.length; i++) {

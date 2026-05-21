@@ -5,7 +5,7 @@ describe("magicCleanup — structural", () => {
   it("bullets a single-line item under a markdown header (no blank between)", () => {
     const input = `## Final cut\n[Final cut | googleDeliverableLink]`;
     expect(magicCleanup(input)).toBe(
-      `## Final cut\n- [Final cut | googleDeliverableLink]`
+      `### **Final cut**\n- [Final cut | googleDeliverableLink]`
     );
   });
 
@@ -14,7 +14,7 @@ describe("magicCleanup — structural", () => {
     const input =
       `## We Need Your Feedback\nStory clarity and overall flow\nPacing and energy\nMusic and tone fit`;
     expect(magicCleanup(input)).toBe(
-      `## We Need Your Feedback\n- Story clarity and overall flow\n- Pacing and energy\n- Music and tone fit`
+      `### **We Need Your Feedback**\n- Story clarity and overall flow\n- Pacing and energy\n- Music and tone fit`
     );
   });
 
@@ -22,21 +22,21 @@ describe("magicCleanup — structural", () => {
     const input =
       `## We Need Your Feedback\nPlease take a full pass and let us know your thoughts! Most focused on:\nStory clarity\nPacing`;
     expect(magicCleanup(input)).toBe(
-      `## We Need Your Feedback\nPlease take a full pass and let us know your thoughts! Most focused on:\n- Story clarity\n- Pacing`
+      `### **We Need Your Feedback**\nPlease take a full pass and let us know your thoughts! Most focused on:\n- Story clarity\n- Pacing`
     );
   });
 
   it("preserves already-bulleted lines and normalizes * to -", () => {
     const input = `## Items\n- already\n* with asterisk`;
     expect(magicCleanup(input)).toBe(
-      `## Items\n- already\n- with asterisk`
+      `### **Items**\n- already\n- with asterisk`
     );
   });
 
   it("does not bullet content before the first header", () => {
     const input = `Hi @[Adam](U123),\nHope your week is great!\n\n## Final cut\n[Final cut | x]`;
     expect(magicCleanup(input)).toBe(
-      `Hi @[Adam](U123),\nHope your week is great!\n\n[versionNotes]\n\n## Final cut\n- [Final cut | x]`
+      `Hi @[Adam](U123),\nHope your week is great!\n\n[versionNotes]\n\n### **Final cut**\n- [Final cut | x]`
     );
   });
 
@@ -56,7 +56,7 @@ describe("magicCleanup — structural", () => {
   it("normalizes blank lines to exactly one between sections", () => {
     const input = `## A\n[a | x]\n\n\n\n## B\n[b | y]`;
     expect(magicCleanup(input)).toBe(
-      `## A\n- [a | x]\n\n## B\n- [b | y]`
+      `### **A**\n- [a | x]\n\n### **B**\n- [b | y]`
     );
   });
 
@@ -85,7 +85,7 @@ describe("magicCleanup — section-specific transforms", () => {
       `## 🔔 Scope & Timeline Reminders\nSome old text about scope.\nMore old text about timeline.`;
     const out = magicCleanup(input);
     expect(out).toBe(
-      `## 🔔 Scope & Timeline Reminders\n- **Revision Rounds:** 1 of [revisionRounds]\n- **Feedback Windows:** [feedbackWindows]\n- **Feedback Deadline:** EOD [nextFeedbackDeadline]\n- Additional revisions beyond the included revision rounds will require a scope adjustment.`
+      `### **🔔 Scope & Timeline Reminders**\n- **Revision Rounds:** 1 of [revisionRounds]\n- **Feedback Windows:** [feedbackWindows]\n- **Feedback Deadline:** EOD [nextFeedbackDeadline]\n- Additional revisions beyond the included revision rounds will require a scope adjustment.`
     );
   });
 
@@ -131,11 +131,42 @@ describe("magicCleanup — section-specific transforms", () => {
     );
   });
 
+  it("preserves a human-chosen Review Link label when the variable is correct", () => {
+    // Audio Script Final = Pre-Pro dept. Default label is "Document"
+    // but the human wrote "Final Audio Script" — we should keep it.
+    const input = `## 🔗 Review Link\n[Final Audio Script | googleDeliverableLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "Audio Script Final",
+      department: "Pre-Pro",
+    });
+    expect(out).toContain("[Final Audio Script | googleDeliverableLink]");
+    expect(out).not.toContain("[Document | googleDeliverableLink]");
+  });
+
+  it("preserves trailing CTA text on Review Link bullets", () => {
+    const input = `## 🔗 Review Link\n- [Frame.io | frameReviewLink] Watch this first!`;
+    const out = magicCleanup(input, {
+      deliverableType: "Edit V1",
+      department: "Post",
+    });
+    expect(out).toContain(
+      "- [Frame.io | frameReviewLink] Watch this first!"
+    );
+  });
+
+  it("still injects a default when the required Review Link variable is missing", () => {
+    const input = `## 🔗 Review Link\nold prose that isn't a bullet`;
+    const out = magicCleanup(input, {
+      deliverableType: "Edit V1",
+      department: "Post",
+    });
+    expect(out).toContain("- [Frame review | frameReviewLink]");
+  });
   it("standardizes the Project Plan section to one canonical bullet", () => {
     const input = `## 🗓 Project Plan\nView real-time progress\nhttps://example.com`;
     const out = magicCleanup(input);
     expect(out).toBe(
-      `## 🗓 Project Plan\n- [View real-time progress | projectPlanLink]`
+      `### **🗓 Project Plan**\n- [View real-time progress | projectPlanLink]`
     );
   });
 
@@ -197,7 +228,7 @@ describe("magicCleanup — greeting + versionNotes", () => {
     const input = `Hello [contactFirstName]!\nWe're excited to share...\n\n## A\nfoo`;
     const out = magicCleanup(input);
     const lines = out.split("\n");
-    const headerIdx = lines.findIndex((l) => l.startsWith("## A"));
+    const headerIdx = lines.findIndex((l) => l.startsWith("### "));
     const vnIdx = lines.findIndex((l) => l.includes("[versionNotes]"));
     expect(vnIdx).toBeGreaterThanOrEqual(0);
     expect(vnIdx).toBeLessThan(headerIdx);
@@ -241,5 +272,31 @@ describe("magicCleanup — [automated] placeholder replacement", () => {
     const input = `Hello [contactFirstName]!\n\n## Notes\nWe ran [automated] checks on this build.`;
     const out = magicCleanup(input);
     expect(out).toContain("[automated]");
+  });
+});
+
+describe("magicCleanup — header normalization", () => {
+  it("normalizes all section headers to bold H3 regardless of input level", () => {
+    const input = `## ⚡ What You're Receiving\nfoo\n\n## 🔔 Scope & Timeline Reminders\nbar`;
+    const out = magicCleanup(input);
+    expect(out).toContain("### **⚡ What You're Receiving**");
+    expect(out).toContain("### **🔔 Scope & Timeline Reminders**");
+    expect(out).not.toMatch(/^## /m);
+  });
+
+  it("strips existing bold wrapping before re-wrapping (idempotent on its own output)", () => {
+    const input = `### **🔔 Reminders**\nfoo`;
+    const once = magicCleanup(input);
+    const twice = magicCleanup(once);
+    expect(twice).toBe(once);
+    expect(once).toContain("### **🔔 Reminders**");
+    expect(once).not.toContain("### **🔔 Reminders****");
+  });
+
+  it("handles plain-text inputs already bold-wrapped (e.g. `## **🔔 Foo**`)", () => {
+    const input = `## **🔔 Foo**\nbody`;
+    const out = magicCleanup(input);
+    expect(out).toContain("### **🔔 Foo**");
+    expect(out).not.toContain("### ****🔔 Foo****");
   });
 });
