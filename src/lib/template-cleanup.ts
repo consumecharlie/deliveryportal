@@ -298,18 +298,53 @@ function ensureVersionNotesPlacement(sections: Section[]): Section[] {
   return result;
 }
 
+const GREETING_LINE = /^\s*(hello|hi|hey|greetings)\b/i;
+const DEADLINE_HINT =
+  /\b(deadline|submit\b[^.]*\bby\b|feedback\b[^.]*\bby\b)/i;
+
 /** Replace deprecated greeting variables in the pre-header section only. */
 function fixGreetingVariables(sections: Section[]): Section[] {
   return sections.map((s) => {
     if (s.header !== null) return s;
     return {
       header: null,
-      bodyLines: s.bodyLines.map((line) =>
+      bodyLines: s.bodyLines.map((line) => {
         // [contact] (without trailing 's') → [contactFirstName]
-        line.replace(/\[contact\](?!s|FirstName|Name|Names)/gi, "[contactFirstName]")
-      ),
+        let out = line.replace(
+          /\[contact\](?!s|FirstName|Name|Names)/gi,
+          "[contactFirstName]"
+        );
+        // [automated] as a greeting placeholder → [contacts]. Legacy
+        // artifact from templates drafted with a stand-in name. We only
+        // touch lines that LOOK like a greeting ("Hello/Hey/Hi …") so
+        // we don't accidentally collide with deadline-context lines
+        // that happen to live in the pre-header section.
+        if (GREETING_LINE.test(out)) {
+          out = out.replace(/\[automated\]/gi, "[contacts]");
+        }
+        return out;
+      }),
     };
   });
+}
+
+/**
+ * Replace `[automated]` placeholders in deadline-context sentences with
+ * `[nextFeedbackDeadline]`. Runs across ALL sections, but only on
+ * lines that mention "deadline", "submit … by", or "feedback … by".
+ * Any other stray `[automated]` is left for the linter to surface — we
+ * don't want to silently rewrite a placeholder whose intent we can't
+ * be sure of.
+ */
+function fixDeadlineAutomatedPlaceholder(sections: Section[]): Section[] {
+  return sections.map((s) => ({
+    header: s.header,
+    bodyLines: s.bodyLines.map((line) =>
+      DEADLINE_HINT.test(line)
+        ? line.replace(/\[automated\]/gi, "[nextFeedbackDeadline]")
+        : line
+    ),
+  }));
 }
 
 function renderSections(sections: Section[]): string {
@@ -341,6 +376,10 @@ export function magicCleanup(
 ): string {
   const lines = input.split("\n");
   let sections = splitIntoSections(lines);
+  // Deadline placeholder first — it's the more specific of the two
+  // `[automated]` rewrites and runs across all sections. Then the
+  // greeting pass picks up whatever's left in the pre-header.
+  sections = fixDeadlineAutomatedPlaceholder(sections);
   sections = fixGreetingVariables(sections);
   sections = ensureVersionNotesPlacement(sections);
   sections = applySectionTransforms(sections, options, input);

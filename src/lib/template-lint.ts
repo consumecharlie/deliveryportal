@@ -54,8 +54,14 @@ const LINK_VARIABLES = new Set(
 );
 
 // Deprecated forms — known but flagged separately by cleanup compliance,
-// not as unknown variables.
-const DEPRECATED_VARIABLES = new Set(["contact", "feedbackDeadline"]);
+// not as unknown variables. `automated` is a legacy stand-in placeholder
+// that Magic Cleanup now rewrites to `[contacts]` in greetings or
+// `[nextFeedbackDeadline]` in deadline-context lines.
+const DEPRECATED_VARIABLES = new Set([
+  "contact",
+  "feedbackDeadline",
+  "automated",
+]);
 
 /**
  * Check whether the closing `**` in a `**…**` pair is preceded by

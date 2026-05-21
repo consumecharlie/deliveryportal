@@ -169,3 +169,35 @@ describe("magicCleanup — greeting + versionNotes", () => {
     expect(out.match(/\[versionNotes\]/g)!.length).toBe(1);
   });
 });
+
+describe("magicCleanup — [automated] placeholder replacement", () => {
+  it("replaces [automated] in greeting line with [contacts]", () => {
+    const input = `Hello [automated]!\n\n## ⚡ Items\nfoo`;
+    const out = magicCleanup(input);
+    expect(out).toContain("Hello [contacts]!");
+    expect(out).not.toContain("[automated]");
+  });
+
+  it("replaces [automated] in deadline sentence with [nextFeedbackDeadline]", () => {
+    const input = `Hello [contactFirstName]!\n\n## 🔔 Reminders\nTo stay on track, please submit consolidated feedback by [automated].`;
+    const out = magicCleanup(input);
+    expect(out).toContain("[nextFeedbackDeadline]");
+    expect(out).not.toContain("[automated]");
+  });
+
+  it("handles both placeholders in the same template (Edit02 - Animated case)", () => {
+    const input = `Hello [automated]!\nWe're excited to share the second version!\n\n## 🔔 Reminders\nTo stay on track, please submit consolidated feedback by [automated].`;
+    const out = magicCleanup(input);
+    expect(out).toContain("Hello [contacts]!");
+    expect(out).toContain("by [nextFeedbackDeadline]");
+    expect(out).not.toContain("[automated]");
+  });
+
+  it("does NOT touch [automated] outside greeting or deadline contexts", () => {
+    // We only replace where we're confident. An [automated] in some
+    // unrelated sentence should be left for the linter to surface.
+    const input = `Hello [contactFirstName]!\n\n## Notes\nWe ran [automated] checks on this build.`;
+    const out = magicCleanup(input);
+    expect(out).toContain("[automated]");
+  });
+});
