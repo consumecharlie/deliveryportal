@@ -38,6 +38,14 @@ const FIXTURES: Array<{ name: string; md: string }> = [
     name: "Pre-pro deliverable type sets correct review link",
     md: `Hey [contacts],\n\n## 🔗 Review Link\nold content`,
   },
+  {
+    name: "V2 deliverable produces '2 of [revisionRounds]' scope",
+    md: `Hey [contacts],\n\n## 🔔 Scope & Timeline Reminders\nstale content`,
+  },
+  {
+    name: "Final deliverable produces Approval-language scope",
+    md: `Hey [contacts],\n\n## 🔔 Scope & Timeline Reminders\nstale content`,
+  },
 ];
 
 describe("Magic Cleanup compliance contract", () => {

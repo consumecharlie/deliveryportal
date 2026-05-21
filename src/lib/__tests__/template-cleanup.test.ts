@@ -89,6 +89,48 @@ describe("magicCleanup — section-specific transforms", () => {
     );
   });
 
+  it("Scope & Timeline derives round number from V2 deliverable type", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\nold content`;
+    const out = magicCleanup(input, { deliverableType: "Edit V2 - Animated" });
+    expect(out).toContain("**Revision Rounds:** 2 of [revisionRounds]");
+  });
+
+  it("Scope & Timeline derives round number from Edit02 trailing-digit type", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\nold content`;
+    const out = magicCleanup(input, { deliverableType: "Edit02" });
+    expect(out).toContain("**Revision Rounds:** 2 of [revisionRounds]");
+  });
+
+  it("Scope & Timeline derives round number from AV Script V3", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\nold content`;
+    const out = magicCleanup(input, { deliverableType: "AV Script V3" });
+    expect(out).toContain("**Revision Rounds:** 3 of [revisionRounds]");
+  });
+
+  it("Scope & Timeline uses Final-stage bullets for 'Final' deliverable types", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\nold content`;
+    const out = magicCleanup(input, { deliverableType: "Audio Script Final" });
+    expect(out).toContain(
+      "**Revision Rounds:** At this stage, all revision rounds have been completed."
+    );
+    expect(out).toContain("**Approval Window:** [feedbackWindows]");
+    expect(out).toContain("**Approval Deadline:** EOD [nextFeedbackDeadline]");
+    expect(out).toContain(
+      "Additional revision rounds may affect scope, and delayed feedback may affect project timeline."
+    );
+    // Should NOT contain the V1 wording when it's a Final delivery
+    expect(out).not.toMatch(/1 of \[revisionRounds\]/);
+    expect(out).not.toContain("Feedback Windows:");
+  });
+
+  it("Scope & Timeline uses Final-stage bullets for 'Final Delivery' too", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\nold content`;
+    const out = magicCleanup(input, { deliverableType: "Final Delivery" });
+    expect(out).toContain(
+      "**Revision Rounds:** At this stage, all revision rounds have been completed."
+    );
+  });
+
   it("standardizes the Project Plan section to one canonical bullet", () => {
     const input = `## 🗓 Project Plan\nView real-time progress\nhttps://example.com`;
     const out = magicCleanup(input);

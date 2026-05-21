@@ -165,12 +165,60 @@ function normalizeHeader(s: string): string {
     .trim();
 }
 
-const SCOPE_BULLETS = [
-  "- **Revision Rounds:** 1 of [revisionRounds]",
-  "- **Feedback Windows:** [feedbackWindows]",
-  "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
-  "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
-];
+/**
+ * Derive the current round number from a deliverable type, or flag it
+ * as the "final" stage where revisions are complete.
+ *
+ *   "Edit V1 - Animated"     → { round: 1 }
+ *   "Edit V2 - Animated"     → { round: 2 }
+ *   "Edit02"                  → { round: 2 }
+ *   "AV Script V1 + Loom"    → { round: 1 }
+ *   "Audio Script Final"     → "final"
+ *   "Final Delivery"          → "final"
+ *   "Raw Footage"             → { round: 1 }   (default — no version hint)
+ */
+function inferRoundContext(
+  deliverableType: string | undefined
+): { round: number } | "final" {
+  const dt = (deliverableType ?? "").trim();
+  if (!dt) return { round: 1 };
+
+  // "Final" anywhere in the deliverable type — Final Delivery, Audio
+  // Script Final, Caption & Title Design Presets Final, etc.
+  if (/\bfinal\b/i.test(dt)) return "final";
+
+  // V<digits> (case-insensitive) — covers "V1", "V2", "v3"
+  const vMatch = dt.match(/\bV(\d+)\b/i);
+  if (vMatch) return { round: parseInt(vMatch[1], 10) };
+
+  // Trailing two-digit suffix used in some types: "Edit01", "Edit02"
+  const trailingMatch = dt.match(/(?:Edit|AV\s*Script|Audio\s*Script)\s*0?(\d+)/i);
+  if (trailingMatch) return { round: parseInt(trailingMatch[1], 10) };
+
+  return { round: 1 };
+}
+
+function buildScopeBullets(
+  options: MagicCleanupOptions
+): string[] {
+  const ctx = inferRoundContext(options.deliverableType);
+  if (ctx === "final") {
+    // Final-stage templates: revisions are done, language pivots to
+    // "approval" (still backed by the same underlying variables).
+    return [
+      "- **Revision Rounds:** At this stage, all revision rounds have been completed.",
+      "- **Approval Window:** [feedbackWindows]",
+      "- **Approval Deadline:** EOD [nextFeedbackDeadline]",
+      "- Additional revision rounds may affect scope, and delayed feedback may affect project timeline.",
+    ];
+  }
+  return [
+    `- **Revision Rounds:** ${ctx.round} of [revisionRounds]`,
+    "- **Feedback Windows:** [feedbackWindows]",
+    "- **Feedback Deadline:** EOD [nextFeedbackDeadline]",
+    "- Additional revisions beyond the included revision rounds will require a scope adjustment.",
+  ];
+}
 
 const PROJECT_PLAN_BULLET = "- [View real-time progress | projectPlanLink]";
 
@@ -224,9 +272,13 @@ function applySectionTransforms(
     // Drop "Next Step" sections entirely (header + body)
     if (/next ?step/.test(name)) continue;
 
-    // Scope & Timeline → canonical bullets
+    // Scope & Timeline → canonical bullets (round-number-aware,
+    // with a Final variant for the last delivery in a series).
     if (/scope/.test(name) && /timeline/.test(name)) {
-      out.push({ header: section.header, bodyLines: SCOPE_BULLETS.slice() });
+      out.push({
+        header: section.header,
+        bodyLines: buildScopeBullets(options),
+      });
       continue;
     }
 
