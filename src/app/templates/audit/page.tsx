@@ -478,7 +478,7 @@ function DiffPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto text-[12px] leading-snug font-mono">
+      <div className="flex-1 overflow-auto px-3 py-2 text-[12px] leading-snug font-mono">
         {lines.map((line, i) => {
           const lineIssues = issuesByLine.get(i + 1) ?? [];
           const hasError = lineIssues.some((x) => x.severity === "error");
@@ -501,10 +501,10 @@ function DiffPanel({
               title={tooltip || undefined}
               className={
                 hasError
-                  ? "border-l-2 border-red-500 bg-red-500/10 pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
+                  ? "border-l-2 border-red-500 bg-red-500/10 pl-3 pr-3 py-0.5 whitespace-pre-wrap break-words"
                   : hasWarning
-                    ? "border-l-2 border-amber-500 bg-amber-500/10 pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
-                    : "border-l-2 border-transparent pl-2 pr-3 py-0.5 whitespace-pre-wrap break-words"
+                    ? "border-l-2 border-amber-500 bg-amber-500/10 pl-3 pr-3 py-0.5 whitespace-pre-wrap break-words"
+                    : "border-l-2 border-transparent pl-3 pr-3 py-0.5 whitespace-pre-wrap break-words"
               }
             >
               {line.length > 0 ? line : " "}
