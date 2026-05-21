@@ -76,21 +76,30 @@ interface Section {
 }
 
 function splitIntoSections(lines: string[]): Section[] {
-  let primaryLevel = Infinity;
-  for (const line of lines) {
-    const lvl = headerLevel(line);
-    if (lvl !== null && lvl < primaryLevel) primaryLevel = lvl;
-  }
+  // Every hash-based header (`#`, `##`, or `###`) starts a section,
+  // regardless of level. Mixed-level inputs are common in production
+  // — e.g., a template might have `## Scope & Timeline` and
+  // `### Review Link` as siblings. Previously we'd pick the
+  // shallowest level as the only "real" section header and drop
+  // everything deeper, which silently deleted the Review Link and
+  // Project Plan sections in mixed-level templates. (See AV Script
+  // V2 audit incident on 2026-05-21.)
+  //
+  // Bold-only-line "headers" (the `**Foo**` style, headerLevel == 99)
+  // are still dropped as sub-headers, since those weren't real
+  // sections in the first place. Subsection leftovers like
+  // `### Scope` inside a `## Scope & Timeline Reminders` are filtered
+  // out separately via `dropNestedSubsections` below.
   const sections: Section[] = [];
   let current: Section = { header: null, bodyLines: [] };
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, "");
     const lvl = headerLevel(line);
-    if (lvl === primaryLevel) {
+    if (lvl !== null && lvl <= 3) {
       sections.push(current);
       current = { header: line.trim(), bodyLines: [] };
     } else if (lvl !== null) {
-      // Deeper header — drop it; body stays in parent.
+      // Bold-only-line sub-header — drop it; body stays in parent.
       continue;
     } else {
       current.bodyLines.push(line);
@@ -98,6 +107,40 @@ function splitIntoSections(lines: string[]): Section[] {
   }
   sections.push(current);
   return sections;
+}
+
+/**
+ * Filter out sections that look like leftover subsections of the
+ * previous (parent) section. Heuristic: if every word of a section's
+ * name appears as a word in the previous section's name, the section
+ * is treated as a subsection and dropped. Catches the common pattern
+ * of `### Scope` / `### Timeline` nested inside
+ * `## Scope & Timeline Reminders`.
+ */
+function dropNestedSubsections(sections: Section[]): Section[] {
+  const result: Section[] = [];
+  let lastSectionName: string | null = null;
+  for (const section of sections) {
+    if (section.header === null) {
+      result.push(section);
+      continue;
+    }
+    const name = normalizeHeader(section.header);
+    if (lastSectionName) {
+      const words = name.split(/\s+/).filter((w) => /[a-z0-9]/i.test(w));
+      const allWordsInPrior =
+        words.length > 0 &&
+        words.every((w) =>
+          new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(
+            lastSectionName!
+          )
+        );
+      if (allWordsInPrior) continue; // drop this subsection
+    }
+    result.push(section);
+    lastSectionName = name;
+  }
+  return result;
 }
 
 function splitIntoBlocks(lines: string[]): string[][] {
@@ -541,6 +584,11 @@ export function magicCleanup(
 ): string {
   const lines = input.split("\n");
   let sections = splitIntoSections(lines);
+  // Filter out subsection leftovers (e.g. `### Scope` nested inside
+  // `## Scope & Timeline Reminders`) BEFORE running the canonical
+  // transforms, otherwise those subsections survive cleanup with stale
+  // content while the parent gets canonicalized.
+  sections = dropNestedSubsections(sections);
   // Deadline placeholder first — it's the more specific of the two
   // `[automated]` rewrites and runs across all sections. Then the
   // greeting pass picks up whatever's left in the pre-header.

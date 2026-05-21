@@ -291,6 +291,46 @@ describe("magicCleanup — [automated] placeholder replacement", () => {
   });
 });
 
+describe("magicCleanup — mixed-level headers", () => {
+  it("preserves sibling sections at different header levels (AV Script V2 case)", () => {
+    // Real bug from 2026-05-21: AV Script V2 had `## Scope & Timeline`
+    // and `### Review Link` / `### Project Plan` as siblings, and the
+    // old splitter treated the deeper ones as subsections and dropped
+    // them. Both Review Link and Project Plan must survive.
+    const input = `Hey [contacts]!\n\n## **🔔 Scope & Timeline Reminders**\n- old\n\n### **🔗 Review Link**\n- [AV Script V2 | frameReviewLink]\n\n### **📅 Project Plan**\n- [View real-time progress | projectPlanLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "AV Script V2",
+      department: "Pre-Pro",
+    });
+    expect(out).toContain("Review Link");
+    expect(out).toContain("Project Plan");
+    expect(out).toContain("[View real-time progress | projectPlanLink]");
+  });
+
+  it("inherits the Review Link label across a level swap (### Review Link with [AV Script V2 | frameReviewLink])", () => {
+    const input = `## **🔔 Scope & Timeline Reminders**\n- old\n\n### **🔗 Review Link**\n- [AV Script V2 | frameReviewLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "AV Script V2",
+      department: "Pre-Pro",
+    });
+    expect(out).toContain("- [AV Script V2 | googleDeliverableLink]");
+  });
+
+  it("drops subsection leftovers nested inside a canonical section (### Scope inside ## Scope & Timeline)", () => {
+    const input = `## 🔔 Scope & Timeline Reminders\n\n### Scope\nAt this stage…\n\n### Timeline\nProject timeline based on…\n\n## 🔗 Review Link\n- [Final Audio Script | googleDeliverableLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "Audio Script Final",
+      department: "Pre-Pro",
+    });
+    // Subsections gone
+    expect(out).not.toContain("### **Scope**");
+    expect(out).not.toContain("### **Timeline**");
+    // Real section preserved
+    expect(out).toContain("Review Link");
+    expect(out).toContain("Final Audio Script");
+  });
+});
+
 describe("magicCleanup — header normalization", () => {
   it("normalizes all section headers to bold H3 regardless of input level", () => {
     const input = `## ⚡ What You're Receiving\nfoo\n\n## 🔔 Scope & Timeline Reminders\nbar`;
