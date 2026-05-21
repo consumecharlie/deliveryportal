@@ -162,6 +162,22 @@ describe("magicCleanup — section-specific transforms", () => {
     });
     expect(out).toContain("- [Frame review | frameReviewLink]");
   });
+
+  it("inherits the orphan bullet's label when swapping to a required variable", () => {
+    // AV Script Final is a Pre-Pro/Final template that needs
+    // googleDeliverableLink. The existing bullet uses the wrong
+    // variable (frameReviewLink), but its label is descriptive of
+    // the deliverable — we keep the label, swap the variable.
+    const input = `## 🔗 Review Link\n[AV Script Final | frameReviewLink]`;
+    const out = magicCleanup(input, {
+      deliverableType: "AV Script Final",
+      department: "Pre-Pro",
+    });
+    expect(out).toContain("- [AV Script Final | googleDeliverableLink]");
+    expect(out).not.toContain("frameReviewLink");
+    expect(out).not.toContain("[Document | googleDeliverableLink]");
+  });
+
   it("standardizes the Project Plan section to one canonical bullet", () => {
     const input = `## 🗓 Project Plan\nView real-time progress\nhttps://example.com`;
     const out = magicCleanup(input);

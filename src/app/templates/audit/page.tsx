@@ -389,8 +389,18 @@ function PreviewFixDialog({
         )}
         {data && (
           <div className="flex-1 min-h-0 overflow-hidden grid grid-cols-2 gap-3">
-            <DiffPanel title="Before" issues={data.beforeIssues} text={data.before} />
-            <DiffPanel title="After (Magic Cleanup)" issues={data.afterIssues} text={data.after} />
+            <DiffPanel
+              title="Before"
+              issues={data.beforeIssues}
+              text={data.before}
+              otherText={data.after}
+            />
+            <DiffPanel
+              title="After (Magic Cleanup)"
+              issues={data.afterIssues}
+              text={data.after}
+              otherText={data.before}
+            />
           </div>
         )}
 
@@ -418,29 +428,30 @@ function DiffPanel({
   title,
   text,
   issues,
+  otherText,
 }: {
   title: string;
   text: string;
   issues: LintIssue[];
+  otherText: string;
 }) {
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
 
-  // Group line-anchored issues by line number for fast lookup. Issues
-  // without a lineNumber (e.g. the `not-cleanup-compliant` whole-doc
-  // rule) are surfaced as a callout above the preview, since there's
-  // no specific row to highlight.
+  // Group line-anchored issues by line number for fast lookup.
   const issuesByLine = new Map<number, LintIssue[]>();
-  const wholeDocIssues: LintIssue[] = [];
   for (const issue of issues) {
-    if (issue.lineNumber === undefined) {
-      wholeDocIssues.push(issue);
-      continue;
-    }
+    if (issue.lineNumber === undefined) continue;
     const existing = issuesByLine.get(issue.lineNumber) ?? [];
     existing.push(issue);
     issuesByLine.set(issue.lineNumber, existing);
   }
+
+  // Build a set of trimmed lines from the OTHER pane so we can flag
+  // lines that appear here but not there — that's the visual diff.
+  // Blank lines never count as "changed."
+  const otherLineSet = new Set<string>();
+  for (const l of otherText.split("\n")) otherLineSet.add(l.trim());
 
   const lines = text.split("\n");
 
@@ -467,26 +478,22 @@ function DiffPanel({
         </div>
       </div>
 
-      {wholeDocIssues.length > 0 && (
-        <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 shrink-0">
-          {wholeDocIssues.map((issue, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-              <span>{issue.message}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex-1 overflow-auto text-[12px] leading-snug font-mono">
         {lines.map((line, i) => {
           const lineIssues = issuesByLine.get(i + 1) ?? [];
           const hasError = lineIssues.some((x) => x.severity === "error");
+          const trimmedLine = line.trim();
+          const isDiff =
+            trimmedLine.length > 0 && !otherLineSet.has(trimmedLine);
           const hasWarning =
-            !hasError && lineIssues.some((x) => x.severity === "warning");
-          const tooltip = lineIssues
+            !hasError &&
+            (lineIssues.some((x) => x.severity === "warning") || isDiff);
+          const lintTooltip = lineIssues
             .map((x) => `${x.severity.toUpperCase()}: ${x.message}`)
             .join("\n");
+          const tooltip =
+            lintTooltip ||
+            (isDiff ? "This line differs between Before and After." : "");
 
           return (
             <div

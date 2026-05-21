@@ -290,7 +290,13 @@ function reconcileReviewLinkBullets(
 ): string[] {
   const required = getRequiredReviewLinks(fullText, options);
 
-  const existingByVar = new Map<string, string>();
+  // Parse existing bullets, preserving order.
+  interface ExistingBullet {
+    label: string;
+    varName: string;
+    full: string;
+  }
+  const existing: ExistingBullet[] = [];
   for (const rawLine of existingLines) {
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
@@ -301,16 +307,41 @@ function reconcileReviewLinkBullets(
     const label = m[1].trim();
     const variable = m[2];
     const trailing = m[3].trim();
-    const bullet = trailing
+    const full = trailing
       ? `- [${label} | ${variable}] ${trailing}`
       : `- [${label} | ${variable}]`;
-    existingByVar.set(variable, bullet);
+    existing.push({ label, varName: variable, full });
   }
 
-  return required.map(
-    ({ varName, defaultLabel }) =>
-      existingByVar.get(varName) ?? `- [${defaultLabel} | ${varName}]`
+  const existingByVar = new Map(existing.map((b) => [b.varName, b]));
+  const requiredVarSet = new Set(required.map((r) => r.varName));
+
+  // Orphan bullets: their variable isn't in the required set, so the
+  // bullet itself is being dropped. Their LABELS might still be
+  // reusable for required vars we're injecting fresh (e.g. an existing
+  // `[AV Script Final | frameReviewLink]` for an AV-Script-Final
+  // template should donate "AV Script Final" to the new
+  // googleDeliverableLink bullet instead of falling back to "Document").
+  const orphanLabels = existing
+    .filter((b) => !requiredVarSet.has(b.varName))
+    .map((b) => b.label);
+
+  const unmatchedRequired = required.filter(
+    (r) => !existingByVar.has(r.varName)
   );
+
+  return required.map((req) => {
+    const found = existingByVar.get(req.varName);
+    if (found) return found.full;
+    // Required but missing — donate an orphan label if there's a
+    // positional one available. Otherwise fall back to the default.
+    const unmatchedIdx = unmatchedRequired.findIndex(
+      (r) => r.varName === req.varName
+    );
+    const inheritedLabel = orphanLabels[unmatchedIdx] ?? null;
+    const label = inheritedLabel ?? req.defaultLabel;
+    return `- [${label} | ${req.varName}]`;
+  });
 }
 
 /**
