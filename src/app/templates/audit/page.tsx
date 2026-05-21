@@ -368,7 +368,7 @@ function PreviewFixDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[min(1700px,95vw)] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[min(1700px,97vw)] w-[97vw] max-h-[92vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{data?.name ?? "Preview cleanup"}</DialogTitle>
           <DialogDescription>
