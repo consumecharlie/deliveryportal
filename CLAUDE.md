@@ -59,6 +59,12 @@ Two patterns in delivery snippet templates:
 - `[variableName]` — simple replacement
 - `[Link Text | variableName]` — hyperlink. Standalone bullet links get project name prefix; inline links don't
 
+### Editing a delivery (edit-the-template model)
+
+"Edit Message" edits the per-delivery **template** (with `[tokens]`), not a frozen snapshot of the merged output. `mergedContent` is recomputed over `displayTemplate = editedSnippet ?? defaultTemplate` on every render, so review links / scope keep flowing into the message even after you've edited it. `editedSnippet`/`editedSubject` are per-delivery only (persisted in drafts, never written back to the shared template). A delivery is email **XOR** Slack (`showEmail`/`showSlack` are mutually exclusive), so one edited body feeds the active channel. The server uses the client-computed `mergedContent` (`formState.editedX ?? mergedContent`), so edits reach send/schedule without extra server merge.
+
+**Merged (add-on) deliveries:** `buildCombinedTemplate()` assembles primary + transition + add-on into one editable template, namespacing the add-on's per-project tokens with an `addon:` prefix (e.g. `[Final Cut | addon:googleDeliverableLink]`) so the two projects' same-named variables don't collide. Contact tokens are shared and **not** namespaced. `mergeCombinedTemplate()` resolves primary tokens from primary fields and `addon:` tokens from add-on fields. Same-project merges name the deliverable type in the transition (not the project name) and dedupe the shared project-plan link. The older `mergeAddonDelivery()` (merge-then-stitch) is `@deprecated` — retained for reference/tests only.
+
 ## Common Tasks
 
 ### Adding a new ClickUp custom field
