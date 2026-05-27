@@ -486,6 +486,11 @@ export interface AddonMergeInput {
   primaryContent: string; // Already merged email or slack content
   // Add-on project
   addonProjectName: string;
+  addonDeliverableType?: string; // e.g. "Voiceover Script" — used in the transition line
+  /** True when the add-on is the same project as the primary (same listId).
+   *  When set, the transition line names the deliverable type instead of
+   *  repeating the project name, and the shared project plan is deduped. */
+  sameProject?: boolean;
   addonTemplate: string; // Raw template snippet
   addonContacts: ProjectContact[];
   addonVariables: {
@@ -625,6 +630,8 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     primaryProjectName,
     primaryContent,
     addonProjectName,
+    addonDeliverableType,
+    sameProject,
     addonTemplate,
     addonContacts,
     addonVariables,
@@ -692,12 +699,21 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     }
   }
 
-  // Transition intro to addon project
+  // Transition intro to addon delivery.
+  // Same project → name the deliverable type (the project name was already
+  // said in the greeting, so don't repeat it). Different project → name the
+  // other project as before.
   parts.push("");
   const bold = isSlack ? "*" : "**";
-  parts.push(
-    `Second, we also have ${bold}${addonProjectName}${bold} deliverables ready for your review!`
-  );
+  if (sameProject && addonDeliverableType) {
+    parts.push(
+      `Second, we also have the ${bold}${addonDeliverableType}${bold} ready for your review!`
+    );
+  } else {
+    parts.push(
+      `Second, we also have ${bold}${addonProjectName}${bold} deliverables ready for your review!`
+    );
+  }
 
   // All addon sections (everything except greeting, closing, and project plan)
   for (const section of addon.sections) {
@@ -714,11 +730,26 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     parts.push("");
     parts.push(plan!.header);
     let planContent = plan!.content || "";
-    // If both projects have plan content, merge the addon's link bullets
+    // If both projects have plan content, merge the addon's link bullets —
+    // but dedupe by URL so an identical project-plan link (common when the
+    // add-on is the same project) doesn't appear twice.
     if (primaryPlan && addonPlan?.content) {
+      const urlOf = (line: string) => line.match(/\(([^)]+)\)\s*$/)?.[1]?.trim() ?? null;
+      const existingUrls = new Set(
+        planContent
+          .split("\n")
+          .map(urlOf)
+          .filter((u): u is string => u !== null)
+      );
       const addonPlanBullets = addonPlan.content
         .split("\n")
-        .filter((line) => /^\s*[-•*]\s*\[/.test(line));
+        .filter((line) => /^\s*[-•*]\s*\[/.test(line))
+        .filter((line) => {
+          const url = urlOf(line);
+          if (url && existingUrls.has(url)) return false;
+          if (url) existingUrls.add(url);
+          return true;
+        });
       if (addonPlanBullets.length > 0) {
         planContent += "\n" + addonPlanBullets.join("\n");
       }

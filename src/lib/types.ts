@@ -154,6 +154,9 @@ export interface DeliveryFormState {
   addonDeliverableType?: string;
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
+  addonLinkLabels?: Record<string, string>;
+  addonRevisionRounds?: string;
+  addonFeedbackWindows?: string;
   addonProjectName?: string;
 }
 

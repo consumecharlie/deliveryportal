@@ -116,7 +116,7 @@ export function AddonProjectModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
@@ -138,7 +138,7 @@ export function AddonProjectModal({
             folder and share the same primary contact.
           </p>
         ) : (
-          <div className="space-y-4 py-2">
+          <div className="-mx-1 flex-1 space-y-4 overflow-y-auto px-1 py-2">
             <div className="space-y-2">
               <Label>Project</Label>
               <SearchableSelect

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -117,6 +117,10 @@ export function DeliveryForm({
   const [addonLinkLabels, setAddonLinkLabels] = useState<Record<string, string>>({});
   const [addonRevisionRounds, setAddonRevisionRounds] = useState("");
   const [addonFeedbackWindows, setAddonFeedbackWindows] = useState("");
+  // When a saved draft restores add-on fields, this guards the auto-prefill
+  // effect below from overwriting the restored values with ClickUp defaults
+  // the first time addonTaskDetail loads.
+  const addonDraftRestored = useRef(false);
 
   // ── Editable recipient fields ──
   const [editedToEmail, setEditedToEmail] = useState<string | null>(null);
@@ -330,6 +334,12 @@ export function DeliveryForm({
   // Pre-fill addon fields when detail loads
   useEffect(() => {
     if (addonTaskDetail) {
+      // A resumed draft already populated these fields — don't clobber them
+      // with ClickUp defaults on the first detail load.
+      if (addonDraftRestored.current) {
+        addonDraftRestored.current = false;
+        return;
+      }
       setAddonRevisionRounds(addonTaskDetail.revisionRounds || "");
       setAddonFeedbackWindows(addonTaskDetail.feedbackWindows || "");
       setAddonReviewLinks({
@@ -388,10 +398,14 @@ export function DeliveryForm({
         repeatClient,
       };
 
+      const sameProject = task.listId === addonProject.listId;
+
       const addonEmailContent = mergeAddonDelivery({
         primaryProjectName: task.projectName,
         primaryContent: baseMerged.emailContent,
         addonProjectName: addonProject.projectName,
+        addonDeliverableType: addonProject.deliverableType,
+        sameProject,
         addonTemplate: addonTaskDetail.template.snippet,
         addonContacts: addonTaskDetail.contacts,
         addonVariables: addonVars,
@@ -402,6 +416,8 @@ export function DeliveryForm({
         primaryProjectName: task.projectName,
         primaryContent: baseMerged.slackContent,
         addonProjectName: addonProject.projectName,
+        addonDeliverableType: addonProject.deliverableType,
+        sameProject,
         addonTemplate: addonTaskDetail.template.snippet,
         addonContacts: addonTaskDetail.contacts,
         addonVariables: addonVars,
@@ -420,6 +436,7 @@ export function DeliveryForm({
     activeTemplate,
     contacts,
     task.projectName,
+    task.listId,
     versionNotes,
     revisionRounds,
     feedbackWindows,
@@ -659,6 +676,9 @@ export function DeliveryForm({
       addonDeliverableType: addonProject.deliverableType,
       addonDepartment: addonTaskDetail?.task.department,
       addonReviewLinks,
+      addonLinkLabels,
+      addonRevisionRounds,
+      addonFeedbackWindows,
       addonProjectName: addonProject.projectName,
     } : {}),
   };
@@ -716,6 +736,23 @@ export function DeliveryForm({
         if (saved.editedToEmail) setEditedToEmail(saved.editedToEmail);
         if (saved.editedCcEmails) setEditedCcEmails(saved.editedCcEmails);
         if (saved.editedSenderEmail) setEditedSenderEmail(saved.editedSenderEmail);
+
+        // Restore the add-on (merged delivery) so resuming a draft keeps it a
+        // merged delivery instead of collapsing back to a single one. Setting
+        // addonProject re-triggers the addon-detail fetch; the guard ref keeps
+        // the prefill effect from overwriting the values we restore here.
+        if (saved.addonListId && saved.addonProjectName && saved.addonDeliverableType) {
+          addonDraftRestored.current = true;
+          setAddonProject({
+            listId: saved.addonListId,
+            projectName: saved.addonProjectName,
+            deliverableType: saved.addonDeliverableType,
+          });
+          if (saved.addonReviewLinks) setAddonReviewLinks(saved.addonReviewLinks);
+          if (saved.addonLinkLabels) setAddonLinkLabels(saved.addonLinkLabels);
+          if (saved.addonRevisionRounds) setAddonRevisionRounds(saved.addonRevisionRounds);
+          if (saved.addonFeedbackWindows) setAddonFeedbackWindows(saved.addonFeedbackWindows);
+        }
       } catch {
         // Silent — draft restoration is best-effort
       } finally {
