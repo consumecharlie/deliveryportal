@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   Table,
@@ -30,6 +29,23 @@ interface Draft {
   updatedAt: string;
 }
 
+interface WorkspaceMember {
+  username: string;
+  email: string;
+  profilePicture?: string;
+  initials: string;
+}
+
+/** Turn a savedBy value (usually an email) into a display name. */
+function savedByName(savedBy: string): string {
+  if (!savedBy?.includes("@")) return savedBy;
+  return savedBy
+    .split("@")[0]
+    .split(".")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -51,7 +67,6 @@ function formatRelativeTime(dateStr: string): string {
 
 export function DraftsTable() {
   const router = useRouter();
-  const { data: session } = useSession();
 
   const { data, isLoading, error } = useQuery<{ drafts: Draft[] }>({
     queryKey: ["drafts"],
@@ -61,6 +76,21 @@ export function DraftsTable() {
       return res.json();
     },
   });
+
+  // Workspace members give us each saved-by user's real avatar, keyed by email.
+  const { data: membersData } = useQuery<{ members: WorkspaceMember[] }>({
+    queryKey: ["workspace-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/workspace-members");
+      if (!res.ok) throw new Error("Failed to fetch members");
+      return res.json();
+    },
+    staleTime: 10 * 60_000,
+  });
+
+  const membersByEmail = new Map(
+    (membersData?.members ?? []).map((m) => [m.email.toLowerCase(), m])
+  );
 
   if (isLoading) {
     return (
@@ -117,19 +147,37 @@ export function DraftsTable() {
                 {(draft.formData as Record<string, string>)?.deliverableType || "—"}
               </TableCell>
               <TableCell className="text-sm">
-                <span className="flex items-center gap-2">
-                  {session?.user?.image && (
-                    <img
-                      src={session.user.image}
-                      alt=""
-                      className="w-6 h-6 rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  )}
-                  {draft.savedBy?.includes("@")
-                    ? draft.savedBy.split("@")[0].split(".").map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ")
-                    : draft.savedBy}
-                </span>
+                {(() => {
+                  const member = draft.savedBy
+                    ? membersByEmail.get(draft.savedBy.toLowerCase())
+                    : undefined;
+                  const name = savedByName(draft.savedBy);
+                  const initials =
+                    member?.initials ||
+                    name
+                      .split(/\s+/)
+                      .map((p) => p.charAt(0))
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase();
+                  return (
+                    <span className="flex items-center gap-2">
+                      {member?.profilePicture ? (
+                        <img
+                          src={member.profilePicture}
+                          alt=""
+                          className="h-6 w-6 rounded-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+                          {initials}
+                        </span>
+                      )}
+                      {name}
+                    </span>
+                  );
+                })()}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {formatRelativeTime(draft.updatedAt)}
