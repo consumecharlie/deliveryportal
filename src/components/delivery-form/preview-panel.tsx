@@ -35,16 +35,24 @@ import type { SlackLintError } from "@/lib/slack-lint";
 import type { ProjectContact } from "@/lib/types";
 
 interface PreviewPanelProps {
+  /** Merged email body (markdown) — shown in read-only preview mode. */
   emailContent: string;
+  /** Merged Slack body (markdown w/ mention tokens) — shown in preview mode. */
   slackContent: string;
+  /** Merged subject — shown in preview mode. */
   subjectLine: string;
+  /** Editable template body (with [tokens]) — shown in edit mode. */
+  templateContent: string;
+  /** Editable template subject — shown in edit mode. */
+  templateSubject: string;
   primaryEmail: string;
   senderEmail: string;
   isEditMode: boolean;
   onToggleEditMode: () => void;
-  onEmailContentChange: (content: string) => void;
-  onSlackContentChange: (content: string) => void;
-  onSubjectLineChange: (subject: string) => void;
+  /** Receives the edited template body. */
+  onTemplateChange: (content: string) => void;
+  /** Receives the edited template subject. */
+  onSubjectChange: (subject: string) => void;
   onResetToTemplate: () => void;
   contacts: ProjectContact[];
   mentionItems?: MentionItem[];
@@ -84,13 +92,14 @@ export function PreviewPanel({
   emailContent,
   slackContent,
   subjectLine,
+  templateContent,
+  templateSubject,
   primaryEmail,
   senderEmail,
   isEditMode,
   onToggleEditMode,
-  onEmailContentChange,
-  onSlackContentChange,
-  onSubjectLineChange,
+  onTemplateChange,
+  onSubjectChange,
   onResetToTemplate,
   contacts,
   mentionItems,
@@ -122,29 +131,23 @@ export function PreviewPanel({
     prevEditMode.current = isEditMode;
   }, [isEditMode]);
 
-  // Wrap onChange handlers to detect edits
-  const handleEmailChange = useCallback(
+  // Wrap onChange handlers to detect edits. Editing happens on the TEMPLATE
+  // (with [tokens]); both the email and Slack tabs edit the same template since
+  // a delivery is one channel or the other.
+  const handleTemplateChange = useCallback(
     (content: string) => {
       setHasEdited(true);
-      onEmailContentChange(content);
+      onTemplateChange(content);
     },
-    [onEmailContentChange]
-  );
-
-  const handleSlackChange = useCallback(
-    (content: string) => {
-      setHasEdited(true);
-      onSlackContentChange(content);
-    },
-    [onSlackContentChange]
+    [onTemplateChange]
   );
 
   const handleSubjectChange = useCallback(
     (value: string) => {
       setHasEdited(true);
-      onSubjectLineChange(value);
+      onSubjectChange(value);
     },
-    [onSubjectLineChange]
+    [onSubjectChange]
   );
 
   // If the current tab is hidden by mode change, switch to the other
@@ -275,7 +278,7 @@ export function PreviewPanel({
                     Subject
                   </Label>
                   <Input
-                    value={subjectLine}
+                    value={templateSubject}
                     onChange={(e) => handleSubjectChange(e.target.value)}
                     className="h-8 text-sm"
                   />
@@ -298,13 +301,14 @@ export function PreviewPanel({
               {isEditMode ? (
                 <RichTextEditor
                   key="email-edit"
-                  content={emailContent}
-                  onChange={handleEmailChange}
-                  placeholder="Edit email content... Use @ to mention someone"
+                  content={templateContent}
+                  onChange={handleTemplateChange}
+                  placeholder="Edit the message... [variables] fill in from the form fields. Use @ to mention someone"
                   outputFormat="markdown"
                   showToolbar={true}
                   minHeight="300px"
                   mentionItems={mentionItems}
+                  enableTemplateVariables
                 />
               ) : (
                 <RichTextEditor
@@ -327,13 +331,14 @@ export function PreviewPanel({
               {isEditMode ? (
                 <RichTextEditor
                   key="slack-edit"
-                  content={prepareSlackMarkdownForPreview(slackContent, contacts)}
-                  onChange={handleSlackChange}
-                  placeholder="Edit Slack message... Use @ to mention someone"
+                  content={templateContent}
+                  onChange={handleTemplateChange}
+                  placeholder="Edit the message... [variables] fill in from the form fields. Use @ to mention someone"
                   outputFormat="markdown"
                   showToolbar={true}
                   minHeight="300px"
                   mentionItems={mentionItems}
+                  enableTemplateVariables
                 />
               ) : (
                 <RichTextEditor

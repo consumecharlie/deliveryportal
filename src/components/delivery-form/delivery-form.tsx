@@ -33,7 +33,8 @@ import { SendBar } from "./send-bar";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import {
   mergeTemplate,
-  mergeAddonDelivery,
+  buildCombinedTemplate,
+  mergeCombinedTemplate,
   getRequiredLinkFields,
   getLinkLabelsFromTemplate,
 } from "@/lib/template-merge";
@@ -97,15 +98,12 @@ export function DeliveryForm({
   const [slackChannelId, setSlackChannelId] = useState(
     taskDetail.slackChannelId ?? ""
   );
-  const [editedEmailContent, setEditedEmailContent] = useState<string | null>(
-    null
-  );
-  const [editedSubjectLine, setEditedSubjectLine] = useState<string | null>(
-    null
-  );
-  const [editedSlackContent, setEditedSlackContent] = useState<string | null>(
-    null
-  );
+  // Per-delivery edited TEMPLATE body (with [tokens]) and subject. When set,
+  // these override the active template for this delivery only — the merge runs
+  // over them so links/scope keep flowing in after editing. They are never
+  // written back to the shared template.
+  const [editedSnippet, setEditedSnippet] = useState<string | null>(null);
+  const [editedSubject, setEditedSubject] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
   const [slackChannelName, setSlackChannelName] = useState<string>("");
@@ -177,9 +175,8 @@ export function DeliveryForm({
     setRushedProject(false);
     setRepeatClient(false);
     setSlackChannelId(taskDetail.slackChannelId ?? "");
-    setEditedEmailContent(null);
-    setEditedSubjectLine(null);
-    setEditedSlackContent(null);
+    setEditedSnippet(null);
+    setEditedSubject(null);
     setIsEditMode(false);
     setEditedToEmail(null);
     setEditedCcEmails(null);
@@ -359,10 +356,33 @@ export function DeliveryForm({
 
   // ── Build merged preview ──
 
+  const sameProject = !!addonProject && task.listId === addonProject.listId;
+
+  // The default template body for this delivery: the active template for a
+  // single delivery, or the assembled combined template (with namespaced
+  // add-on tokens) for a merged delivery. The user edits this; the merge runs
+  // over the edited version so links/scope keep flowing in.
+  const defaultTemplate = useMemo(() => {
+    if (!activeTemplate?.snippet) return "";
+    if (addonProject && addonTaskDetail?.template?.snippet) {
+      return buildCombinedTemplate({
+        primaryTemplate: activeTemplate.snippet,
+        addonTemplate: addonTaskDetail.template.snippet,
+        addonProjectName: addonProject.projectName,
+        addonDeliverableType: addonProject.deliverableType,
+        sameProject,
+      });
+    }
+    return activeTemplate.snippet;
+  }, [activeTemplate?.snippet, addonProject, addonTaskDetail?.template?.snippet, sameProject]);
+
+  const displayTemplate = editedSnippet ?? defaultTemplate;
+  const displaySubject = editedSubject ?? activeTemplate?.subjectLine ?? "";
+
   const mergedContent: MergedContent | null = useMemo(() => {
     if (!activeTemplate?.snippet) return null;
 
-    const baseMerged = mergeTemplate(activeTemplate.snippet, activeTemplate.subjectLine, {
+    const primaryVariables = {
       contacts,
       projectName: task.projectName,
       versionNotes,
@@ -379,64 +399,41 @@ export function DeliveryForm({
       rushedProject,
       repeatClient,
       linkLabels: Object.keys(linkLabels).length > 0 ? linkLabels : undefined,
-    });
+    };
 
-    // If addon project is active and has a template, create combined content
+    // Merged delivery: merge the combined template, resolving primary tokens
+    // and namespaced add-on tokens from their respective field sets.
     if (addonProject && addonTaskDetail?.template?.snippet) {
-      const addonVars = {
-        revisionRounds: addonRevisionRounds,
-        feedbackWindows: addonFeedbackWindows,
-        nextFeedbackDeadline: addonTaskDetail.feedbackDeadline?.formattedDate ?? "",
-        googleDeliverableLink: addonReviewLinks.googleDeliverableLink,
-        frameReviewLink: addonReviewLinks.frameReviewLink,
-        animaticReviewLink: addonReviewLinks.animaticReviewLink,
-        loomReviewLink: addonReviewLinks.loomReviewLink,
-        flexLink: addonReviewLinks.flexLink,
-        projectPlanLink: addonTaskDetail.projectPlanLink ?? undefined,
-        linkLabels: Object.keys(addonLinkLabels).length > 0 ? addonLinkLabels : undefined,
-        extraLinks: [] as Array<{ url: string; label: string }>,
-        repeatClient,
-      };
-
-      const sameProject = task.listId === addonProject.listId;
-
-      const addonEmailContent = mergeAddonDelivery({
+      return mergeCombinedTemplate({
+        combinedTemplate: displayTemplate,
+        subjectLine: displaySubject,
         primaryProjectName: task.projectName,
-        primaryContent: baseMerged.emailContent,
         addonProjectName: addonProject.projectName,
-        addonDeliverableType: addonProject.deliverableType,
-        sameProject,
-        addonTemplate: addonTaskDetail.template.snippet,
-        addonContacts: addonTaskDetail.contacts,
-        addonVariables: addonVars,
-        isSlack: false,
+        primaryVariables,
+        addonVariables: {
+          projectName: addonProject.projectName,
+          revisionRounds: addonRevisionRounds,
+          feedbackWindows: addonFeedbackWindows,
+          nextFeedbackDeadline: addonTaskDetail.feedbackDeadline?.formattedDate ?? "",
+          googleDeliverableLink: addonReviewLinks.googleDeliverableLink,
+          frameReviewLink: addonReviewLinks.frameReviewLink,
+          animaticReviewLink: addonReviewLinks.animaticReviewLink,
+          loomReviewLink: addonReviewLinks.loomReviewLink,
+          flexLink: addonReviewLinks.flexLink,
+          projectPlanLink: addonTaskDetail.projectPlanLink ?? undefined,
+          linkLabels: Object.keys(addonLinkLabels).length > 0 ? addonLinkLabels : undefined,
+        },
       });
-
-      const addonSlackContent = mergeAddonDelivery({
-        primaryProjectName: task.projectName,
-        primaryContent: baseMerged.slackContent,
-        addonProjectName: addonProject.projectName,
-        addonDeliverableType: addonProject.deliverableType,
-        sameProject,
-        addonTemplate: addonTaskDetail.template.snippet,
-        addonContacts: addonTaskDetail.contacts,
-        addonVariables: addonVars,
-        isSlack: true,
-      });
-
-      return {
-        emailContent: addonEmailContent,
-        slackContent: addonSlackContent,
-        subjectLine: baseMerged.subjectLine,
-      };
     }
 
-    return baseMerged;
+    // Single delivery: merge the (possibly edited) template directly.
+    return mergeTemplate(displayTemplate, displaySubject, primaryVariables);
   }, [
-    activeTemplate,
+    displayTemplate,
+    displaySubject,
+    activeTemplate?.snippet,
     contacts,
     task.projectName,
-    task.listId,
     versionNotes,
     revisionRounds,
     feedbackWindows,
@@ -582,9 +579,9 @@ export function DeliveryForm({
   const handleDeliverableTypeChange = useCallback(
     (newType: string) => {
       setDeliverableType(newType);
-      // Reset edit mode when template changes
-      setEditedEmailContent(null);
-      setEditedSubjectLine(null);
+      // Reset edit mode + any per-delivery edits when the template changes
+      setEditedSnippet(null);
+      setEditedSubject(null);
       setIsEditMode(false);
     },
     []
@@ -622,6 +619,9 @@ export function DeliveryForm({
     setAddonLinkLabels({});
     setAddonRevisionRounds("");
     setAddonFeedbackWindows("");
+    // Adding an add-on changes the combined template shape — drop stale edits.
+    setEditedSnippet(null);
+    setEditedSubject(null);
   }, []);
 
   const handleRemoveAddon = useCallback(() => {
@@ -630,31 +630,30 @@ export function DeliveryForm({
     setAddonLinkLabels({});
     setAddonRevisionRounds("");
     setAddonFeedbackWindows("");
+    // Removing the add-on collapses back to the single template — drop edits.
+    setEditedSnippet(null);
+    setEditedSubject(null);
   }, []);
 
   const handleToggleEditMode = useCallback(() => {
-    // NOTE: We intentionally do NOT pre-initialize editedEmailContent here.
-    // TipTap's editor receives its content from displayEmailContent which
-    // falls through to mergedContent when editedEmailContent is null.
-    // This keeps the preview reactive to form input changes (review links,
-    // version notes, etc.) until the user actually types in the editor.
+    // We intentionally do NOT pre-initialize editedSnippet here. The editor
+    // receives displayTemplate, which falls through to defaultTemplate while
+    // editedSnippet is null — so the preview stays reactive to form input
+    // until the user actually types in the editor.
     setIsEditMode((prev) => !prev);
   }, []);
 
   const handleResetToTemplate = useCallback(() => {
-    setEditedEmailContent(null);
-    setEditedSubjectLine(null);
-    setEditedSlackContent(null);
+    setEditedSnippet(null);
+    setEditedSubject(null);
     setIsEditMode(false);
   }, []);
 
-  // Final content to display/send
-  const displayEmailContent =
-    editedEmailContent ?? mergedContent?.emailContent ?? "";
-  const displaySubjectLine =
-    editedSubjectLine ?? mergedContent?.subjectLine ?? "";
-  const displaySlackContent =
-    editedSlackContent ?? mergedContent?.slackContent ?? "";
+  // Final merged content to display/send. The merge always runs over the
+  // (possibly edited) template, so this stays reactive even after editing.
+  const displayEmailContent = mergedContent?.emailContent ?? "";
+  const displaySubjectLine = mergedContent?.subjectLine ?? "";
+  const displaySlackContent = mergedContent?.slackContent ?? "";
 
   // Build the form state for save/send
   const formState: DeliveryFormState = {
@@ -665,9 +664,15 @@ export function DeliveryForm({
     feedbackWindows,
     versionNotes,
     slackChannelId,
-    editedEmailContent,
-    editedSlackContent,
-    editedSubjectLine,
+    // Legacy frozen-snapshot fields are no longer produced by the editor; the
+    // server reads `?? mergedContent`, and mergedContent already reflects any
+    // template edits. Kept null for backward compatibility.
+    editedEmailContent: null,
+    editedSlackContent: null,
+    editedSubjectLine: null,
+    // The per-delivery template edits (drive mergedContent, persisted in drafts).
+    editedSnippet,
+    editedSubject,
     editedToEmail,
     editedCcEmails,
     editedSenderEmail,
@@ -729,10 +734,8 @@ export function DeliveryForm({
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
         }
         if (saved.extraLinks?.length) setExtraLinks(saved.extraLinks);
-        if (saved.editedEmailContent) setEditedEmailContent(saved.editedEmailContent);
-        if (saved.editedSubjectLine) setEditedSubjectLine(saved.editedSubjectLine);
-        if (saved.editedSlackContent) setEditedSlackContent(saved.editedSlackContent);
-        if (saved.editedEmailContent || saved.editedSubjectLine || saved.editedSlackContent) setIsEditMode(true);
+        if (saved.editedSnippet) setEditedSnippet(saved.editedSnippet);
+        if (saved.editedSubject) setEditedSubject(saved.editedSubject);
         if (saved.editedToEmail) setEditedToEmail(saved.editedToEmail);
         if (saved.editedCcEmails) setEditedCcEmails(saved.editedCcEmails);
         if (saved.editedSenderEmail) setEditedSenderEmail(saved.editedSenderEmail);
@@ -1207,13 +1210,14 @@ export function DeliveryForm({
             emailContent={displayEmailContent}
             slackContent={displaySlackContent}
             subjectLine={displaySubjectLine}
+            templateContent={displayTemplate}
+            templateSubject={displaySubject}
             primaryEmail={displayToEmail}
             senderEmail={displaySenderEmail}
             isEditMode={isEditMode}
             onToggleEditMode={handleToggleEditMode}
-            onEmailContentChange={setEditedEmailContent}
-            onSlackContentChange={setEditedSlackContent}
-            onSubjectLineChange={setEditedSubjectLine}
+            onTemplateChange={setEditedSnippet}
+            onSubjectChange={setEditedSubject}
             onResetToTemplate={handleResetToTemplate}
             contacts={contacts}
             mentionItems={mentionItems}

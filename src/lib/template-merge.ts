@@ -77,7 +77,12 @@ function escapeRegExp(str: string): string {
 function performMerge(
   template: string,
   replacements: Record<string, string>,
-  linkLabels?: Record<string, string>
+  linkLabels?: Record<string, string>,
+  // Resolves which project name to use when enriching a standalone link for a
+  // given variable. Defaults to the single `projectName` replacement. Combined
+  // (add-on) merges pass a resolver so namespaced add-on links get the add-on's
+  // project name instead of the primary's.
+  projectNameFor?: (varName: string) => string
 ): string {
   let result = template;
 
@@ -91,7 +96,8 @@ function performMerge(
   //   → Plain link text: "[Frame.io](url)"
   //   These already have surrounding context and don't need the project name.
 
-  const projectName = replacements.projectName || "";
+  const resolveProjectName =
+    projectNameFor ?? (() => replacements.projectName || "");
 
   // Pass 1: Standalone bullet/line links — enrich with project name
   const standaloneLinkPattern = /^(\s*[-•*]\s*)\[([^\]|]+)\s*\|\s*([^\]]+)\]/gm;
@@ -103,6 +109,7 @@ function performMerge(
       if (!url) return ""; // Remove the entire bullet if no URL
       // Use custom label if provided, otherwise use template default
       const text = linkLabels?.[trimmedVar]?.trim() || linkText.trim();
+      const projectName = resolveProjectName(trimmedVar);
       const enrichedText =
         projectName && !text.toLowerCase().includes(projectName.toLowerCase())
           ? `${projectName} – ${text}`
@@ -291,6 +298,112 @@ export function convertToSlackFormat(markdown: string): string {
   return result.trim();
 }
 
+// Strip explainer sections ("What you're receiving", "We need your feedback",
+// and the "Typical feedback might include" sub-section) for repeat clients.
+function stripRepeatClientSections(content: string, repeatClient?: boolean): string {
+  if (!repeatClient) return content;
+  const lines = content.split("\n");
+  const result: string[] = [];
+  // "section" = skip until next ## header; "subsection" = skip until next blank line or header
+  let skipMode: "none" | "section" | "subsection" = "none";
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isHeader = /^#{1,3}\s/.test(line) || /^\*\*.*\*\*$/.test(line.trim());
+    const lower = line.toLowerCase();
+    const cleaned = lower.replace(/[*#]/g, "").trim();
+
+    // Check for section-level headers to skip (skip until next ## header)
+    if (isHeader) {
+      if (
+        (lower.includes("what you") && lower.includes("receiving")) ||
+        (lower.includes("we need") && lower.includes("feedback"))
+      ) {
+        skipMode = "section";
+        continue;
+      }
+      // Any other header ends section-level skip
+      if (skipMode === "section") {
+        skipMode = "none";
+      }
+    }
+
+    // Check for "Typical feedback might include" sub-section
+    if (cleaned.includes("typical feedback") && cleaned.includes("include")) {
+      skipMode = "subsection";
+      continue;
+    }
+
+    // End subsection skip at blank line or header
+    if (skipMode === "subsection" && (line.trim() === "" || isHeader)) {
+      skipMode = "none";
+      // Keep the blank line or header that ended the skip
+      if (isHeader) {
+        result.push(line);
+      }
+      continue;
+    }
+
+    if (skipMode === "none") {
+      result.push(line);
+    }
+  }
+
+  // Clean up excessive blank lines from removed sections
+  return result.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+// Replace the feedback deadline bullet with a rushed project notice.
+function injectRushedNotice(
+  content: string,
+  opts: { rushedProject?: boolean; nextFeedbackDeadline: string; revisionRounds: string }
+): string {
+  if (!opts.rushedProject) return content;
+  const deadline = opts.nextFeedbackDeadline || "the feedback deadline";
+  // Determine if this is the final revision round by checking the merged content
+  // Looks for "N of M" pattern in the revision rounds line
+  const revisionMatch = content.match(/(\d+)\s+of\s+(\d+)/i);
+  const isFinalRound = revisionMatch
+    ? revisionMatch[1] === revisionMatch[2]
+    : opts.revisionRounds === "1";
+
+  const rushedBullets = [
+    ``,
+    `### 🚨 URGENT: Fixed Deadline Alert`,
+    `- Feedback deadline is **EOD ${deadline}**`,
+    `- Our team will proceed the following business day regardless of whether feedback has been received.`,
+    ...(isFinalRound
+      ? [`- Because this is the final revision round, if feedback has not been received by the deadline, we will proceed to the next step.`]
+      : [
+          `- If feedback has not been received by the deadline, the current revision round will be considered complete and the next revision round will begin. Any feedback provided after the deadline will apply to the next revision round.`,
+        ]),
+    `- This is necessary to keep the project timeline on track and hit the fixed deadline.`,
+    `- If your team needs more time, the delivery date will be delayed or rushed fees will apply.`,
+  ];
+
+  const lines = content.split("\n");
+
+  // Find and replace the feedback deadline line
+  const idx = lines.findIndex(
+    (line) =>
+      line.toLowerCase().includes("feedback deadline") &&
+      (line.startsWith("-") || line.startsWith("•") || line.includes("**Feedback Deadline"))
+  );
+  if (idx >= 0) {
+    lines.splice(idx, 1, ...rushedBullets);
+  } else {
+    // Fallback: append
+    lines.push("", ...rushedBullets);
+  }
+
+  // Remove "Additional revisions beyond the included revision rounds" bullet
+  const filtered = lines.filter(
+    (line) => !line.toLowerCase().includes("additional revisions beyond the included revision rounds")
+  );
+
+  return filtered.join("\n");
+}
+
 /**
  * Merge a delivery snippet template with variables.
  * Returns both email (markdown) and Slack (mrkdwn) versions.
@@ -324,108 +437,6 @@ export function mergeTemplate(
     projectPlanLink: variables.projectPlanLink ?? "",
   };
 
-  // Strip explainer sections for repeat clients
-  function stripRepeatClientSections(content: string): string {
-    if (!variables.repeatClient) return content;
-    const lines = content.split("\n");
-    const result: string[] = [];
-    // "section" = skip until next ## header; "subsection" = skip until next blank line or header
-    let skipMode: "none" | "section" | "subsection" = "none";
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const isHeader = /^#{1,3}\s/.test(line) || /^\*\*.*\*\*$/.test(line.trim());
-      const lower = line.toLowerCase();
-      const cleaned = lower.replace(/[*#]/g, "").trim();
-
-      // Check for section-level headers to skip (skip until next ## header)
-      if (isHeader) {
-        if (
-          (lower.includes("what you") && lower.includes("receiving")) ||
-          (lower.includes("we need") && lower.includes("feedback"))
-        ) {
-          skipMode = "section";
-          continue;
-        }
-        // Any other header ends section-level skip
-        if (skipMode === "section") {
-          skipMode = "none";
-        }
-      }
-
-      // Check for "Typical feedback might include" sub-section
-      if (cleaned.includes("typical feedback") && cleaned.includes("include")) {
-        skipMode = "subsection";
-        continue;
-      }
-
-      // End subsection skip at blank line or header
-      if (skipMode === "subsection" && (line.trim() === "" || isHeader)) {
-        skipMode = "none";
-        // Keep the blank line or header that ended the skip
-        if (isHeader) {
-          result.push(line);
-        }
-        continue;
-      }
-
-      if (skipMode === "none") {
-        result.push(line);
-      }
-    }
-
-    // Clean up excessive blank lines from removed sections
-    return result.join("\n").replace(/\n{3,}/g, "\n\n");
-  }
-
-  // Replace the feedback deadline bullet with a rushed project notice
-  function injectRushedNotice(content: string): string {
-    if (!variables.rushedProject) return content;
-    const deadline = variables.nextFeedbackDeadline || "the feedback deadline";
-    // Determine if this is the final revision round by checking the merged content
-    // Looks for "N of M" pattern in the revision rounds line
-    const revisionMatch = content.match(/(\d+)\s+of\s+(\d+)/i);
-    const isFinalRound = revisionMatch
-      ? revisionMatch[1] === revisionMatch[2]
-      : variables.revisionRounds === "1";
-
-    const rushedBullets = [
-      ``,
-      `### 🚨 URGENT: Fixed Deadline Alert`,
-      `- Feedback deadline is **EOD ${deadline}**`,
-      `- Our team will proceed the following business day regardless of whether feedback has been received.`,
-      ...(isFinalRound
-        ? [`- Because this is the final revision round, if feedback has not been received by the deadline, we will proceed to the next step.`]
-        : [
-            `- If feedback has not been received by the deadline, the current revision round will be considered complete and the next revision round will begin. Any feedback provided after the deadline will apply to the next revision round.`,
-          ]),
-      `- This is necessary to keep the project timeline on track and hit the fixed deadline.`,
-      `- If your team needs more time, the delivery date will be delayed or rushed fees will apply.`,
-    ];
-
-    const lines = content.split("\n");
-
-    // Find and replace the feedback deadline line
-    const idx = lines.findIndex(
-      (line) =>
-        line.toLowerCase().includes("feedback deadline") &&
-        (line.startsWith("-") || line.startsWith("•") || line.includes("**Feedback Deadline"))
-    );
-    if (idx >= 0) {
-      lines.splice(idx, 1, ...rushedBullets);
-    } else {
-      // Fallback: append
-      lines.push("", ...rushedBullets);
-    }
-
-    // Remove "Additional revisions beyond the included revision rounds" bullet
-    const filtered = lines.filter(
-      (line) => !line.toLowerCase().includes("additional revisions beyond the included revision rounds")
-    );
-
-    return filtered.join("\n");
-  }
-
   // Build the bullet lines that should appear inside the Review Links section
   // for fields the template itself doesn't render: an unplaced flexLink and any
   // user-added extra links.
@@ -451,10 +462,16 @@ export function mergeTemplate(
     }
   }
 
+  const rushedOpts = {
+    rushedProject: variables.rushedProject,
+    nextFeedbackDeadline: variables.nextFeedbackDeadline,
+    revisionRounds: variables.revisionRounds,
+  };
+
   // Merge the email version
   let emailContent = performMerge(template, replacements, variables.linkLabels);
-  emailContent = stripRepeatClientSections(emailContent);
-  emailContent = injectRushedNotice(emailContent);
+  emailContent = stripRepeatClientSections(emailContent, variables.repeatClient);
+  emailContent = injectRushedNotice(emailContent, rushedOpts);
   emailContent = injectReviewLinkBullets(emailContent, reviewLinkBullets);
 
   // Build Slack version: same markdown as email, but with @mention tokens
@@ -464,8 +481,8 @@ export function mergeTemplate(
     contacts: formatContactsSlack(variables.contacts),
   };
   let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
-  slackContent = stripRepeatClientSections(slackContent);
-  slackContent = injectRushedNotice(slackContent);
+  slackContent = stripRepeatClientSections(slackContent, variables.repeatClient);
+  slackContent = injectRushedNotice(slackContent, rushedOpts);
   slackContent = injectReviewLinkBullets(slackContent, reviewLinkBullets);
 
   // Merge subject line
@@ -616,6 +633,11 @@ function findSection(
 
 /**
  * Merge a combined delivery for a primary + add-on project.
+ *
+ * @deprecated The delivery form now uses {@link buildCombinedTemplate} +
+ * {@link mergeCombinedTemplate} so the combined message is an editable template
+ * (with tokens) that stays reactive to form fields. This merge-then-stitch
+ * version is retained for reference/tests only.
  *
  * Strategy (based on real-world reference):
  * 1. Keep the primary project's full content (greeting + all sections)
@@ -769,6 +791,258 @@ export function mergeAddonDelivery(input: AddonMergeInput): string {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// ── Combined editable template (merged delivery, edit-the-template model) ──
+//
+// For merged deliveries the user edits ONE combined template that still holds
+// `[tokens]`, so links/scope keep flowing in after editing. Because the primary
+// and the add-on each have their own value for the same variable name (e.g.
+// both have a `googleDeliverableLink`), the add-on's per-project tokens are
+// namespaced with the `addon:` prefix so they don't collide. Contact tokens are
+// shared (a merged delivery always shares one primary contact) and are NOT
+// namespaced.
+
+/** Prefix applied to the add-on project's per-project variable tokens. */
+export const ADDON_NS = "addon:";
+
+/** Variable names whose value differs between the primary and add-on projects. */
+const PER_PROJECT_VARS = [
+  "googleDeliverableLink",
+  "frameReviewLink",
+  "animaticReviewLink",
+  "loomReviewLink",
+  "flexLink",
+  "projectPlanLink",
+  "revisionRounds",
+  "feedbackWindows",
+  "nextFeedbackDeadline",
+  "feedbackDeadline",
+  "projectName",
+  "versionNotes",
+]
+  // Longest first so e.g. "nextFeedbackDeadline" is considered before "feedbackDeadline".
+  .sort((a, b) => b.length - a.length);
+
+/** Rewrite an add-on template's per-project tokens to the `addon:` namespace. */
+function namespaceAddonTemplate(template: string): string {
+  let result = template;
+  for (const v of PER_PROJECT_VARS) {
+    const esc = escapeRegExp(v);
+    // Link form: "[Label | v]" → "[Label | addon:v]"
+    result = result.replace(
+      new RegExp(`(\\|\\s*)${esc}(\\s*\\])`, "g"),
+      `$1${ADDON_NS}${v}$2`
+    );
+    // Bare form: "[v]" → "[addon:v]"
+    result = result.replace(
+      new RegExp(`\\[${esc}\\]`, "g"),
+      `[${ADDON_NS}${v}]`
+    );
+  }
+  return result;
+}
+
+/**
+ * Assemble the default combined TEMPLATE (with tokens) for a merged delivery,
+ * mirroring mergeAddonDelivery's structure but operating on the raw templates
+ * so the result stays mergeable/reactive. The add-on's per-project tokens are
+ * namespaced. This is what the user edits in edit mode; merging it later
+ * (mergeCombinedTemplate) resolves both projects' values.
+ */
+export function buildCombinedTemplate(input: {
+  primaryTemplate: string;
+  addonTemplate: string;
+  addonProjectName: string;
+  addonDeliverableType?: string;
+  sameProject?: boolean;
+}): string {
+  const { primaryTemplate, addonTemplate, addonProjectName, addonDeliverableType, sameProject } =
+    input;
+
+  const primary = parseSections(primaryTemplate);
+  const addon = parseSections(namespaceAddonTemplate(addonTemplate));
+
+  const planMatcher = (s: ParsedSection) =>
+    /project\s*plan/i.test(s.header.toLowerCase().replace(/[#*]/g, ""));
+  const primaryPlanIdx = primary.sections.findIndex(planMatcher);
+  const primaryPlan =
+    primaryPlanIdx >= 0 ? primary.sections.splice(primaryPlanIdx, 1)[0] : null;
+  const addonPlanIdx = addon.sections.findIndex(planMatcher);
+  const addonPlan =
+    addonPlanIdx >= 0 ? addon.sections.splice(addonPlanIdx, 1)[0] : null;
+
+  const parts: string[] = [];
+
+  if (primary.greeting) parts.push(primary.greeting);
+
+  for (const section of primary.sections) {
+    parts.push("");
+    parts.push(section.header);
+    if (section.content) parts.push(section.content);
+  }
+
+  // Transition. Same project → name the deliverable type (project name was
+  // already said in the greeting). Different project → name the other project.
+  parts.push("");
+  if (sameProject && addonDeliverableType) {
+    parts.push(`Second, we also have the **${addonDeliverableType}** ready for your review!`);
+  } else {
+    parts.push(`Second, we also have **${addonProjectName}** deliverables ready for your review!`);
+  }
+
+  for (const section of addon.sections) {
+    parts.push("");
+    parts.push(section.header);
+    if (section.content) parts.push(section.content);
+  }
+
+  // Shared project plan. When same project, both plans resolve to the same
+  // link, so keep only the primary's. When different, append the add-on's
+  // (namespaced) plan bullets.
+  if (primaryPlan || addonPlan) {
+    const plan = primaryPlan ?? addonPlan;
+    parts.push("");
+    parts.push(plan!.header);
+    let planContent = plan!.content || "";
+    if (!sameProject && primaryPlan && addonPlan?.content) {
+      const addonBullets = addonPlan.content
+        .split("\n")
+        .filter((line) => /^\s*[-•*]\s*\[/.test(line));
+      if (addonBullets.length > 0) {
+        planContent += "\n" + addonBullets.join("\n");
+      }
+    }
+    if (planContent) parts.push(planContent);
+  }
+
+  if (primary.closing) {
+    parts.push("");
+    parts.push(primary.closing);
+  }
+
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Per-project variable values for the combined merge (add-on side). */
+export interface CombinedAddonVariables {
+  projectName?: string;
+  versionNotes?: string;
+  revisionRounds: string;
+  feedbackWindows: string;
+  nextFeedbackDeadline: string;
+  googleDeliverableLink?: string;
+  frameReviewLink?: string;
+  animaticReviewLink?: string;
+  loomReviewLink?: string;
+  flexLink?: string;
+  projectPlanLink?: string;
+  linkLabels?: Record<string, string>;
+}
+
+/**
+ * Merge a combined template (from buildCombinedTemplate, or an edited version
+ * of it) by resolving primary tokens from the primary variables and `addon:`
+ * namespaced tokens from the add-on variables. Returns email + slack markdown,
+ * exactly like mergeTemplate.
+ */
+export function mergeCombinedTemplate(input: {
+  combinedTemplate: string;
+  subjectLine: string;
+  primaryProjectName: string;
+  addonProjectName: string;
+  primaryVariables: MergeVariables;
+  addonVariables: CombinedAddonVariables;
+}): MergedContent {
+  const { combinedTemplate, subjectLine, primaryProjectName, addonProjectName } = input;
+  const pv = input.primaryVariables;
+  const av = input.addonVariables;
+
+  const primaryContact = pv.contacts.find((c) => c.role === "Primary") ?? pv.contacts[0];
+  const contactName = primaryContact?.name ?? "";
+  const contactFirstName = contactName.split(/\s+/)[0] ?? "";
+
+  // Shared (non-namespaced) replacements + primary's per-project values.
+  const baseReplacements: Record<string, string> = {
+    contactFirstName,
+    contactName,
+    projectName: pv.projectName,
+    versionNotes: pv.versionNotes,
+    revisionRounds: pv.revisionRounds,
+    feedbackWindows: pv.feedbackWindows,
+    nextFeedbackDeadline: pv.nextFeedbackDeadline,
+    feedbackDeadline: pv.nextFeedbackDeadline,
+    googleDeliverableLink: pv.googleDeliverableLink ?? "",
+    frameReviewLink: pv.frameReviewLink ?? "",
+    animaticReviewLink: pv.animaticReviewLink ?? "",
+    loomReviewLink: pv.loomReviewLink ?? "",
+    flexLink: pv.flexLink ?? "",
+    projectPlanLink: pv.projectPlanLink ?? "",
+    // Add-on (namespaced) per-project values.
+    [`${ADDON_NS}projectName`]: av.projectName ?? addonProjectName,
+    [`${ADDON_NS}versionNotes`]: av.versionNotes ?? "",
+    [`${ADDON_NS}revisionRounds`]: av.revisionRounds,
+    [`${ADDON_NS}feedbackWindows`]: av.feedbackWindows,
+    [`${ADDON_NS}nextFeedbackDeadline`]: av.nextFeedbackDeadline,
+    [`${ADDON_NS}feedbackDeadline`]: av.nextFeedbackDeadline,
+    [`${ADDON_NS}googleDeliverableLink`]: av.googleDeliverableLink ?? "",
+    [`${ADDON_NS}frameReviewLink`]: av.frameReviewLink ?? "",
+    [`${ADDON_NS}animaticReviewLink`]: av.animaticReviewLink ?? "",
+    [`${ADDON_NS}loomReviewLink`]: av.loomReviewLink ?? "",
+    [`${ADDON_NS}flexLink`]: av.flexLink ?? "",
+    [`${ADDON_NS}projectPlanLink`]: av.projectPlanLink ?? "",
+  };
+
+  // Combined link labels: primary under normal keys, add-on under namespaced.
+  const linkLabels: Record<string, string> = { ...(pv.linkLabels ?? {}) };
+  for (const [k, v] of Object.entries(av.linkLabels ?? {})) {
+    linkLabels[`${ADDON_NS}${k}`] = v;
+  }
+
+  // Standalone link enrichment uses the owning project's name.
+  const projectNameFor = (varName: string) =>
+    varName.startsWith(ADDON_NS) ? addonProjectName : primaryProjectName;
+
+  // Primary's unplaced flexLink + user-added extra links (the add-on never
+  // carries extra links; its flexLink, if any, renders from its own token).
+  const templateHasPrimaryFlexLink = /(^|[^:])\|\s*flexLink\s*\]/.test(combinedTemplate);
+  const reviewLinkBullets: string[] = [];
+  if (pv.flexLink && !templateHasPrimaryFlexLink) {
+    const customLabel = pv.linkLabels?.flexLink?.trim();
+    const baseText = customLabel || primaryProjectName || "Review Link";
+    const text =
+      primaryProjectName && !baseText.toLowerCase().includes(primaryProjectName.toLowerCase())
+        ? `${primaryProjectName} – ${baseText}`
+        : baseText;
+    reviewLinkBullets.push(`- [${text}](${pv.flexLink})`);
+  }
+  if (pv.extraLinks?.length) {
+    for (const link of pv.extraLinks) {
+      if (!link.url) continue;
+      reviewLinkBullets.push(`- [${link.label?.trim() || "Link"}](${link.url})`);
+    }
+  }
+
+  const rushedOpts = {
+    rushedProject: pv.rushedProject,
+    nextFeedbackDeadline: pv.nextFeedbackDeadline,
+    revisionRounds: pv.revisionRounds,
+  };
+
+  const run = (contactsValue: string) => {
+    const replacements = { ...baseReplacements, contacts: contactsValue };
+    let out = performMerge(combinedTemplate, replacements, linkLabels, projectNameFor);
+    out = stripRepeatClientSections(out, pv.repeatClient);
+    out = injectRushedNotice(out, rushedOpts);
+    out = injectReviewLinkBullets(out, reviewLinkBullets);
+    return out;
+  };
+
+  return {
+    emailContent: run(formatContactsEmail(pv.contacts)),
+    slackContent: run(formatContactsSlack(pv.contacts)),
+    subjectLine: performMerge(subjectLine, { ...baseReplacements, contacts: formatContactsEmail(pv.contacts) }),
+  };
 }
 
 /**

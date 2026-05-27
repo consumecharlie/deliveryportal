@@ -143,9 +143,13 @@ export interface DeliveryFormState {
   feedbackWindows: string;
   versionNotes: string;
   slackChannelId: string;
-  editedEmailContent: string | null; // null = use merged template
+  editedEmailContent: string | null; // legacy frozen snapshot (kept for server `?? mergedContent`)
   editedSlackContent: string | null;
   editedSubjectLine: string | null;
+  // Per-delivery edited template body + subject (with [tokens]); merge runs
+  // over these so links/scope stay reactive after editing. Persisted in drafts.
+  editedSnippet?: string | null;
+  editedSubject?: string | null;
   editedToEmail: string | null;
   editedCcEmails: string | null;
   editedSenderEmail: string | null;

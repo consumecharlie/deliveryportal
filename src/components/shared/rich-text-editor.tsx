@@ -559,8 +559,12 @@ export function RichTextEditor({
                         variable = fullMatch.trim();
                       }
 
-                      if (variable in TEMPLATE_VARIABLE_META) {
-                        const meta = TEMPLATE_VARIABLE_META[variable];
+                      // Add-on tokens in a combined delivery are namespaced
+                      // (e.g. "addon:googleDeliverableLink"); highlight them
+                      // using the base variable's metadata.
+                      const baseVar = variable.replace(/^addon:/, "");
+                      if (baseVar in TEMPLATE_VARIABLE_META) {
+                        const meta = TEMPLATE_VARIABLE_META[baseVar];
                         const category = meta?.category ?? "project";
                         const cssClass =
                           CATEGORY_COLORS[category] ?? "template-var-project";
