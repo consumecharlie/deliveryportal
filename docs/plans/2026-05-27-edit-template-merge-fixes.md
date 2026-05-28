@@ -11,6 +11,7 @@ Session progress log / recovery doc. All work below is **committed and pushed to
 | `294f074` | Docs: document edit-the-template model + add-on namespacing in CLAUDE.md |
 | `f1d7be5` | Drafts: show each saved-by user's real avatar (was always logged-in user's) |
 | `2ed26e3` | Merged send: complete the EXISTING add-on share task instead of creating a duplicate (2026-05-28) |
+| `72ea560` | Merged add-on: pull review links + scope from the real ClickUp task (2026-05-28) |
 
 Branch: `main`. Base before this session: `7dcc5bc`.
 
@@ -102,6 +103,18 @@ Tony tested: merge worked, but on a merged delivery the add-on's share task did 
 Files: `addon-project-modal.tsx`, `delivery-form.tsx`, `send-bar.tsx`, `types.ts`, `send/route.ts`.
 
 Backward-compat: drafts saved before this change have no `addonTaskId` → fall back to the old create-new behavior (no regression).
+
+## 2026-05-28 follow-up #2 — add-on scope/links not pulled from ClickUp (commit `72ea560`)
+
+Tony also noticed the add-on's review link wasn't written back to ClickUp, and asked to confirm the merge auto-pulls revision rounds / windows / links from the add-on task rather than relying on manual entry.
+
+**Cause:** `addonTaskDetail` comes from `GET /api/projects/[listId]/detail`, which was built for **ad-hoc** deliveries and returned hardcoded-empty `reviewLinks` / `revisionRounds` / `feedbackWindows` / `versionNotes`. So the add-on never auto-populated its existing values; an empty link also meant nothing was written back on send. (Separately, before `2ed26e3` the add-on links were written to the *duplicate* task, not the one being inspected.)
+
+**Fix:** the detail endpoint now accepts a `taskId` query param; when present it finds that task among `siblings` and extracts its real review links + revision rounds + feedback windows + version notes (same `extractCustomFieldValue`/`extractCustomFieldUrl` as the main task-detail route). The form's add-on-detail query passes `addonProject.taskId` (+ in the query key). Pure ad-hoc (no `taskId`) is unchanged — the `deliverableType` fallback was deliberately NOT added to avoid changing ad-hoc behavior. `result.task.id` is now the real task id when found.
+
+Net effect with `2ed26e3`: the add-on's Google/Frame/Loom links + scope prefill from ClickUp, appear in the merged message, and write back to that same existing task on send. Note: revision rounds / feedback windows are *read* but not written back — matching the primary's behavior (primary only writes links + version notes + slack channel).
+
+Files: `app/api/projects/[listId]/detail/route.ts`, `delivery-form.tsx` (add-on-detail query).
 
 ## Known minor limitations
 - Different-project merges with *coincidentally identical* plan URLs aren't deduped (template-level dedup only fires for same-project). Rare; acceptable.
