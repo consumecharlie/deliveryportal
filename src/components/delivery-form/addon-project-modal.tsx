@@ -38,6 +38,10 @@ export interface AddonSelection {
   listId: string;
   projectName: string;
   deliverableType: string;
+  /** The existing delivery-deadline task the user picked, when chosen from the
+   *  active-deliveries list. Absent when a deliverable type is picked manually
+   *  (no existing task) — the send route creates one in that case. */
+  taskId?: string;
 }
 
 interface AddonProjectModalProps {
@@ -67,6 +71,9 @@ export function AddonProjectModal({
 }: AddonProjectModalProps) {
   const [selectedListId, setSelectedListId] = useState<string>("");
   const [selectedType, setSelectedType] = useState<string>("");
+  // The exact delivery-deadline task picked from the list (empty when a type
+  // is chosen manually). Distinguishes between two deliveries that share a type.
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
 
   const { data, isLoading } = useQuery<{ projects: EligibleProject[] }>({
     queryKey: ["eligible-addons", currentListId],
@@ -96,6 +103,7 @@ export function AddonProjectModal({
     if (!open) {
       setSelectedListId("");
       setSelectedType("");
+      setSelectedTaskId("");
       return;
     }
     const withDeadlines = projects.filter((p) => p.hasActiveDeliveryDeadlines);
@@ -110,6 +118,7 @@ export function AddonProjectModal({
       listId: selectedProject.listId,
       projectName: selectedProject.projectName,
       deliverableType: selectedType,
+      taskId: selectedTaskId || undefined,
     });
     onOpenChange(false);
   };
@@ -152,6 +161,7 @@ export function AddonProjectModal({
                 onValueChange={(val) => {
                   setSelectedListId(val);
                   setSelectedType(""); // Reset type when project changes
+                  setSelectedTaskId("");
                 }}
                 placeholder="Select project..."
                 searchPlaceholder="Search projects..."
@@ -174,9 +184,12 @@ export function AddonProjectModal({
                     <button
                       key={d.taskId}
                       type="button"
-                      onClick={() => setSelectedType(d.deliverableType || "")}
+                      onClick={() => {
+                        setSelectedTaskId(d.taskId);
+                        setSelectedType(d.deliverableType || "");
+                      }}
                       className={`w-full flex items-center gap-3 rounded-md border px-3 py-2.5 text-left text-sm transition-colors min-w-0 ${
-                        selectedType === d.deliverableType
+                        selectedTaskId === d.taskId
                           ? "border-[#6AC387] bg-[#6AC387]/10"
                           : "border-border/50 hover:border-[#6AC387]/40 hover:bg-[#6AC387]/5"
                       }`}
@@ -205,7 +218,10 @@ export function AddonProjectModal({
                 <SearchableSelect
                   options={deliverableTypeOptions}
                   value={selectedType}
-                  onValueChange={setSelectedType}
+                  onValueChange={(val) => {
+                    setSelectedType(val);
+                    setSelectedTaskId(""); // manual type → no existing task
+                  }}
                   placeholder="Select deliverable type..."
                   searchPlaceholder="Search types..."
                 />

@@ -155,6 +155,9 @@ export interface DeliveryFormState {
   editedSenderEmail: string | null;
   // Add-on project data (when combining projects)
   addonListId?: string;
+  /** Existing delivery-deadline task picked for the add-on (so the send route
+   *  completes it instead of creating a duplicate). Absent for manual types. */
+  addonTaskId?: string;
   addonDeliverableType?: string;
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;

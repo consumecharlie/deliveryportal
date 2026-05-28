@@ -678,6 +678,7 @@ export function DeliveryForm({
     editedSenderEmail,
     ...(addonProject ? {
       addonListId: addonProject.listId,
+      addonTaskId: addonProject.taskId,
       addonDeliverableType: addonProject.deliverableType,
       addonDepartment: addonTaskDetail?.task.department,
       addonReviewLinks,
@@ -750,6 +751,7 @@ export function DeliveryForm({
             listId: saved.addonListId,
             projectName: saved.addonProjectName,
             deliverableType: saved.addonDeliverableType,
+            taskId: saved.addonTaskId,
           });
           if (saved.addonReviewLinks) setAddonReviewLinks(saved.addonReviewLinks);
           if (saved.addonLinkLabels) setAddonLinkLabels(saved.addonLinkLabels);
@@ -788,6 +790,7 @@ export function DeliveryForm({
     ...(addonProject
       ? {
           addonListId: addonProject.listId,
+          addonTaskId: addonProject.taskId,
           addonDeliverableType: addonProject.deliverableType,
           addonDepartment: addonTaskDetail?.task.department,
           addonReviewLinks,
@@ -1314,6 +1317,7 @@ export function DeliveryForm({
         adhocDeliverableType={adhocDeliverableType}
         adhocDepartment={adhocDepartment}
         addonListId={addonProject?.listId}
+        addonTaskId={addonProject?.taskId}
         addonDeliverableType={addonProject?.deliverableType}
         addonDepartment={addonTaskDetail?.task.department}
         addonReviewLinks={addonProject ? addonReviewLinks : undefined}

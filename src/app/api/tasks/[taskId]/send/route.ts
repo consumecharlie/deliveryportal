@@ -37,6 +37,9 @@ interface SendRequestBody {
     slackChannelName?: string;
   };
   addonListId?: string;
+  /** Existing delivery-deadline task the add-on was combined from. When set,
+   *  complete this task instead of creating a new one. */
+  addonTaskId?: string;
   addonDeliverableType?: string;
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
@@ -350,7 +353,7 @@ export async function POST(
             emailSubject: emailSubject,
             emailContent: emailContent,
             slackContent: slackContent || null,
-            wasEdited: !!(formState.editedEmailContent || formState.editedSlackContent),
+            wasEdited: !!(formState.editedSnippet || formState.editedSubject || formState.editedEmailContent || formState.editedSlackContent),
             sentBy: userEmail,
             projectListId: listId || null,
             clientFolderId: null,
@@ -405,61 +408,76 @@ export async function POST(
         const addonDeliverableType = body.addonDeliverableType ?? "";
         const addonDepartment = body.addonDepartment ?? "";
 
-        // Create task in addon project
-        const addonTask = await createTask(addonListId, {
-          name: `Share ${addonDeliverableType} with Client`,
-          custom_fields: [],
-        });
-
-        // Resolve dropdown option IDs
-        const fieldsRes = await getListFields(addonListId);
-        const fields = fieldsRes.fields ?? [];
-
-        const resolveOptionId = (fieldId: string, optionName: string): string | null => {
-          const field = fields.find((f: { id: string }) => f.id === fieldId);
-          if (!field?.type_config?.options) return null;
-          const option = field.type_config.options.find(
-            (o: { name?: string; label?: string }) =>
-              o.name === optionName || o.label === optionName
-          );
-          return option ? String(option.orderindex) : null;
-        };
-
-        const addonUpdates: Promise<void>[] = [];
-
-        if (addonDeliverableType) {
-          const optionId = resolveOptionId(CUSTOM_FIELDS.DELIVERABLE_TYPE, addonDeliverableType);
-          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.DELIVERABLE_TYPE, optionId));
-        }
-        if (addonDepartment) {
-          const optionId = resolveOptionId(CUSTOM_FIELDS.DEPARTMENT, addonDepartment);
-          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.DEPARTMENT, optionId));
-        }
-        {
-          const optionId = resolveOptionId(CUSTOM_FIELDS.PROJECT_TASK_TYPE, "Delivery Deadline");
-          if (optionId) addonUpdates.push(updateTaskCustomField(addonTask.id, CUSTOM_FIELDS.PROJECT_TASK_TYPE, optionId));
-        }
-
-        // Set addon review link fields
         const addonLinks = body.addonReviewLinks ?? {};
-        for (const [varName, url] of Object.entries(addonLinks)) {
-          if (!url) continue;
-          const mapping = LINK_VARIABLE_MAP[varName];
-          if (mapping) {
-            addonUpdates.push(updateTaskCustomField(addonTask.id, mapping.fieldId, url));
+        const addonUpdates: Promise<void>[] = [];
+        let addonTaskId: string;
+
+        if (body.addonTaskId) {
+          // The add-on was combined from an EXISTING delivery-deadline task —
+          // complete that one (so it stops showing in Slack/the portal) rather
+          // than creating a duplicate. Just write the review-link fields onto
+          // it; its type/department/task-type are already set.
+          addonTaskId = body.addonTaskId;
+          for (const [varName, url] of Object.entries(addonLinks)) {
+            if (!url) continue;
+            const mapping = LINK_VARIABLE_MAP[varName];
+            if (mapping) {
+              addonUpdates.push(updateTaskCustomField(addonTaskId, mapping.fieldId, url));
+            }
+          }
+        } else {
+          // No existing task (add-on type picked manually) — create one.
+          const addonTask = await createTask(addonListId, {
+            name: `Share ${addonDeliverableType} with Client`,
+            custom_fields: [],
+          });
+          addonTaskId = addonTask.id;
+
+          // Resolve dropdown option IDs
+          const fieldsRes = await getListFields(addonListId);
+          const fields = fieldsRes.fields ?? [];
+
+          const resolveOptionId = (fieldId: string, optionName: string): string | null => {
+            const field = fields.find((f: { id: string }) => f.id === fieldId);
+            if (!field?.type_config?.options) return null;
+            const option = field.type_config.options.find(
+              (o: { name?: string; label?: string }) =>
+                o.name === optionName || o.label === optionName
+            );
+            return option ? String(option.orderindex) : null;
+          };
+
+          if (addonDeliverableType) {
+            const optionId = resolveOptionId(CUSTOM_FIELDS.DELIVERABLE_TYPE, addonDeliverableType);
+            if (optionId) addonUpdates.push(updateTaskCustomField(addonTaskId, CUSTOM_FIELDS.DELIVERABLE_TYPE, optionId));
+          }
+          if (addonDepartment) {
+            const optionId = resolveOptionId(CUSTOM_FIELDS.DEPARTMENT, addonDepartment);
+            if (optionId) addonUpdates.push(updateTaskCustomField(addonTaskId, CUSTOM_FIELDS.DEPARTMENT, optionId));
+          }
+          {
+            const optionId = resolveOptionId(CUSTOM_FIELDS.PROJECT_TASK_TYPE, "Delivery Deadline");
+            if (optionId) addonUpdates.push(updateTaskCustomField(addonTaskId, CUSTOM_FIELDS.PROJECT_TASK_TYPE, optionId));
+          }
+          for (const [varName, url] of Object.entries(addonLinks)) {
+            if (!url) continue;
+            const mapping = LINK_VARIABLE_MAP[varName];
+            if (mapping) {
+              addonUpdates.push(updateTaskCustomField(addonTaskId, mapping.fieldId, url));
+            }
           }
         }
 
         await Promise.allSettled(addonUpdates);
 
         // Mark addon task complete
-        await updateTaskStatus(addonTask.id, "complete");
+        await updateTaskStatus(addonTaskId, "complete");
 
         // Log addon delivery to DB
         try {
           const addonDelivery = await prisma.delivery.create({
             data: {
-              taskId: addonTask.id,
+              taskId: addonTaskId,
               projectName: body.addonProjectName || "",
               clientName: taskMeta?.clientName || "",
               deliverableType: addonDeliverableType,
@@ -472,7 +490,7 @@ export async function POST(
               emailSubject: emailSubject,
               emailContent: emailContent,
               slackContent: slackContent || null,
-              wasEdited: !!(formState.editedEmailContent || formState.editedSlackContent),
+              wasEdited: !!(formState.editedSnippet || formState.editedSubject || formState.editedEmailContent || formState.editedSlackContent),
               sentBy: userEmail,
               projectListId: body.addonListId || null,
               clientFolderId: null,

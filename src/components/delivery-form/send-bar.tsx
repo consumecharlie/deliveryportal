@@ -59,6 +59,7 @@ interface SendBarProps {
   adhocDeliverableType?: string;
   adhocDepartment?: string;
   addonListId?: string;
+  addonTaskId?: string;
   addonDeliverableType?: string;
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
@@ -88,6 +89,7 @@ export function SendBar({
   adhocDeliverableType,
   adhocDepartment,
   addonListId,
+  addonTaskId,
   addonDeliverableType,
   addonDepartment,
   addonReviewLinks,
@@ -119,6 +121,7 @@ export function SendBar({
     ...(addonListId
       ? {
           addonListId,
+          addonTaskId,
           addonDeliverableType,
           addonDepartment,
           addonReviewLinks,
@@ -194,6 +197,7 @@ export function SendBar({
       const addonFields = addonListId
         ? {
             addonListId,
+            addonTaskId,
             addonDeliverableType,
             addonDepartment,
             addonReviewLinks,
