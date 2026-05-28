@@ -10,6 +10,7 @@ Session progress log / recovery doc. All work below is **committed and pushed to
 | `dcef57e` | Edit-the-template model (stop freezing variable replacement after editing) + combined editable template |
 | `294f074` | Docs: document edit-the-template model + add-on namespacing in CLAUDE.md |
 | `f1d7be5` | Drafts: show each saved-by user's real avatar (was always logged-in user's) |
+| `2ed26e3` | Merged send: complete the EXISTING add-on share task instead of creating a duplicate (2026-05-28) |
 
 Branch: `main`. Base before this session: `7dcc5bc`.
 
@@ -89,6 +90,18 @@ Primary and add-on each have their own value for the same variable name (both ha
    - Drafts page: avatars show the correct person (or initials).
 2. If a merged preview looks off vs. the old output, tune `buildCombinedTemplate` (assembly/blank lines) — the combined path replaced the old merge-then-stitch for merged deliveries.
 3. Optional cleanup later: remove `mergeAddonDelivery` + its tests once the new path is confirmed in production.
+
+## 2026-05-28 follow-up — add-on task completion (commit `2ed26e3`)
+
+Tony tested: merge worked, but on a merged delivery the add-on's share task did **not** get marked complete in ClickUp, so it kept showing in Slack and the portal.
+
+**Cause:** the send route (`/api/tasks/[taskId]/send`, step 7) *created a new* `Share <type> with Client` task and completed that — the real delivery-deadline task the user combined from was never referenced, because the modal dropped its `taskId` on confirm.
+
+**Fix:** capture the selected task id → `AddonSelection.taskId` (modal) → `DeliveryFormState.addonTaskId` (formState + scheduled payload + draft restore) → SendBar `addonFields` → send route `body.addonTaskId`. When present, the route writes the review-link fields onto that **existing** task and marks **it** complete. The create-new path is kept only for the manual-type case (no existing task). The modal now also tracks selection by `taskId` (not just deliverable type), so two deliveries sharing a type are distinguishable.
+
+Files: `addon-project-modal.tsx`, `delivery-form.tsx`, `send-bar.tsx`, `types.ts`, `send/route.ts`.
+
+Backward-compat: drafts saved before this change have no `addonTaskId` → fall back to the old create-new behavior (no regression).
 
 ## Known minor limitations
 - Different-project merges with *coincidentally identical* plan URLs aren't deduped (template-level dedup only fires for same-project). Rare; acceptable.
