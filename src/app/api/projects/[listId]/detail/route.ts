@@ -32,6 +32,10 @@ export async function GET(
   const { listId } = await params;
   const { searchParams } = new URL(req.url);
   const deliverableType = searchParams.get("deliverableType") ?? "";
+  // When combining an existing delivery-deadline task (merged delivery), its
+  // id is passed so we can pull that task's real review links + scope, instead
+  // of returning blanks like the pure ad-hoc case.
+  const sourceTaskId = searchParams.get("taskId") ?? "";
 
   try {
     // Fetch list info, sibling tasks, and delivery snippets in parallel
@@ -206,6 +210,43 @@ export async function GET(
       }
     }
 
+    // ── Pull review links + scope from the source delivery task ──
+    //
+    // Only when an explicit task id is given (merged add-on combined from an
+    // existing delivery-deadline task). Pure ad-hoc deliveries pass no taskId
+    // and keep these blank, exactly as before.
+    const sourceTask = sourceTaskId
+      ? siblings.find((t) => t.id === sourceTaskId)
+      : undefined;
+
+    const reviewLinks = {
+      googleDeliverableLink: sourceTask
+        ? (extractCustomFieldUrl(sourceTask.custom_fields, CUSTOM_FIELDS.GOOGLE_LINK) ?? undefined)
+        : undefined,
+      frameReviewLink: sourceTask
+        ? (extractCustomFieldUrl(sourceTask.custom_fields, CUSTOM_FIELDS.FRAME_IO_LINK) ?? undefined)
+        : undefined,
+      animaticReviewLink: sourceTask
+        ? (extractCustomFieldUrl(sourceTask.custom_fields, CUSTOM_FIELDS.ANIMATIC_LINK) ?? undefined)
+        : undefined,
+      loomReviewLink: sourceTask
+        ? (extractCustomFieldUrl(sourceTask.custom_fields, CUSTOM_FIELDS.LOOM_LINK) ?? undefined)
+        : undefined,
+      flexLink:
+        sourceTask && CUSTOM_FIELDS.FLEX_LINK
+          ? (extractCustomFieldUrl(sourceTask.custom_fields, CUSTOM_FIELDS.FLEX_LINK) ?? undefined)
+          : undefined,
+    };
+    const sourceRevisionRounds = sourceTask
+      ? (extractCustomFieldValue(sourceTask.custom_fields, CUSTOM_FIELDS.REVISION_ROUNDS) ?? "")
+      : "";
+    const sourceFeedbackWindows = sourceTask
+      ? (extractCustomFieldValue(sourceTask.custom_fields, CUSTOM_FIELDS.FEEDBACK_WINDOWS) ?? "")
+      : "";
+    const sourceVersionNotes = sourceTask
+      ? (extractCustomFieldValue(sourceTask.custom_fields, CUSTOM_FIELDS.VERSION_NOTES) ?? "")
+      : "";
+
     // ── Build synthetic task ──
 
     const taskName = deliverableType
@@ -214,7 +255,7 @@ export async function GET(
 
     const result: TaskDetail = {
       task: {
-        id: "__adhoc__",
+        id: sourceTask?.id ?? "__adhoc__",
         name: taskName,
         status: "open",
         statusColor: "",
@@ -232,16 +273,10 @@ export async function GET(
       slackChannelId,
       projectPlanLink,
       template,
-      reviewLinks: {
-        googleDeliverableLink: undefined,
-        frameReviewLink: undefined,
-        animaticReviewLink: undefined,
-        loomReviewLink: undefined,
-        flexLink: undefined,
-      },
-      revisionRounds: "",
-      feedbackWindows: "",
-      versionNotes: "",
+      reviewLinks,
+      revisionRounds: sourceRevisionRounds,
+      feedbackWindows: sourceFeedbackWindows,
+      versionNotes: sourceVersionNotes,
     };
 
     return NextResponse.json(result);

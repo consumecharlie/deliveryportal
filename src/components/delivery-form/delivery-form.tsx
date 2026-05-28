@@ -266,10 +266,13 @@ export function DeliveryForm({
   // ── Fetch add-on project detail ──
 
   const { data: addonTaskDetail } = useQuery<TaskDetail>({
-    queryKey: ["addon-detail", addonProject?.listId, addonProject?.deliverableType],
+    queryKey: ["addon-detail", addonProject?.listId, addonProject?.deliverableType, addonProject?.taskId],
     queryFn: async () => {
+      const taskIdParam = addonProject!.taskId
+        ? `&taskId=${encodeURIComponent(addonProject!.taskId)}`
+        : "";
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(addonProject!.listId)}/detail?deliverableType=${encodeURIComponent(addonProject!.deliverableType)}`
+        `/api/projects/${encodeURIComponent(addonProject!.listId)}/detail?deliverableType=${encodeURIComponent(addonProject!.deliverableType)}${taskIdParam}`
       );
       if (!res.ok) throw new Error("Failed to fetch add-on project detail");
       return res.json();
