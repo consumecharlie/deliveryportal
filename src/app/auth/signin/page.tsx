@@ -68,7 +68,7 @@ export default function SignInPage() {
     <Suspense
       fallback={
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#151919]">
-          <PacmanLoader size={48} />
+          <PacmanLoader size={72} />
         </div>
       }
     >

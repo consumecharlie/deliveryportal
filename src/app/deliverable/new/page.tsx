@@ -149,7 +149,7 @@ export default function NewDeliveryPage() {
         {/* Loading state */}
         {shouldFetchDetail && isLoadingDetail && (
           <div className="flex items-center justify-center py-8">
-            <PacmanLoader size={96} />
+            <PacmanLoader size={144} />
           </div>
         )}
 
