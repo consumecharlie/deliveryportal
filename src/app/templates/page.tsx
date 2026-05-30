@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import PacmanLoader from "@/components/ui/pacman-loader";
 import {
   departmentColors,
   DEPARTMENT_ORDER,
@@ -165,8 +166,11 @@ export default function TemplatesPage() {
       )}
 
       {isLoading && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          Loading templates...
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
+          <PacmanLoader size={72} />
+          <span className="font-pixel text-[13px]" style={{ color: "#6AC387" }}>
+            LOADING TEMPLATES
+          </span>
         </div>
       )}
 

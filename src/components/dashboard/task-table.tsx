@@ -100,7 +100,7 @@ export function TaskTable() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
-        <PacmanLoader size={32} />
+        <PacmanLoader size={72} />
         <span className="font-pixel text-[13px]" style={{ color: "#6AC387" }}>LOADING DASHBOARD</span>
       </div>
     );

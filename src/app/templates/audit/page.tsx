@@ -172,7 +172,7 @@ export default function TemplatesAuditPage() {
 
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
-          <PacmanLoader size={32} />
+          <PacmanLoader size={72} />
           <span className="font-pixel text-[13px]" style={{ color: "#6AC387" }}>
             AUDITING TEMPLATES
           </span>
@@ -379,7 +379,7 @@ function PreviewFixDialog({
 
         {isLoading && (
           <div className="flex items-center justify-center py-12">
-            <PacmanLoader size={24} />
+            <PacmanLoader size={48} />
           </div>
         )}
         {error && (
