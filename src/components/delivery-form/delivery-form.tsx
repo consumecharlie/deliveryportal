@@ -956,11 +956,11 @@ export function DeliveryForm({
     <div className="space-y-4 pb-24">
       {/* Resend banner */}
       {resendFrom && (
-        <div className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-amber-500/10 border-y border-amber-500/30 text-sm flex items-center gap-3 backdrop-blur">
-          <Send className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+        <div className="sticky top-0 z-10 flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm backdrop-blur">
+          <Send className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
           <div className="text-amber-900 dark:text-amber-200">
             <strong>Resending a prior delivery.</strong>{" "}
-            Recipient, sender, channel, subject, and review links are prefilled from what was sent before — review and correct anything that was wrong, then click Send. The share task won&apos;t be re-completed.
+            Recipient, sender, channel, subject, and review links are prefilled from what was sent before. Review and correct anything that was wrong, then click Send. The share task won&apos;t be re-completed.
           </div>
         </div>
       )}
