@@ -289,7 +289,7 @@
 
 .pac-ripple .pr-mark {
   position: relative;
-  left: -3px; /* optical-centering nudge for the open mouth */
+  left: -2px; /* optical-centering nudge for the open mouth */
   width: 42%;
   height: 42%;
   color: var(--pac-green);
