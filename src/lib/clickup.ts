@@ -47,17 +47,41 @@ export async function getTask(taskId: string): Promise<ClickUpTask> {
   );
 }
 
+/**
+ * Fetch every task in a ClickUp list, transparently paging.
+ *
+ * ClickUp's `/list/{listId}/task` returns at most ~100 tasks per call and
+ * uses a 0-indexed `page` query param. Without paging, any list with more
+ * than ~100 tasks (subtasks count too) silently drops the rest — which made
+ * mature project lists (and every share task past page 0) invisible to the
+ * portal. We loop until a page comes back below `PAGE_SIZE`, which signals
+ * the last page (the API exposes no total/last-page flag).
+ */
 export async function getListTasks(
   listId: string,
   includeSubtasks = true
 ): Promise<{ tasks: ClickUpTask[] }> {
-  const params = new URLSearchParams({
-    include_closed: "false",
-    subtasks: String(includeSubtasks),
-  });
-  return clickupFetch<{ tasks: ClickUpTask[] }>(
-    `/list/${listId}/task?${params}`
-  );
+  // ClickUp's list-task endpoint returns up to ~100 tasks per page.
+  const PAGE_SIZE = 100;
+  // Safety cap — 5,000 tasks per list is well beyond anything we expect.
+  const MAX_PAGES = 50;
+
+  const all: ClickUpTask[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      include_closed: "false",
+      subtasks: String(includeSubtasks),
+      page: String(page),
+    });
+    const res = await clickupFetch<{ tasks: ClickUpTask[] }>(
+      `/list/${listId}/task?${params}`
+    );
+    const batch = res.tasks ?? [];
+    all.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  return { tasks: all };
 }
 
 export async function updateTaskCustomField(
