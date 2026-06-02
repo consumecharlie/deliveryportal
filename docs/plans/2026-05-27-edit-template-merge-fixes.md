@@ -12,6 +12,7 @@ Session progress log / recovery doc. All work below is **committed and pushed to
 | `f1d7be5` | Drafts: show each saved-by user's real avatar (was always logged-in user's) |
 | `2ed26e3` | Merged send: complete the EXISTING add-on share task instead of creating a duplicate (2026-05-28) |
 | `72ea560` | Merged add-on: pull review links + scope from the real ClickUp task (2026-05-28) |
+| `bb7369f` | Resend feature: correct a misconfigured delivery from the sent-detail dialog (2026-06-02) |
 
 Branch: `main`. Base before this session: `7dcc5bc`.
 
@@ -115,6 +116,18 @@ Tony also noticed the add-on's review link wasn't written back to ClickUp, and a
 Net effect with `2ed26e3`: the add-on's Google/Frame/Loom links + scope prefill from ClickUp, appear in the merged message, and write back to that same existing task on send. Note: revision rounds / feedback windows are *read* but not written back — matching the primary's behavior (primary only writes links + version notes + slack channel).
 
 Files: `app/api/projects/[listId]/detail/route.ts`, `delivery-form.tsx` (add-on-detail query).
+
+## 2026-06-02 — Resend feature (commit `bb7369f`)
+
+Lets you correct a misconfigured delivery without inflating analytics. Button in the sent-detail dialog routes to `/deliverable/[taskId]?resendFrom=<id>`; the form prefills from the prior `Delivery` row (recipient/sender/CCs/slack channel/subject/links + the saved `editedSnippet`/`editedSubject`) via a one-shot effect, shows a resend banner, and passes `resendOf` through SendBar to the send route.
+
+**Schema (Neon, additive nullable):** `Delivery.replacesDeliveryId` (self-FK), `editedSnippet`/`editedSubject` (captured at every send so future resends preserve template-level edits).
+
+**Send-route behavior on `resendOf`:** skip mark-complete (task already complete), skip the add-on side-effects (add-ons have their own Delivery rows and are independently resendable — avoids duplicate add-on tasks), and persist `replacesDeliveryId` on the new row.
+
+**Analytics:** totals, weekly counts, by-department, by-type, and the team leaderboard now filter `replacesDeliveryId: null` (a resend doesn't double-count). Activity feed includes resends with the verb "resent" + a `RESENT` tag. Sent-table rows show a `RESENT` badge; sent dialog shows a `RESENT · VIEW ORIGINAL` chip that opens the prior delivery.
+
+**Reused existing route:** `GET /api/deliveries/[id]` already returns the row + links — no new endpoint added (initial duplicate `/[deliveryId]` route was removed before commit to avoid the sibling-dynamic-segment hang).
 
 ## Known minor limitations
 - Different-project merges with *coincidentally identical* plan URLs aren't deduped (template-level dedup only fires for same-project). Rare; acceptable.
