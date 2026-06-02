@@ -29,6 +29,18 @@ model Delivery {
   n8nStatus       String?
   projectListId   String?
   clientFolderId  String?
+  // When this delivery is a resend, points to the original Delivery it
+  // corrects. Self-FK so we can chain (rare) and so analytics can exclude
+  // resends from totals/leaderboard while still surfacing them in the
+  // activity log.
+  replacesDeliveryId String?
+  replaces        Delivery?      @relation("DeliveryReplaces", fields: [replacesDeliveryId], references: [id])
+  replacedBy      Delivery[]     @relation("DeliveryReplaces")
+  // Snapshot of the user's per-delivery template + subject edits at send
+  // time, so a resend can carry forward "what they meant to send" while
+  // still picking up corrected form-field values via re-merge.
+  editedSnippet   String?        @db.Text
+  editedSubject   String?
   links           DeliveryLink[]
   createdAt       DateTime       @default(now())
 
@@ -36,6 +48,7 @@ model Delivery {
   @@index([projectListId])
   @@index([clientFolderId])
   @@index([sentAt])
+  @@index([replacesDeliveryId])
 }
 
 model DeliveryLink {

@@ -1,13 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { DeliveryForm } from "@/components/delivery-form/delivery-form";
+import { useParams, useSearchParams } from "next/navigation";
+import { DeliveryForm, type ResendFrom } from "@/components/delivery-form/delivery-form";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TaskDetail } from "@/lib/types";
 
 export default function DeliverablePage() {
   const { taskId } = useParams<{ taskId: string }>();
+  const searchParams = useSearchParams();
+  const resendFromId = searchParams.get("resendFrom");
 
   const { data, isLoading, error } = useQuery<TaskDetail>({
     queryKey: ["task", taskId],
@@ -18,6 +20,22 @@ export default function DeliverablePage() {
     },
     staleTime: 60_000,
     refetchInterval: false, // Don't auto-refetch while editing
+  });
+
+  // When ?resendFrom=<deliveryId> is set, fetch the prior delivery so the form
+  // can prefill recipient/sender/links/scope/template edits from what was
+  // actually sent before.
+  const { data: resendData } = useQuery<{ delivery: ResendFrom["delivery"] & { links: ResendFrom["links"] } }>({
+    queryKey: ["delivery", resendFromId],
+    queryFn: async () => {
+      const res = await fetch(`/api/deliveries/${resendFromId}`);
+      // Note: this hits the existing GET /api/deliveries/[id] route, which
+      // already returns the delivery + its links — no new endpoint needed.
+      if (!res.ok) throw new Error("Failed to load delivery");
+      return res.json();
+    },
+    enabled: !!resendFromId,
+    staleTime: 5 * 60_000,
   });
 
   if (isLoading) {
@@ -46,5 +64,9 @@ export default function DeliverablePage() {
     );
   }
 
-  return <DeliveryForm taskDetail={data} />;
+  const resendFrom: ResendFrom | undefined = resendData?.delivery
+    ? { delivery: resendData.delivery, links: resendData.delivery.links }
+    : undefined;
+
+  return <DeliveryForm taskDetail={data} resendFrom={resendFrom} />;
 }

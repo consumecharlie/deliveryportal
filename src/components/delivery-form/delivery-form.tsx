@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus, CalendarClock, RotateCcw } from "lucide-react";
+import { ArrowLeft, ExternalLink, Mail, MessageSquare, FlaskConical, Plus, CalendarClock, RotateCcw, Send } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,12 +52,38 @@ import type {
 import type { MentionItem } from "@/components/shared/rich-text-editor";
 import type { SlackLintError } from "@/lib/slack-lint";
 
+/** A prior delivery + its review-link records, used to prefill the form when
+ *  resending a previously-sent delivery (?resendFrom=<deliveryId>). */
+export interface ResendFrom {
+  delivery: {
+    id: string;
+    primaryEmail: string;
+    ccEmails: string | null;
+    senderEmail: string;
+    slackChannel: string | null;
+    emailSubject: string;
+    editedSnippet: string | null;
+    editedSubject: string | null;
+  };
+  links: Array<{
+    url: string;
+    label: string;
+    linkType: string;
+    variableName: string | null;
+  }>;
+}
+
 interface DeliveryFormProps {
   taskDetail: TaskDetail;
   adhocMode?: boolean;
   adhocListId?: string;
   adhocDeliverableType?: string;
   adhocDepartment?: string;
+  /** Set when the user clicked Resend on a prior sent delivery. The form
+   *  prefills its overridable fields with the prior values; on send, the
+   *  send route writes a replacesDeliveryId link and skips re-completing
+   *  the (already-complete) share task. */
+  resendFrom?: ResendFrom;
 }
 
 export function DeliveryForm({
@@ -66,6 +92,7 @@ export function DeliveryForm({
   adhocListId,
   adhocDeliverableType,
   adhocDepartment,
+  resendFrom,
 }: DeliveryFormProps) {
   const { task, contacts, feedbackDeadline, template: initialTemplate } = taskDetail;
   const { data: session } = useSession();
@@ -772,6 +799,39 @@ export function DeliveryForm({
     return () => { cancelled = true; };
   }, [task.id, draftLoaded]);
 
+  // ── Resend prefill ──
+  //
+  // Applied once when `resendFrom` becomes available. Overrides the form
+  // state with what was actually sent on the prior delivery: recipient,
+  // sender, CCs, slack channel, subject, review/extra links, and the
+  // template/subject edits the user had made.
+  const resendApplied = useRef(false);
+  useEffect(() => {
+    if (!resendFrom || resendApplied.current) return;
+    resendApplied.current = true;
+    const { delivery: prior, links } = resendFrom;
+    if (prior.primaryEmail) setEditedToEmail(prior.primaryEmail);
+    if (prior.ccEmails) setEditedCcEmails(prior.ccEmails);
+    if (prior.senderEmail) setEditedSenderEmail(prior.senderEmail);
+    if (prior.slackChannel) setSlackChannelId(prior.slackChannel);
+    if (prior.editedSnippet) setEditedSnippet(prior.editedSnippet);
+    if (prior.editedSubject) setEditedSubject(prior.editedSubject);
+
+    const standardByVar: Record<string, string> = {};
+    const extras: Array<{ url: string; label: string }> = [];
+    for (const link of links) {
+      if (link.linkType === "extra") {
+        extras.push({ url: link.url, label: link.label });
+      } else if (link.variableName) {
+        standardByVar[link.variableName] = link.url;
+      }
+    }
+    if (Object.keys(standardByVar).length > 0) {
+      setReviewLinks((prev) => ({ ...prev, ...standardByVar }));
+    }
+    if (extras.length > 0) setExtraLinks(extras);
+  }, [resendFrom]);
+
   const isScheduled = scheduleStatus === "scheduled" && Boolean(scheduledFor);
 
   const buildScheduledPayload = useCallback((): ScheduledSendPayload => ({
@@ -894,6 +954,17 @@ export function DeliveryForm({
 
   return (
     <div className="space-y-4 pb-24">
+      {/* Resend banner */}
+      {resendFrom && (
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-amber-500/10 border-y border-amber-500/30 text-sm flex items-center gap-3 backdrop-blur">
+          <Send className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+          <div className="text-amber-900 dark:text-amber-200">
+            <strong>Resending a prior delivery.</strong>{" "}
+            Recipient, sender, channel, subject, and review links are prefilled from what was sent before — review and correct anything that was wrong, then click Send. The share task won&apos;t be re-completed.
+          </div>
+        </div>
+      )}
+
       {/* Scheduled banner */}
       {isScheduled && scheduledFor && (
         <div className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-blue-500/10 border-y border-blue-500/30 text-sm flex items-center justify-between gap-3 backdrop-blur">
@@ -1324,6 +1395,7 @@ export function DeliveryForm({
         addonDeliverableType={addonProject?.deliverableType}
         addonDepartment={addonTaskDetail?.task.department}
         addonReviewLinks={addonProject ? addonReviewLinks : undefined}
+        resendOf={resendFrom?.delivery.id}
         addonProjectName={addonProject?.projectName}
         scheduledMode={isScheduled}
         onUpdateSchedule={isScheduled ? handleUpdateSchedule : undefined}

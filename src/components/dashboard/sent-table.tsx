@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import PacmanLoader from "@/components/ui/pacman-loader";
 import {
@@ -23,7 +23,8 @@ import { SLACK_EMOJI_MAP } from "@/lib/template-merge";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
-import { ExternalLink, AlertCircle, Mail, MessageSquare, Bookmark } from "lucide-react";
+import { ExternalLink, AlertCircle, Mail, MessageSquare, Bookmark, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 interface DeliveryLink {
@@ -53,6 +54,8 @@ interface Delivery {
   sentAt: string;
   n8nStatus: string | null;
   projectListId: string | null;
+  /** When this delivery is a resend, points to the original Delivery it corrected. */
+  replacesDeliveryId: string | null;
   links: DeliveryLink[];
 }
 
@@ -152,6 +155,7 @@ export function SentTable() {
   // param so other pages can deep-link straight into a delivery's
   // dialog (used by the analytics activity log). Avoids the setState-
   // inside-useEffect cascading-renders lint error.
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(
     () => searchParams.get("open")
@@ -429,7 +433,17 @@ export function SentTable() {
                     {delivery.projectName || "—"}
                   </TableCell>
                   <TableCell className={`${cellClass} text-sm text-muted-foreground`}>
-                    {delivery.deliverableType || "—"}
+                    <span className="inline-flex items-center gap-2">
+                      {delivery.deliverableType || "—"}
+                      {delivery.replacesDeliveryId && (
+                        <span
+                          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-pixel tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                          title="This delivery resent a prior one"
+                        >
+                          RESENT
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className={cellClass}>
                     <DepartmentBadge department={delivery.department} />
@@ -514,16 +528,43 @@ export function SentTable() {
                         </>
                       )}
                     </span>
-                    {selectedDelivery.projectListId && (
-                      <Link
-                        href={`/projects/${selectedDelivery.projectListId}`}
-                        className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                        title="Open project links"
+                    {selectedDelivery.replacesDeliveryId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedDeliveryId(selectedDelivery.replacesDeliveryId)
+                        }
+                        className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-pixel tracking-[0.18em] text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
+                        title="This delivery resent an earlier one — click to view the original"
                       >
-                        <Bookmark className="h-3.5 w-3.5" />
-                        Project links
-                      </Link>
+                        RESENT · VIEW ORIGINAL
+                      </button>
                     )}
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (!confirm("Resend this delivery? This opens the form prefilled with the prior values so you can correct what was wrong before sending again.")) return;
+                          router.push(
+                            `/deliverable/${selectedDelivery.taskId}?resendFrom=${selectedDelivery.id}`
+                          );
+                        }}
+                      >
+                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                        Resend
+                      </Button>
+                      {selectedDelivery.projectListId && (
+                        <Link
+                          href={`/projects/${selectedDelivery.projectListId}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                          title="Open project links"
+                        >
+                          <Bookmark className="h-3.5 w-3.5" />
+                          Project links
+                        </Link>
+                      )}
+                    </div>
                   </DialogTitle>
                 </DialogHeader>
 

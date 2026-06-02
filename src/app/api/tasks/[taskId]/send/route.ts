@@ -44,6 +44,10 @@ interface SendRequestBody {
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
   addonProjectName?: string;
+  /** Set when this is a resend correcting a prior delivery — the share task
+   *  is already complete, so we skip re-marking it, and the new Delivery row
+   *  records the audit link via replacesDeliveryId. */
+  resendOf?: string;
 }
 
 /**
@@ -328,8 +332,12 @@ export async function POST(
     }
 
     // ── 5. Mark task complete in ClickUp (skip in test mode) ──
+    //
+    // On a resend the share task is already complete from the original send —
+    // re-marking it would be a no-op but we still skip it to keep the audit
+    // trail clean and to avoid touching ClickUp unnecessarily.
 
-    if (!testMode) {
+    if (!testMode && !body.resendOf) {
       await updateTaskStatus(taskId, "complete");
     }
 
@@ -357,6 +365,13 @@ export async function POST(
             sentBy: userEmail,
             projectListId: listId || null,
             clientFolderId: null,
+            // Per-delivery template edits — captured so a resend can carry
+            // forward "what they meant to send" while re-merging with the
+            // (possibly corrected) current field values.
+            editedSnippet: formState.editedSnippet ?? null,
+            editedSubject: formState.editedSubject ?? null,
+            // Audit link when this delivery corrects a prior one.
+            replacesDeliveryId: body.resendOf ?? null,
           },
         });
         deliveryId = delivery.id;
@@ -402,7 +417,10 @@ export async function POST(
     }
 
     // ── 7. Handle add-on project (if combined delivery) ──
-    if (!testMode && body.addonListId) {
+    // Skip the add-on side-effects on a resend — the add-on task was already
+    // completed and logged on the original send, and the add-on has its own
+    // Delivery row that's independently resendable if it needs correcting.
+    if (!testMode && !body.resendOf && body.addonListId) {
       try {
         const addonListId = body.addonListId;
         const addonDeliverableType = body.addonDeliverableType ?? "";

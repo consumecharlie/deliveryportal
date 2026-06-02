@@ -57,6 +57,8 @@ interface AnalyticsData {
     projectName: string;
     sentBy: string;
     sentAt: string;
+    isResend: boolean;
+    replacesDeliveryId: string | null;
   }>;
   period: string;
 }
@@ -595,10 +597,15 @@ export default function AnalyticsPage() {
                               <span className="font-medium">
                                 {senderDisplayName}
                               </span>{" "}
-                              sent{" "}
+                              {item.isResend ? "resent" : "sent"}{" "}
                               <span className="text-muted-foreground">
                                 {item.deliverableType}
                               </span>
+                              {item.isResend && (
+                                <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-pixel tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                                  RESENT
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               {item.clientName}

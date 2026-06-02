@@ -64,6 +64,8 @@ interface SendBarProps {
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
   addonProjectName?: string;
+  /** Prior Delivery.id when this is a resend correcting an earlier send. */
+  resendOf?: string;
   scheduledMode?: boolean;
   onUpdateSchedule?: () => void | Promise<void>;
   isUpdatingSchedule?: boolean;
@@ -94,6 +96,7 @@ export function SendBar({
   addonDepartment,
   addonReviewLinks,
   addonProjectName,
+  resendOf,
   scheduledMode = false,
   onUpdateSchedule,
   isUpdatingSchedule = false,
@@ -129,6 +132,7 @@ export function SendBar({
         }
       : {}),
     ...(testMode ? { testMode: true, testEmail } : {}),
+    ...(resendOf ? { resendOf } : {}),
   });
 
   const handleSchedule = async (isoString: string) => {
@@ -221,6 +225,7 @@ export function SendBar({
             taskMeta,
             ...(testMode ? { testMode: true, testEmail } : {}),
             ...addonFields,
+            ...(resendOf ? { resendOf } : {}),
           }
         : {
             formState,
@@ -235,6 +240,7 @@ export function SendBar({
             taskMeta,
             ...(testMode ? { testMode: true, testEmail } : {}),
             ...addonFields,
+            ...(resendOf ? { resendOf } : {}),
           };
 
       const res = await fetch(endpoint, {

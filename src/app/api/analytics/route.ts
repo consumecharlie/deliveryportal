@@ -39,6 +39,11 @@ interface RecentDelivery {
   projectName: string;
   sentBy: string;
   sentAt: string;
+  /** True when this row is a resend correcting a prior delivery — surfaced
+   *  in the activity log so the audit trail is visible, but excluded from
+   *  totals/leaderboard upstream. */
+  isResend: boolean;
+  replacesDeliveryId: string | null;
 }
 
 export async function GET(req: Request) {
@@ -69,7 +74,10 @@ export async function GET(req: Request) {
 
     const where = startDate ? { sentAt: { gte: startDate } } : {};
 
-    // Fetch all deliveries in the period
+    // Fetch all deliveries in the period (incl. resends, so the activity feed
+    // can surface them). All aggregate stats below operate on `originals`,
+    // which filters resends out so they don't double-count toward totals or
+    // the team leaderboard — a corrected send shouldn't earn a second tally.
     const deliveries: Array<{
       id: string;
       deliverableType: string;
@@ -82,6 +90,7 @@ export async function GET(req: Request) {
       wasEdited: boolean;
       primaryEmail: string;
       slackChannel: string | null;
+      replacesDeliveryId: string | null;
     }> = await prisma.delivery.findMany({
       where,
       orderBy: { sentAt: "desc" },
@@ -97,14 +106,17 @@ export async function GET(req: Request) {
         wasEdited: true,
         primaryEmail: true,
         slackChannel: true,
+        replacesDeliveryId: true,
       },
     });
 
-    const totalDeliveries = deliveries.length;
+    // Counted-toward-stats subset: original sends only (no resends).
+    const originals = deliveries.filter((d) => !d.replacesDeliveryId);
+    const totalDeliveries = originals.length;
 
     // ── Deliveries over time (weekly buckets) ──
     const weeklyMap = new Map<string, number>();
-    for (const d of deliveries) {
+    for (const d of originals) {
       const date = new Date(d.sentAt);
       // Get the Monday of the week
       const day = date.getDay();
@@ -120,7 +132,7 @@ export async function GET(req: Request) {
 
     // ── By department ──
     const deptMap = new Map<string, number>();
-    for (const d of deliveries) {
+    for (const d of originals) {
       const dept = d.department || "Unknown";
       deptMap.set(dept, (deptMap.get(dept) ?? 0) + 1);
     }
@@ -131,7 +143,7 @@ export async function GET(req: Request) {
 
     // ── By deliverable type ──
     const typeMap = new Map<string, number>();
-    for (const d of deliveries) {
+    for (const d of originals) {
       const type = d.deliverableType || "Unknown";
       typeMap.set(type, (typeMap.get(type) ?? 0) + 1);
     }
@@ -141,8 +153,9 @@ export async function GET(req: Request) {
       .map(([deliverableType, count]) => ({ deliverableType, count }));
 
     // ── Team leaderboard (by sender) ──
+    // Excludes resends so a corrected send doesn't double-credit the sender.
     const senderMap = new Map<string, number>();
-    for (const d of deliveries) {
+    for (const d of originals) {
       const sender = d.sentBy || d.senderEmail || "Unknown";
       senderMap.set(sender, (senderMap.get(sender) ?? 0) + 1);
     }
@@ -152,12 +165,14 @@ export async function GET(req: Request) {
       .map(([senderEmail, count]) => ({ senderEmail, count }));
 
     // ── Additional stats ──
-    const editedCount = deliveries.filter((d) => d.wasEdited).length;
-    const slackCount = deliveries.filter((d) => !!d.slackChannel).length;
-    const uniqueClients = new Set(deliveries.map((d) => d.clientName).filter(Boolean)).size;
-    const uniqueProjects = new Set(deliveries.map((d) => d.projectName).filter(Boolean)).size;
+    const editedCount = originals.filter((d) => d.wasEdited).length;
+    const slackCount = originals.filter((d) => !!d.slackChannel).length;
+    const uniqueClients = new Set(originals.map((d) => d.clientName).filter(Boolean)).size;
+    const uniqueProjects = new Set(originals.map((d) => d.projectName).filter(Boolean)).size;
 
     // ── Recent activity feed ──
+    // Includes resends so the audit trail is visible — `isResend` lets the UI
+    // tag them. `deliveries` is already sorted DESC by sentAt from the query.
     const recentActivity: RecentDelivery[] = deliveries.slice(0, 20).map((d) => ({
       id: d.id,
       deliverableType: d.deliverableType,
@@ -166,6 +181,8 @@ export async function GET(req: Request) {
       projectName: d.projectName,
       sentBy: d.sentBy || d.senderEmail,
       sentAt: d.sentAt.toISOString(),
+      isResend: !!d.replacesDeliveryId,
+      replacesDeliveryId: d.replacesDeliveryId,
     }));
 
     return NextResponse.json({

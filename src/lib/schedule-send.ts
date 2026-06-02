@@ -22,10 +22,13 @@ export interface ScheduledSendPayload {
     slackChannelName?: string;
   };
   addonListId?: string;
+  addonTaskId?: string;
   addonDeliverableType?: string;
   addonDepartment?: string;
   addonReviewLinks?: Record<string, string>;
   addonProjectName?: string;
+  /** Prior Delivery.id when this scheduled send is itself a resend. */
+  resendOf?: string;
   testMode?: boolean;
   testEmail?: string;
 }
