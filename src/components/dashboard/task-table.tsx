@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -13,6 +14,11 @@ import PacmanLoader from "@/components/ui/pacman-loader";
 import { AssigneeFilter } from "./assignee-filter";
 import { TaskCard } from "./task-card";
 import type { DeliverableTask } from "@/lib/types";
+
+// Dashboard auto-filters to the logged-in user's own deliveries on first
+// load so each person lands on their queue. Admins listed here are exempt —
+// they default to "All Assignees". Manual changes stick once made.
+const ADMIN_EMAILS = new Set<string>(["michael@consume-media.com"]);
 
 /* ------------------------------------------------------------------ */
 /*  Date bucket helpers                                                */
@@ -70,7 +76,12 @@ function splitByTimeBucket(tasks: DeliverableTask[]) {
 /* ------------------------------------------------------------------ */
 
 export function TaskTable() {
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email?.toLowerCase() ?? "";
   const [assigneeFilter, setAssigneeFilter] = useState("");
+  // Tracks whether we've already applied the per-user default so a tasks
+  // refetch doesn't re-snap the filter back over a manual user change.
+  const appliedUserDefault = useRef(false);
 
   const { data, isLoading, error } = useQuery<{ tasks: DeliverableTask[] }>({
     queryKey: ["tasks"],
@@ -82,6 +93,27 @@ export function TaskTable() {
   });
 
   const allTasks = data?.tasks ?? [];
+
+  // Default the assignee filter to the logged-in user once tasks load — by
+  // matching the session email against assignee.email in the task list and
+  // picking up their ClickUp user id from there. Admins are skipped (they
+  // see all by default). Only runs once per mount.
+  useEffect(() => {
+    if (appliedUserDefault.current) return;
+    if (!userEmail) return; // wait for session
+    if (ADMIN_EMAILS.has(userEmail)) {
+      appliedUserDefault.current = true;
+      return;
+    }
+    if (allTasks.length === 0) return; // wait for tasks
+    const mine = allTasks.find(
+      (t) => t.assignee?.email?.toLowerCase() === userEmail
+    );
+    if (mine?.assignee) {
+      setAssigneeFilter(String(mine.assignee.id));
+    }
+    appliedUserDefault.current = true;
+  }, [userEmail, allTasks]);
 
   // Filter by assignee
   const filtered = useMemo(() => {
