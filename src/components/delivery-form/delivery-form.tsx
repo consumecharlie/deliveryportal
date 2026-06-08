@@ -689,7 +689,14 @@ export function DeliveryForm({
   const formState: DeliveryFormState = {
     deliverableType,
     reviewLinks,
-    extraLinks: extraLinks.filter((l) => l.url && l.label),
+    // Custom labels for standard variables (e.g. flexLink → "Updated Animatic").
+    // The user may type a label before pasting the URL — without this, those
+    // labels were dropped on auto-save and disappeared on reload.
+    linkLabels,
+    // Persist any row that has either a URL or a label so a partially-filled
+    // row survives auto-save. Completely empty rows are still dropped as
+    // noise. The send path already guards on `extra.url` before writing.
+    extraLinks: extraLinks.filter((l) => l.url || l.label),
     revisionRounds,
     feedbackWindows,
     versionNotes,
@@ -763,6 +770,9 @@ export function DeliveryForm({
         if (saved.feedbackWindows) setFeedbackWindows(saved.feedbackWindows);
         if (saved.reviewLinks) {
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
+        }
+        if (saved.linkLabels && Object.keys(saved.linkLabels).length > 0) {
+          setLinkLabels((prev) => ({ ...prev, ...saved.linkLabels }));
         }
         if (saved.extraLinks?.length) setExtraLinks(saved.extraLinks);
         if (saved.editedSnippet) setEditedSnippet(saved.editedSnippet);

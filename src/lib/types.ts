@@ -138,6 +138,10 @@ export interface MergedContent {
 export interface DeliveryFormState {
   deliverableType: string;
   reviewLinks: Record<string, string>;
+  /** User-customized labels for the standard review-link variables, keyed by
+   *  the variable name (e.g. flexLink → "Updated Animatic"). Persisted in
+   *  drafts so a label entered before a URL doesn't disappear. */
+  linkLabels?: Record<string, string>;
   extraLinks: Array<{ url: string; label: string }>;
   revisionRounds: string;
   feedbackWindows: string;
