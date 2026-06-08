@@ -34,19 +34,26 @@ export function ReviewLinksSection({
   onExtraLinkChange,
   onRemoveExtraLink,
 }: ReviewLinksSectionProps) {
-  // The flex link field should be shown first when the user adds a link,
-  // before any dynamic extra links. It only shows via Add if the template
-  // doesn't already include it in requiredFields.
+  // The flex link field shows first when the user adds a link, before any
+  // dynamic extras. Visibility is derived from three signals so that a
+  // draft-restored label (without a URL yet) keeps the row visible — the
+  // prior `useState`-initializer version only checked URL presence on the
+  // very first render, so a deferred label restore collapsed the row.
   const flexAlreadyRequired = requiredFields.includes("flexLink");
   const flexHasValue = !!reviewLinks.flexLink;
+  const flexHasLabel = !!linkLabels.flexLink;
 
-  // Track whether the user has activated the flex link field via Add
-  const [flexLinkActive, setFlexLinkActive] = useState(flexHasValue && !flexAlreadyRequired);
+  // Tracks "user manually opened an empty flex row via the Add button" so the
+  // row doesn't disappear if they clear the inputs but haven't trashed it.
+  const [flexLinkManuallyActive, setFlexLinkManuallyActive] = useState(false);
+  const flexLinkActive =
+    !flexAlreadyRequired &&
+    (flexHasValue || flexHasLabel || flexLinkManuallyActive);
 
   const handleAddClick = useCallback(() => {
     // If flex link isn't already shown (via template or user), show it first
     if (!flexAlreadyRequired && !flexLinkActive) {
-      setFlexLinkActive(true);
+      setFlexLinkManuallyActive(true);
     } else {
       // Otherwise add a dynamic extra link
       onAddExtraLink();
@@ -54,9 +61,12 @@ export function ReviewLinksSection({
   }, [flexAlreadyRequired, flexLinkActive, onAddExtraLink]);
 
   const handleRemoveFlexLink = useCallback(() => {
-    setFlexLinkActive(false);
+    setFlexLinkManuallyActive(false);
     onReviewLinkChange("flexLink", "");
-  }, [onReviewLinkChange]);
+    // Clear the label too — otherwise the derived `flexHasLabel` would
+    // immediately re-open the row that the user just trashed.
+    onLinkLabelChange("flexLink", "");
+  }, [onReviewLinkChange, onLinkLabelChange]);
 
   return (
     <div className="space-y-3">
