@@ -25,7 +25,7 @@ describe("flexible feedback deadline", () => {
   it("reframes the deadline as a soft target when Flexible", () => {
     const { emailContent } = mergeTemplate(TEMPLATE, "subj", baseVars());
     expect(emailContent).toContain(
-      "**Feedback Deadline:** Flexible. We're aiming for ~Mon, Jul 6 to stay aligned with the project plan, but this can flex with your team's timeline."
+      "**Feedback Deadline:** We're aiming for ~Mon, Jul 6 to stay aligned with the project plan, but this can flex with your team's timeline."
     );
     // No em dashes in client-facing copy.
     expect(emailContent).not.toContain("—");
@@ -59,7 +59,7 @@ describe("flexible feedback deadline", () => {
   it("applies to the Slack version too", () => {
     const { slackContent } = mergeTemplate(TEMPLATE, "subj", baseVars());
     expect(slackContent).toContain(
-      "Flexible. We're aiming for ~Mon, Jul 6"
+      "**Feedback Deadline:** We're aiming for ~Mon, Jul 6"
     );
   });
 });
