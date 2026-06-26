@@ -422,8 +422,8 @@ function injectFlexibleFeedbackNotice(
 
   const date = opts.nextFeedbackDeadline?.trim();
   const value = date
-    ? `Flexible — we're aiming for ~${date} to stay aligned with the project plan, but this can flex with your team's timeline.`
-    : `Flexible — we'll target a date based on the project plan and stay flexible to your team's timeline.`;
+    ? `Flexible. We're aiming for ~${date} to stay aligned with the project plan, but this can flex with your team's timeline.`
+    : `Flexible. We'll target a date based on the project plan and stay flexible to your team's timeline.`;
 
   const lines = content.split("\n");
   const idx = lines.findIndex(

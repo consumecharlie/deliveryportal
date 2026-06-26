@@ -25,8 +25,10 @@ describe("flexible feedback deadline", () => {
   it("reframes the deadline as a soft target when Flexible", () => {
     const { emailContent } = mergeTemplate(TEMPLATE, "subj", baseVars());
     expect(emailContent).toContain(
-      "**Feedback Deadline:** Flexible — we're aiming for ~Mon, Jul 6 to stay aligned with the project plan, but this can flex with your team's timeline."
+      "**Feedback Deadline:** Flexible. We're aiming for ~Mon, Jul 6 to stay aligned with the project plan, but this can flex with your team's timeline."
     );
+    // No em dashes in client-facing copy.
+    expect(emailContent).not.toContain("—");
     // The hard "EOD <date>" phrasing should be gone.
     expect(emailContent).not.toContain("EOD Mon, Jul 6");
     // The Feedback Windows line is untouched.
@@ -57,7 +59,7 @@ describe("flexible feedback deadline", () => {
   it("applies to the Slack version too", () => {
     const { slackContent } = mergeTemplate(TEMPLATE, "subj", baseVars());
     expect(slackContent).toContain(
-      "Flexible — we're aiming for ~Mon, Jul 6"
+      "Flexible. We're aiming for ~Mon, Jul 6"
     );
   });
 });
