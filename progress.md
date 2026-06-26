@@ -137,3 +137,24 @@ and Deliverable Type already use:
 
 **Result:** adding/renaming a dropdown option in ClickUp now appears in the portal
 automatically — no code change. (ClickUp task fetch isn't cached, so it's immediate.)
+
+---
+
+## 2026-06-26 — Flexible feedback windows reframe the deadline line
+
+### Problem
+When Feedback Windows = "Flexible", the snippet still rendered a hard
+"**Feedback Deadline:** EOD <date>", which contradicts the flexibility.
+
+### Fix
+`injectFlexibleFeedbackNotice()` in `template-merge.ts` (mirrors the existing
+`injectRushedNotice` pattern): when `feedbackWindows` is "Flexible" (and the
+project isn't Rushed), it rewrites the deadline bullet to:
+
+> **Feedback Deadline:** Flexible — we're aiming for ~<date> to stay aligned with
+> the project plan, but this can flex with your team's timeline.
+
+Wired into email, Slack, and the add-on combined merge. Rushed projects keep
+their fixed-deadline alert (rushed wins, since a rushed project isn't flexible).
+The "Feedback Windows: Flexible" line is untouched. Covered by
+`flexible-feedback.test.ts` (4 cases).

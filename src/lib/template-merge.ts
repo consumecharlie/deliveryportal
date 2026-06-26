@@ -404,6 +404,45 @@ function injectRushedNotice(
   return filtered.join("\n");
 }
 
+// When the feedback window is "Flexible", a hard "EOD <date>" deadline reads as
+// a contradiction. Reframe the deadline bullet as a soft target tied to the
+// project plan, keeping the date as guidance rather than a fixed cutoff.
+// Skipped for rushed projects, which intentionally assert a fixed deadline
+// (injectRushedNotice owns that line in that case).
+function injectFlexibleFeedbackNotice(
+  content: string,
+  opts: {
+    feedbackWindows: string;
+    rushedProject?: boolean;
+    nextFeedbackDeadline: string;
+  }
+): string {
+  const isFlexible = opts.feedbackWindows?.trim().toLowerCase() === "flexible";
+  if (!isFlexible || opts.rushedProject) return content;
+
+  const date = opts.nextFeedbackDeadline?.trim();
+  const value = date
+    ? `Flexible — we're aiming for ~${date} to stay aligned with the project plan, but this can flex with your team's timeline.`
+    : `Flexible — we'll target a date based on the project plan and stay flexible to your team's timeline.`;
+
+  const lines = content.split("\n");
+  const idx = lines.findIndex(
+    (line) =>
+      (line.toLowerCase().includes("feedback deadline") ||
+        line.toLowerCase().includes("approval deadline")) &&
+      (line.startsWith("-") || line.startsWith("•") || line.includes("Deadline"))
+  );
+  if (idx >= 0) {
+    // Preserve the bullet prefix + bold label, replace only the value after it.
+    const labelMatch = lines[idx].match(/^(\s*[-•]\s*\*\*[^*]*?\*\*)/);
+    lines[idx] = labelMatch
+      ? `${labelMatch[1]} ${value}`
+      : `- **Feedback Deadline:** ${value}`;
+  }
+
+  return lines.join("\n");
+}
+
 /**
  * Merge a delivery snippet template with variables.
  * Returns both email (markdown) and Slack (mrkdwn) versions.
@@ -467,11 +506,17 @@ export function mergeTemplate(
     nextFeedbackDeadline: variables.nextFeedbackDeadline,
     revisionRounds: variables.revisionRounds,
   };
+  const flexibleOpts = {
+    feedbackWindows: variables.feedbackWindows,
+    rushedProject: variables.rushedProject,
+    nextFeedbackDeadline: variables.nextFeedbackDeadline,
+  };
 
   // Merge the email version
   let emailContent = performMerge(template, replacements, variables.linkLabels);
   emailContent = stripRepeatClientSections(emailContent, variables.repeatClient);
   emailContent = injectRushedNotice(emailContent, rushedOpts);
+  emailContent = injectFlexibleFeedbackNotice(emailContent, flexibleOpts);
   emailContent = injectReviewLinkBullets(emailContent, reviewLinkBullets);
 
   // Build Slack version: same markdown as email, but with @mention tokens
@@ -483,6 +528,7 @@ export function mergeTemplate(
   let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
   slackContent = stripRepeatClientSections(slackContent, variables.repeatClient);
   slackContent = injectRushedNotice(slackContent, rushedOpts);
+  slackContent = injectFlexibleFeedbackNotice(slackContent, flexibleOpts);
   slackContent = injectReviewLinkBullets(slackContent, reviewLinkBullets);
 
   // Merge subject line
@@ -1028,12 +1074,18 @@ export function mergeCombinedTemplate(input: {
     nextFeedbackDeadline: pv.nextFeedbackDeadline,
     revisionRounds: pv.revisionRounds,
   };
+  const flexibleOpts = {
+    feedbackWindows: pv.feedbackWindows,
+    rushedProject: pv.rushedProject,
+    nextFeedbackDeadline: pv.nextFeedbackDeadline,
+  };
 
   const run = (contactsValue: string) => {
     const replacements = { ...baseReplacements, contacts: contactsValue };
     let out = performMerge(combinedTemplate, replacements, linkLabels, projectNameFor);
     out = stripRepeatClientSections(out, pv.repeatClient);
     out = injectRushedNotice(out, rushedOpts);
+    out = injectFlexibleFeedbackNotice(out, flexibleOpts);
     out = injectReviewLinkBullets(out, reviewLinkBullets);
     return out;
   };
