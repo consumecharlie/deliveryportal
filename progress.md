@@ -151,10 +151,15 @@ When Feedback Windows = "Flexible", the snippet still rendered a hard
 `injectRushedNotice` pattern): when `feedbackWindows` is "Flexible" (and the
 project isn't Rushed), it rewrites the deadline bullet to:
 
-> **Feedback Deadline:** Flexible — we're aiming for ~<date> to stay aligned with
-> the project plan, but this can flex with your team's timeline.
+> **Feedback Deadline:** We're aiming for ~<date> to stay aligned with the
+> project plan, but this can flex with your team's timeline.
 
 Wired into email, Slack, and the add-on combined merge. Rushed projects keep
 their fixed-deadline alert (rushed wins, since a rushed project isn't flexible).
 The "Feedback Windows: Flexible" line is untouched. Covered by
 `flexible-feedback.test.ts` (4 cases).
+
+**Wording refinements (same day):**
+- Dropped the em dash for a period, per house style (no em dashes in client copy).
+- Dropped the leading "Flexible." prefix — the Feedback Windows bullet directly
+  above already says "Flexible", so the deadline line starts at "We're aiming…".
