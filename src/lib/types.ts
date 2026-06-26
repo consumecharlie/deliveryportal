@@ -126,6 +126,11 @@ export interface TaskDetail {
   };
   revisionRounds: string;
   feedbackWindows: string;
+  /** Dropdown options pulled live from ClickUp's field definitions, so the
+   *  Scope selects reflect ClickUp without code changes. May be empty if the
+   *  field has no options or wasn't returned. */
+  revisionRoundOptions?: Array<{ value: string; label: string }>;
+  feedbackWindowOptions?: Array<{ value: string; label: string }>;
   versionNotes: string;
 }
 

@@ -226,6 +226,29 @@ export function extractCustomFieldUrl(
 }
 
 /**
+ * Extract a dropdown custom field's available options, in ClickUp's display
+ * order, as {value,label} pairs keyed by the option name. The form stores the
+ * option name as its value (see resolveDropdownOptionId for write-back), so
+ * surfacing these straight from the task's field definition keeps the portal's
+ * dropdowns in sync with ClickUp — adding an option in ClickUp needs no code
+ * change. Returns [] when the field is absent or has no options.
+ */
+export function extractDropdownOptions(
+  fields: ClickUpCustomField[],
+  fieldId: string
+): Array<{ value: string; label: string }> {
+  const field = fields.find((f) => f.id === fieldId);
+  if (!field?.type_config?.options) return [];
+  return [...field.type_config.options]
+    .sort((a, b) => (a.orderindex ?? 0) - (b.orderindex ?? 0))
+    .map((o) => {
+      const name = o.name ?? o.label ?? "";
+      return { value: name, label: name };
+    })
+    .filter((o) => o.value !== "");
+}
+
+/**
  * Resolve a dropdown custom field's option name to its orderindex/ID
  * (needed when writing back to ClickUp).
  */

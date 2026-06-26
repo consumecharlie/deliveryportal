@@ -5,6 +5,7 @@ import {
   updateTaskCustomField,
   extractCustomFieldValue,
   extractCustomFieldUrl,
+  extractDropdownOptions,
 } from "@/lib/clickup";
 import {
   CUSTOM_FIELDS,
@@ -279,6 +280,16 @@ export async function GET(
         extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.REVISION_ROUNDS) ?? "",
       feedbackWindows:
         extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.FEEDBACK_WINDOWS) ?? "",
+      // Available dropdown options pulled live from ClickUp's field definitions
+      // so the form's selects reflect ClickUp without code changes.
+      revisionRoundOptions: extractDropdownOptions(
+        task.custom_fields,
+        CUSTOM_FIELDS.REVISION_ROUNDS
+      ),
+      feedbackWindowOptions: extractDropdownOptions(
+        task.custom_fields,
+        CUSTOM_FIELDS.FEEDBACK_WINDOWS
+      ),
       versionNotes:
         extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.VERSION_NOTES) ?? "",
     };

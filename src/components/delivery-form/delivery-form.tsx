@@ -1186,6 +1186,8 @@ export function DeliveryForm({
           <ScopeSection
             revisionRounds={revisionRounds}
             feedbackWindows={feedbackWindows}
+            revisionOptions={taskDetail.revisionRoundOptions}
+            feedbackWindowOptions={taskDetail.feedbackWindowOptions}
             rushedProject={rushedProject}
             repeatClient={repeatClient}
             onRevisionRoundsChange={setRevisionRounds}
@@ -1224,7 +1226,11 @@ export function DeliveryForm({
                 <div>
                   <Label className="text-xs text-muted-foreground">Revision Rounds</Label>
                   <SearchableSelect
-                    options={[{ value: "1", label: "1" }, { value: "2", label: "2" }]}
+                    options={
+                      addonTaskDetail.revisionRoundOptions?.length
+                        ? addonTaskDetail.revisionRoundOptions
+                        : [{ value: "1", label: "1" }, { value: "2", label: "2" }]
+                    }
                     value={addonRevisionRounds}
                     onValueChange={setAddonRevisionRounds}
                     placeholder="Select..."
@@ -1233,11 +1239,15 @@ export function DeliveryForm({
                 <div>
                   <Label className="text-xs text-muted-foreground">Feedback Windows</Label>
                   <SearchableSelect
-                    options={[
-                      { value: "Same day", label: "Same day" },
-                      { value: "24 Hours", label: "24 Hours" },
-                      { value: "48 Hours", label: "48 Hours" },
-                    ]}
+                    options={
+                      addonTaskDetail.feedbackWindowOptions?.length
+                        ? addonTaskDetail.feedbackWindowOptions
+                        : [
+                            { value: "Same day", label: "Same day" },
+                            { value: "24 Hours", label: "24 Hours" },
+                            { value: "48 Hours", label: "48 Hours" },
+                          ]
+                    }
                     value={addonFeedbackWindows}
                     onValueChange={setAddonFeedbackWindows}
                     placeholder="Select..."

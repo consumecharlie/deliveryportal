@@ -3,38 +3,66 @@
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 
+type Option = { value: string; label: string };
+
 interface ScopeSectionProps {
   revisionRounds: string;
   feedbackWindows: string;
   rushedProject: boolean;
   repeatClient: boolean;
+  /** Options sourced live from ClickUp's field definitions. When provided they
+   *  replace the fallbacks below, so adding a ClickUp option needs no code
+   *  change. */
+  revisionOptions?: Option[];
+  feedbackWindowOptions?: Option[];
   onRevisionRoundsChange: (value: string) => void;
   onFeedbackWindowsChange: (value: string) => void;
   onRushedProjectChange: (value: boolean) => void;
   onRepeatClientChange: (value: boolean) => void;
 }
 
-const revisionOptions = [
+// Fallbacks used only when ClickUp options aren't available (e.g. API failure).
+const fallbackRevisionOptions: Option[] = [
   { value: "1", label: "1" },
   { value: "2", label: "2" },
 ];
 
-const feedbackWindowOptions = [
+const fallbackFeedbackWindowOptions: Option[] = [
   { value: "Same day", label: "Same day" },
   { value: "24 Hours", label: "24 Hours" },
   { value: "48 Hours", label: "48 Hours" },
 ];
+
+// Guarantee the currently-selected value is always a selectable option, so a
+// real ClickUp value never renders as a blank select even if the options list
+// is momentarily incomplete.
+function withCurrentValue(options: Option[], current: string): Option[] {
+  if (!current || options.some((o) => o.value === current)) return options;
+  return [...options, { value: current, label: current }];
+}
 
 export function ScopeSection({
   revisionRounds,
   feedbackWindows,
   rushedProject,
   repeatClient,
+  revisionOptions,
+  feedbackWindowOptions,
   onRevisionRoundsChange,
   onFeedbackWindowsChange,
   onRushedProjectChange,
   onRepeatClientChange,
 }: ScopeSectionProps) {
+  const revisionOpts = withCurrentValue(
+    revisionOptions?.length ? revisionOptions : fallbackRevisionOptions,
+    revisionRounds
+  );
+  const feedbackOpts = withCurrentValue(
+    feedbackWindowOptions?.length
+      ? feedbackWindowOptions
+      : fallbackFeedbackWindowOptions,
+    feedbackWindows
+  );
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">Scope</Label>
@@ -44,7 +72,7 @@ export function ScopeSection({
             Revision Rounds
           </Label>
           <SearchableSelect
-            options={revisionOptions}
+            options={revisionOpts}
             value={revisionRounds}
             onValueChange={onRevisionRoundsChange}
             placeholder="Select..."
@@ -55,7 +83,7 @@ export function ScopeSection({
             Feedback Windows
           </Label>
           <SearchableSelect
-            options={feedbackWindowOptions}
+            options={feedbackOpts}
             value={feedbackWindows}
             onValueChange={onFeedbackWindowsChange}
             placeholder="Select..."

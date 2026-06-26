@@ -110,3 +110,30 @@ compute stays awake when people actually use the portal, and still idles cheaply
 - `vercel.json`: added `{ "/api/cron/keep-warm": "*/4 * * * *" }`. Every 4 min beats the
   5-min autosuspend, so the compute never suspends inside the business-hours window.
 - Net effect: fast loads during the workday (~$10/mo est. compute), idle overnight/weekends.
+
+---
+
+## 2026-06-26 — Scope dropdowns now reflect ClickUp options (no code change to add options)
+
+### Problem
+New options added to the **Revision Rounds** and **Feedback Windows** dropdown
+custom fields in ClickUp weren't showing in the portal — and the selected value
+rendered **blank**. Root cause: those two selects used **hardcoded** option arrays
+(`1,2` and `Same day/24 Hours/48 Hours`) in `scope-section.tsx`. A `Select` shows
+blank when its current value isn't among its options, so a task set to a new option
+(e.g. revision "3") had nothing to match. The merge preview still showed the right
+value because it reads the task's raw field value, not the constrained option list.
+
+### Fix
+Sourced the options live from ClickUp's field definitions, same pattern Department
+and Deliverable Type already use:
+- `extractDropdownOptions(fields, fieldId)` in `clickup.ts` — returns the field's
+  `type_config.options` as `{value,label}` keyed by option name, in ClickUp order.
+- `/api/tasks/[taskId]` now returns `revisionRoundOptions` / `feedbackWindowOptions`
+  (added to the `TaskDetail` type).
+- `ScopeSection` and the add-on inline selects consume those options; hardcoded lists
+  remain only as a fallback if the API returns none. `withCurrentValue()` also guards
+  against ever rendering a real value as blank.
+
+**Result:** adding/renaming a dropdown option in ClickUp now appears in the portal
+automatically — no code change. (ClickUp task fetch isn't cached, so it's immediate.)
