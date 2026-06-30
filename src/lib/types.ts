@@ -152,6 +152,13 @@ export interface DeliveryFormState {
   feedbackWindows: string;
   versionNotes: string;
   slackChannelId: string;
+  /** Scope toggles. Optional so older drafts (saved before these were
+   *  persisted) still load. */
+  rushedProject?: boolean;
+  repeatClient?: boolean;
+  /** Email vs Slack channel choice. Optional for the same backward-compat
+   *  reason; falls back to auto-detection when absent. */
+  deliveryMode?: "email" | "slack";
   editedEmailContent: string | null; // legacy frozen snapshot (kept for server `?? mergedContent`)
   editedSlackContent: string | null;
   editedSubjectLine: string | null;

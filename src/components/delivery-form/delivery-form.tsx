@@ -701,6 +701,11 @@ export function DeliveryForm({
     feedbackWindows,
     versionNotes,
     slackChannelId,
+    // Scope toggles + channel choice — must persist so a saved draft reopens
+    // exactly as left.
+    rushedProject,
+    repeatClient,
+    deliveryMode,
     // Legacy frozen-snapshot fields are no longer produced by the editor; the
     // server reads `?? mergedContent`, and mergedContent already reflects any
     // template edits. Kept null for backward compatibility.
@@ -768,6 +773,11 @@ export function DeliveryForm({
         if (saved.slackChannelId) setSlackChannelId(saved.slackChannelId);
         if (saved.revisionRounds) setRevisionRounds(saved.revisionRounds);
         if (saved.feedbackWindows) setFeedbackWindows(saved.feedbackWindows);
+        // Scope toggles + channel choice. typeof check so an explicitly-saved
+        // `false` still restores (and absent keys on older drafts are skipped).
+        if (typeof saved.rushedProject === "boolean") setRushedProject(saved.rushedProject);
+        if (typeof saved.repeatClient === "boolean") setRepeatClient(saved.repeatClient);
+        if (saved.deliveryMode) setDeliveryMode(saved.deliveryMode);
         if (saved.reviewLinks) {
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
         }
