@@ -163,3 +163,44 @@ The "Feedback Windows: Flexible" line is untouched. Covered by
 - Dropped the em dash for a period, per house style (no em dashes in client copy).
 - Dropped the leading "Flexible." prefix — the Feedback Windows bullet directly
   above already says "Flexible", so the deadline line starts at "We're aiming…".
+
+---
+
+## 2026-06-30 — Draft persistence gaps + dashboard 2-minute load
+
+### 1. Draft toggles not persisting
+`DeliveryFormState` never carried the Scope toggles or the channel choice, so
+they were neither saved nor restored. Audited every `useState` in
+`delivery-form.tsx`; three user options were missing from the draft round-trip:
+- `repeatClient` (the reported one)
+- `rushedProject` (same bug)
+- `deliveryMode` (Email/Slack toggle — a manual override was lost on reload)
+
+Added all three to the `DeliveryFormState` type, the saved `formState` object,
+and the draft-load restore block (boolean toggles restored with a `typeof`
+guard so an explicit `false` reloads and older drafts without the keys are
+skipped). Everything else already round-tripped; the remaining state is
+UI-only/derived (modals, lint, edit-mode, schedule, testMode) and correctly not
+persisted.
+
+### 2. Dashboard ~2-minute load
+Root cause: `/api/tasks` fanned out one `/list/{id}/task` call per list across
+the whole Projects space (~30 lists incl. non-deliverable lists like Billable
+Hours/Fonts), deep-paginating with `subtasks=true`, then discarded everything
+that wasn't a Delivery Deadline. Measured against live ClickUp:
+- Old approach (space-wide, all tasks, subtasks): **~95s**, 2,216 tasks, 23 pages.
+- New approach (Filtered Team Tasks, custom-field filter): **~15s**, 262 tasks, 3 pages.
+
+`getSpaceTasksByDropdownField()` in `clickup.ts` queries ClickUp's Filtered Team
+Tasks endpoint (`/team/{id}/task`) with a dropdown custom-field filter
+(Project Task Type = Delivery Deadline) scoped to the Projects space. The
+endpoint returns full task objects (folder/list names, status, assignees,
+custom_fields, url), so it's a drop-in for the dashboard mapping. ~6× faster
+cold; the existing 3-min in-memory cache makes warm loads instant.
+
+Verified end-to-end against live ClickUp: 262 tasks, 0 missing client/project
+names. Build + 169 tests green.
+
+**Possible follow-up (not done):** 15s cold is still noticeable on a serverless
+cold start (module cache is per-instance). A Neon-backed stale-while-revalidate
+cache (optionally pre-warmed by the keep-warm cron) would make it feel instant.

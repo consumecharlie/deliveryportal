@@ -84,6 +84,49 @@ export async function getListTasks(
   return { tasks: all };
 }
 
+/**
+ * Fetch tasks across a whole space via ClickUp's Filtered Team Tasks endpoint,
+ * narrowed server-side by a dropdown custom field. This replaces fanning out
+ * one /list/{id}/task call per list (and deep-paginating large, irrelevant
+ * lists like Billable Hours): ClickUp does the filtering, so we page through
+ * only the matching tasks. Returns full task objects (custom_fields, list,
+ * folder, status, assignees, url — everything the dashboard needs).
+ */
+export async function getSpaceTasksByDropdownField(
+  spaceId: string,
+  fieldId: string,
+  optionId: string,
+  includeSubtasks = true
+): Promise<{ tasks: ClickUpTask[] }> {
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 50;
+  // team_id == workspace_id in ClickUp.
+  const teamId = process.env.CLICKUP_WORKSPACE_ID ?? "9010023164";
+  const customFields = JSON.stringify([
+    { field_id: fieldId, operator: "=", value: optionId },
+  ]);
+
+  const all: ClickUpTask[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      include_closed: "false",
+      subtasks: String(includeSubtasks),
+      page: String(page),
+      custom_fields: customFields,
+    });
+    // space_ids is an array param — URLSearchParams handles the encoding.
+    params.append("space_ids[]", spaceId);
+    const res = await clickupFetch<{ tasks: ClickUpTask[] }>(
+      `/team/${teamId}/task?${params}`
+    );
+    const batch = res.tasks ?? [];
+    all.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  return { tasks: all };
+}
+
 export async function updateTaskCustomField(
   taskId: string,
   fieldId: string,
