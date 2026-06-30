@@ -228,3 +228,8 @@ Tradeoffs accepted (chosen to "see how it feels" first):
 Fallback if the deploy-reset proves annoying: demand-driven Neon-backed cache
 (survives deploys; negligible burn since keep-warm already holds Neon awake
 during business hours).
+
+**Status (2026-06-30):** Shipped and live. Parked here intentionally — Michael
+will live with the Vercel Data Cache for a bit before deciding whether the
+deploy-reset is annoying enough to warrant the Neon-backed fallback. No action
+until he circles back.
