@@ -204,3 +204,27 @@ names. Build + 169 tests green.
 **Possible follow-up (not done):** 15s cold is still noticeable on a serverless
 cold start (module cache is per-instance). A Neon-backed stale-while-revalidate
 cache (optionally pre-warmed by the keep-warm cron) would make it feel instant.
+
+---
+
+## 2026-06-30 — Dashboard: Vercel Data Cache (persistent across cold starts)
+
+Replaced the per-instance module-level cache on `/api/tasks` with the **Vercel
+Data Cache** via `unstable_cache` (5-min revalidate, tag `dashboard-tasks`).
+Persists the mapped task list at Vercel's infra level, so it survives serverless
+cold starts — the ~15s ClickUp pull now happens rarely instead of on every cold
+load, and stale-while-revalidate refreshes in the background. **No Neon
+involvement** (dashboard stays Neon-free → no compute-burn surface), no cron.
+
+Tradeoffs accepted (chosen to "see how it feels" first):
+- Cache resets on each deploy → first dashboard load after a deploy pays the
+  full ClickUp fetch. Mostly stings during active dev, not normal team use.
+- Up to 5-min staleness; best-effort (can evict early).
+- `?refresh=1` on `/api/tasks` bypasses the cache and pulls fresh on demand
+  (manual escape hatch; no UI button yet).
+- Next 16's `revalidateTag` now needs a cache-profile arg (new `'use cache'`
+  model), so the refresh path just calls the fetch directly instead.
+
+Fallback if the deploy-reset proves annoying: demand-driven Neon-backed cache
+(survives deploys; negligible burn since keep-warm already holds Neon awake
+during business hours).
