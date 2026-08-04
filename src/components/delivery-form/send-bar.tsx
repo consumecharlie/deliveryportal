@@ -12,7 +12,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Save,
@@ -115,6 +114,7 @@ export function SendBar({
   const [isScheduling, setIsScheduling] = useState(false);
   const [showLintWarning, setShowLintWarning] = useState(false);
   const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showClientPrefConfirm, setShowClientPrefConfirm] = useState(false);
   // Acknowledged once per editing session; the pending action re-runs after "Send anyway".
   const clientPrefAckRef = useRef(false);
@@ -306,24 +306,35 @@ export function SendBar({
   };
 
   // ── Client-preference guardrail ──
-  // For a flagged (enabled) client, re-prompt on Send/Schedule with a soft
-  // override before the action actually fires. Covers every path (both Send
-  // button branches + the schedule picker) by gating the two action fns.
+  // For a flagged (enabled) client, the warning must be the FIRST thing shown
+  // when Send/Schedule is clicked — before the normal confirm — so it can't be
+  // skipped past. `guardClientPref` runs on the button click and, once
+  // acknowledged, hands off to the normal flow.
   const needsClientPrefConfirm =
     !!clientPreference?.enabled && !!clientPreference.warningMessage.trim();
 
-  const runGuarded = (action: () => void) => {
+  const guardClientPref = (proceed: () => void) => {
     if (needsClientPrefConfirm && !clientPrefAckRef.current) {
-      pendingActionRef.current = action;
+      pendingActionRef.current = proceed;
       setShowClientPrefConfirm(true);
       return;
     }
-    action();
+    proceed();
   };
 
-  const handleSend = () => runGuarded(() => void doSend());
+  // Opens the normal confirm flow: the Slack-lint warning first if there are
+  // lint errors, otherwise the Send Delivery confirm.
+  const openSendConfirm = () => {
+    if (slackLintErrors && slackLintErrors.length > 0) setShowLintWarning(true);
+    else setShowSendConfirm(true);
+  };
+
+  // Send button → client-pref guard → normal confirm → doSend.
+  const initiateSend = () => guardClientPref(openSendConfirm);
+  const handleSend = () => void doSend();
+  // Schedule has no intermediate confirm, so the guard wraps it directly.
   const handleSchedule = (isoString: string) =>
-    runGuarded(() => void doSchedule(isoString));
+    guardClientPref(() => void doSchedule(isoString));
 
   // Email mode requires recipient + sender; Slack mode just needs content + channel
   const isReady =
@@ -344,7 +355,7 @@ export function SendBar({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              {clientPreference?.clientName} — before you send
+              {clientPreference?.clientName}: before you send
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
@@ -438,7 +449,7 @@ export function SendBar({
               <div className="flex">
                 <Button
                   disabled={!isReady || isSending || isScheduling}
-                  onClick={() => setShowLintWarning(true)}
+                  onClick={initiateSend}
                   className={`${canSchedule ? "rounded-r-none" : ""} ${
                     testMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
                   }`}
@@ -635,10 +646,10 @@ export function SendBar({
             </>
           ) : (
             <div className="flex">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              <AlertDialog open={showSendConfirm} onOpenChange={setShowSendConfirm}>
                   <Button
                     disabled={!isReady || isSending || isScheduling}
+                    onClick={initiateSend}
                     className={`${canSchedule ? "rounded-r-none" : ""} ${
                       testMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
                     }`}
@@ -652,7 +663,6 @@ export function SendBar({
                     )}
                     {testMode ? "Test Send" : "Send"}
                   </Button>
-                </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">

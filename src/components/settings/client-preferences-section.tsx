@@ -437,7 +437,7 @@ export function ClientPreferencesSection() {
               />
               <p className="text-xs text-muted-foreground">
                 Renames the Google Deliverable Link field in the editor for this
-                client (the field only — the link itself is unchanged).
+                client (the field only; the link itself is unchanged).
               </p>
             </div>
 
