@@ -23,6 +23,7 @@ import type { ScheduledSendPayload } from "@/lib/schedule-send";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
 import { ReviewLinksSection } from "./review-links-section";
 import { ScopeSection } from "./scope-section";
+import { ClientPreferenceBanner } from "./client-preference-banner";
 import { VersionNotesSection } from "./version-notes-section";
 import { RecipientsSection } from "./recipients-section";
 import { SenderSelect } from "./sender-select";
@@ -982,6 +983,7 @@ export function DeliveryForm({
 
   return (
     <div className="space-y-4 pb-24">
+      <ClientPreferenceBanner preference={taskDetail.clientPreference} />
       {/* Resend banner */}
       {resendFrom && (
         <div className="sticky top-0 z-10 flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm backdrop-blur">
