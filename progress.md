@@ -356,8 +356,11 @@ UI (message + Box destination link + Google restriction) after deploy.
 Replaced the Vercel Data Cache on `/api/tasks` with a `DashboardCache` Postgres
 table (pushed to prod), stale-while-revalidate:
 - Serves the cached list instantly; refreshes in the background via `after()`
-  when older than 5 min. **Survives deploys** — no more repeated ~15s cold loads
-  after each push (the key pain during dev sessions).
-- Demand-driven (no cron); falls back to a live ClickUp fetch if Neon is down.
-  `?refresh=1` forces fresh. Verified the Json upsert/read round-trip against
-  live Neon.
+  when older than the revalidate window (`REVALIDATE_MS`, now **2 min** — dropped
+  from 5 at Michael's request). **Survives deploys** — no more repeated ~15s cold
+  loads after each push (the key pain during dev sessions).
+- Demand-driven (no cron; nothing refreshes when nobody's viewing the dashboard);
+  falls back to a live ClickUp fetch if Neon is down. `?refresh=1` forces fresh.
+  Verified the Json upsert/read round-trip against live Neon.
+- Staleness ceiling ≈ the revalidate window; the load that trips the refresh
+  still serves stale, fresh lands on the next load.
