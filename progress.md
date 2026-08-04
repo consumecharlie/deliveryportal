@@ -323,3 +323,12 @@ Built via subagent-driven execution (8 tasks, TDD, per-task review):
 
 189 tests green, build clean. **Follow-up:** seed KeyBank in the live Settings
 UI (message + Box destination link + Google restriction) after deploy.
+
+### 2026-08-04 follow-ups
+- **Banner restyle:** bright `#DBEF00` background + black high-contrast text; title
+  uses a colon, not an em dash.
+- **Field relabel:** optional `deliverableLinkLabel` on `ClientPreference` (pushed
+  to prod). When set, the review-links section shows it instead of "Google
+  Deliverable Link" for that client (e.g. "Box Link" for KeyBank), on both the
+  primary and add-on link fields. Editable in Settings. Field label only — the
+  link value/behavior is unchanged.
