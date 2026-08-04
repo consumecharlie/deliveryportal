@@ -12,11 +12,16 @@ export function ClientPreferenceBanner({
     return null;
   }
   return (
-    <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-      <div className="space-y-2">
-        <p className="font-medium">{preference.clientName} — delivery note</p>
-        <p className="text-muted-foreground whitespace-pre-line">
+    <div className="flex items-start gap-3 rounded-md bg-[#DBEF00] px-4 py-3 text-sm text-black shadow-md ring-1 ring-black/20">
+      <AlertTriangle
+        className="mt-0.5 h-5 w-5 shrink-0 text-black"
+        strokeWidth={2.5}
+      />
+      <div className="space-y-1.5">
+        <p className="font-bold text-black">
+          {preference.clientName}: delivery note
+        </p>
+        <p className="font-medium text-black whitespace-pre-line">
           {preference.warningMessage}
         </p>
         {preference.destinationLink && (
@@ -24,9 +29,9 @@ export function ClientPreferenceBanner({
             href={preference.destinationLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 font-medium text-amber-600 hover:underline"
+            className="inline-flex items-center gap-1.5 font-bold text-black underline underline-offset-2 hover:opacity-70"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4" strokeWidth={2.5} />
             Open {preference.clientName}&apos;s folder
           </a>
         )}
