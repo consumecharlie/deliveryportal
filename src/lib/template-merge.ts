@@ -14,6 +14,9 @@ interface MergeVariables {
   revisionRounds: string;
   feedbackWindows: string;
   nextFeedbackDeadline: string;
+  // Time-of-day label (e.g. "12:00 PM ET") when the deadline has a real time
+  // set; empty/absent for date-only deadlines.
+  feedbackDeadlineTime?: string;
   googleDeliverableLink?: string;
   frameReviewLink?: string;
   animaticReviewLink?: string;
@@ -443,6 +446,41 @@ function injectFlexibleFeedbackNotice(
   return lines.join("\n");
 }
 
+// When the feedback deadline has a real time set (not a date-only default),
+// surface it: rewrite "EOD <date>" → "<date> by <time>" (dropping "EOD", which
+// contradicts a specific time). Skipped for rushed/flexible deliveries, which
+// own the deadline line via their own transforms.
+function injectTimedFeedbackDeadline(
+  content: string,
+  opts: {
+    feedbackDeadlineTime?: string;
+    rushedProject?: boolean;
+    feedbackWindows: string;
+  }
+): string {
+  const time = opts.feedbackDeadlineTime?.trim();
+  const isFlexible = opts.feedbackWindows?.trim().toLowerCase() === "flexible";
+  if (!time || opts.rushedProject || isFlexible) return content;
+
+  const lines = content.split("\n");
+  const idx = lines.findIndex(
+    (line) =>
+      (line.toLowerCase().includes("feedback deadline") ||
+        line.toLowerCase().includes("approval deadline")) &&
+      (line.startsWith("-") || line.startsWith("•") || line.includes("Deadline"))
+  );
+  if (idx < 0) return content;
+
+  const labelMatch = lines[idx].match(/^(\s*[-•]\s*\*\*[^*]*?\*\*)\s*(.*)$/);
+  if (!labelMatch) return content;
+  const [, label, rawValue] = labelMatch;
+  // Drop a leading "EOD " (end-of-day) since we now have a real time.
+  const dateValue = rawValue.replace(/^EOD\s+/i, "").trim();
+  lines[idx] = `${label} ${dateValue} by ${time}`;
+
+  return lines.join("\n");
+}
+
 /**
  * Merge a delivery snippet template with variables.
  * Returns both email (markdown) and Slack (mrkdwn) versions.
@@ -511,12 +549,18 @@ export function mergeTemplate(
     rushedProject: variables.rushedProject,
     nextFeedbackDeadline: variables.nextFeedbackDeadline,
   };
+  const timedOpts = {
+    feedbackDeadlineTime: variables.feedbackDeadlineTime,
+    rushedProject: variables.rushedProject,
+    feedbackWindows: variables.feedbackWindows,
+  };
 
   // Merge the email version
   let emailContent = performMerge(template, replacements, variables.linkLabels);
   emailContent = stripRepeatClientSections(emailContent, variables.repeatClient);
   emailContent = injectRushedNotice(emailContent, rushedOpts);
   emailContent = injectFlexibleFeedbackNotice(emailContent, flexibleOpts);
+  emailContent = injectTimedFeedbackDeadline(emailContent, timedOpts);
   emailContent = injectReviewLinkBullets(emailContent, reviewLinkBullets);
 
   // Build Slack version: same markdown as email, but with @mention tokens
@@ -529,6 +573,7 @@ export function mergeTemplate(
   slackContent = stripRepeatClientSections(slackContent, variables.repeatClient);
   slackContent = injectRushedNotice(slackContent, rushedOpts);
   slackContent = injectFlexibleFeedbackNotice(slackContent, flexibleOpts);
+  slackContent = injectTimedFeedbackDeadline(slackContent, timedOpts);
   slackContent = injectReviewLinkBullets(slackContent, reviewLinkBullets);
 
   // Merge subject line
@@ -1079,6 +1124,11 @@ export function mergeCombinedTemplate(input: {
     rushedProject: pv.rushedProject,
     nextFeedbackDeadline: pv.nextFeedbackDeadline,
   };
+  const timedOpts = {
+    feedbackDeadlineTime: pv.feedbackDeadlineTime,
+    rushedProject: pv.rushedProject,
+    feedbackWindows: pv.feedbackWindows,
+  };
 
   const run = (contactsValue: string) => {
     const replacements = { ...baseReplacements, contacts: contactsValue };
@@ -1086,6 +1136,7 @@ export function mergeCombinedTemplate(input: {
     out = stripRepeatClientSections(out, pv.repeatClient);
     out = injectRushedNotice(out, rushedOpts);
     out = injectFlexibleFeedbackNotice(out, flexibleOpts);
+    out = injectTimedFeedbackDeadline(out, timedOpts);
     out = injectReviewLinkBullets(out, reviewLinkBullets);
     return out;
   };

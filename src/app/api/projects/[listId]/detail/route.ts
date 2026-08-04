@@ -12,6 +12,7 @@ import {
   LISTS,
 } from "@/lib/custom-field-ids";
 import { quillDeltaToMarkdown } from "@/lib/markdown-to-quill";
+import { formatFeedbackDeadline } from "@/lib/feedback-deadline";
 import type {
   ProjectContact,
   FeedbackDeadline,
@@ -129,8 +130,9 @@ export async function GET(
             !feedbackDeadline ||
             Number(sibling.due_date) < Number(feedbackDeadline.dueDate)
           ) {
-            const dueMs = Number(sibling.due_date);
-            const date = new Date(dueMs);
+            const { formattedDate, timeLabel } = formatFeedbackDeadline(
+              sibling.due_date
+            );
             feedbackDeadline = {
               taskId: sibling.id,
               name: sibling.name,
@@ -138,11 +140,8 @@ export async function GET(
               department:
                 extractCustomFieldValue(sibling.custom_fields, CUSTOM_FIELDS.DEPARTMENT) ?? "",
               dueDate: sibling.due_date,
-              formattedDate: date.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              }),
+              formattedDate,
+              timeLabel,
             };
           }
         }

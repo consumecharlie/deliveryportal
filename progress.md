@@ -261,3 +261,36 @@ broken with a missing `ssrf-protection` module.) The greeting already addresses
 everyone (`formatContacts*` include all non-Log contacts).
 
 Build + 169 tests green. Needs a live multi-primary test send to confirm.
+
+---
+
+## 2026-08-04 — Feedback deadline time now shows in the snippet
+
+### Question / finding
+"If a feedback deadline has a time on the due date, does it show in the snippet?"
+No — the formatter used `toLocaleDateString` (date only, and no timezone → UTC).
+Also learned ClickUp's v2 API (our token) never returns the `due_date_time`
+flag, only the raw `due_date`. But probing all 214 feedback deadlines live: 204
+sit at exactly 08:00:00 UTC (ClickUp's date-only sentinel → renders 3–4am ET),
+and the rest are real times (e.g. task 86ajn3fj2 = 16:00 UTC = 12:00 PM ET). So
+"has a real time" = due timestamp is NOT at 08:00 UTC.
+
+### Change
+- `src/lib/feedback-deadline.ts` — `formatFeedbackDeadline(dueMs)` returns
+  `{ formattedDate, timeLabel }`, all in Eastern time. `timeLabel` is "" for the
+  08:00-UTC date-only sentinel, else e.g. "12:00 PM ET". (Also fixes the latent
+  no-timezone bug — dates now render in ET, not the Vercel UTC server tz.)
+- Both routes that build the deadline (`/api/tasks/[taskId]`, projects `detail`)
+  use it; `FeedbackDeadline` type gains `timeLabel`.
+- `template-merge.ts` — new `injectTimedFeedbackDeadline` transform (mirrors the
+  flexible/rushed ones): when a real time is set and the delivery isn't
+  rushed/flexible, rewrites "EOD <date>" → "<date> by <time>" (drops the
+  contradictory "EOD"). Wired into email, Slack, and add-on merges;
+  `feedbackDeadlineTime` threaded through `MergeVariables` from the form.
+
+Wording chosen by Michael: "Feedback Deadline: Tue, Aug 4 by 12:00 PM ET"
+(date-only unchanged: "EOD Tue, Aug 4"). Covered by
+`feedback-deadline-time.test.ts` (8 cases). 177 tests green.
+
+Note: relies on the 08:00-UTC date-only sentinel (empirically 204/214). If
+ClickUp changes that default, the detection would need revisiting.

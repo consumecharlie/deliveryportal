@@ -93,6 +93,9 @@ export interface FeedbackDeadline {
   department: string;
   dueDate: string | null;
   formattedDate: string;
+  /** Time-of-day label (e.g. "12:00 PM ET") when the ClickUp due date has a
+   *  real time set; empty string for date-only deadlines. */
+  timeLabel: string;
 }
 
 export interface DeliverySnippetTemplate {

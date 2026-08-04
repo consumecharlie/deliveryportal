@@ -419,6 +419,7 @@ export function DeliveryForm({
       revisionRounds,
       feedbackWindows,
       nextFeedbackDeadline: feedbackDeadline?.formattedDate ?? "",
+      feedbackDeadlineTime: feedbackDeadline?.timeLabel ?? "",
       googleDeliverableLink: reviewLinks.googleDeliverableLink,
       frameReviewLink: reviewLinks.frameReviewLink,
       animaticReviewLink: reviewLinks.animaticReviewLink,
