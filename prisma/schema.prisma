@@ -122,3 +122,12 @@ model ClientPreference {
 
   @@index([updatedAt])
 }
+
+/** Read-through cache for expensive ClickUp reads (e.g. the dashboard task
+ *  list). Survives deploys (unlike the Vercel Data Cache) and is refreshed
+ *  on demand via stale-while-revalidate. */
+model DashboardCache {
+  key       String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}

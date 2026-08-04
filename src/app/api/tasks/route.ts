@@ -1,14 +1,15 @@
-import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
+import { NextResponse, after } from "next/server";
+import { Prisma } from "@prisma/client";
 import {
   getSpaceTasksByDropdownField,
   extractCustomFieldValue,
 } from "@/lib/clickup";
 import { SPACES, CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
+import { prisma } from "@/lib/db";
 import type { DeliverableTask } from "@/lib/types";
 
-const TASKS_CACHE_TAG = "dashboard-tasks";
-const TASKS_REVALIDATE_SECONDS = 5 * 60; // 5 minutes
+const CACHE_KEY = "dashboard-tasks";
+const REVALIDATE_MS = 5 * 60_000; // serve cached, refresh in background past this
 
 /**
  * Fetch the non-complete Delivery Deadline tasks for the dashboard, mapped to
@@ -82,37 +83,74 @@ async function fetchDeliverables(): Promise<DeliverableTask[]> {
   return deliverables;
 }
 
-// Vercel Data Cache wrapper: persists the mapped result across serverless
-// invocations (survives cold starts, unlike a module-level variable) without
-// touching Neon. Stale-while-revalidate — after the 5-min window, the next
-// request is served the cached copy while the refresh runs in the background.
-// The cache is reset on each deploy (first load after a deploy pays the full
-// ClickUp fetch) and can be busted on demand via `?refresh=1`.
-const getCachedDeliverables = unstable_cache(
-  fetchDeliverables,
-  ["dashboard-deliverables"],
-  { revalidate: TASKS_REVALIDATE_SECONDS, tags: [TASKS_CACHE_TAG] }
-);
+// ── Neon-backed read-through cache (stale-while-revalidate) ──
+// Persists the mapped list in Postgres, so it survives deploys (unlike the
+// Vercel Data Cache) and cold starts. A load is served the cached copy
+// instantly; if it's older than REVALIDATE_MS the refresh runs in the
+// background (via after()) so the user never waits on the ~15s ClickUp fetch.
+// Demand-driven — no cron, so negligible Neon burn (keep-warm already holds
+// the DB awake during business hours).
+
+async function readCache(): Promise<{
+  data: DeliverableTask[];
+  ageMs: number;
+} | null> {
+  try {
+    const row = await prisma.dashboardCache.findUnique({
+      where: { key: CACHE_KEY },
+    });
+    if (!row) return null;
+    return {
+      data: row.data as unknown as DeliverableTask[],
+      ageMs: Date.now() - row.updatedAt.getTime(),
+    };
+  } catch {
+    return null; // DB down → fall back to a live fetch
+  }
+}
+
+async function refreshAndCache(): Promise<DeliverableTask[]> {
+  const data = await fetchDeliverables();
+  try {
+    const value = data as unknown as Prisma.InputJsonValue;
+    await prisma.dashboardCache.upsert({
+      where: { key: CACHE_KEY },
+      create: { key: CACHE_KEY, data: value },
+      update: { data: value },
+    });
+  } catch (e) {
+    console.error("Failed to write dashboard cache:", e);
+  }
+  return data;
+}
 
 /**
  * GET /api/tasks
  *
- * Returns the non-complete Delivery Deadline tasks from the Projects space.
- * Cached via the Vercel Data Cache; pass `?refresh=1` to force a fresh pull.
+ * Returns the non-complete Delivery Deadline tasks from the Projects space,
+ * served from a Neon read-through cache. Pass `?refresh=1` to force fresh.
  */
 export async function GET(req: Request) {
   try {
-    const forceRefresh =
-      new URL(req.url).searchParams.get("refresh") === "1";
-
+    const forceRefresh = new URL(req.url).searchParams.get("refresh") === "1";
     if (forceRefresh) {
-      // Bypass the cache and pull straight from ClickUp for this response. The
-      // shared cached entry refreshes on its normal 5-min cycle afterward.
-      const tasks = await fetchDeliverables();
+      const tasks = await refreshAndCache();
       return NextResponse.json({ tasks });
     }
 
-    const tasks = await getCachedDeliverables();
+    const cached = await readCache();
+    if (cached) {
+      // Serve immediately; refresh in the background if stale.
+      if (cached.ageMs > REVALIDATE_MS) {
+        after(async () => {
+          await refreshAndCache();
+        });
+      }
+      return NextResponse.json({ tasks: cached.data });
+    }
+
+    // Cold (no cache row yet): fetch fresh, store, return.
+    const tasks = await refreshAndCache();
     return NextResponse.json({ tasks });
   } catch (error) {
     console.error("Failed to fetch tasks:", error);
