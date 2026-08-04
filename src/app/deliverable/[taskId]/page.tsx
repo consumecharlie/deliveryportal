@@ -18,8 +18,15 @@ export default function DeliverablePage() {
       if (!res.ok) throw new Error("Failed to load task");
       return res.json();
     },
-    staleTime: 60_000,
-    refetchInterval: false, // Don't auto-refetch while editing
+    // Always pull fresh ClickUp data when a delivery is opened, so an edit made
+    // in ClickUp (template, contacts, links, deliverable type) shows up on the
+    // next open instead of a stale cached copy.
+    staleTime: 0,
+    refetchOnMount: "always",
+    // But never refetch while the editor is open — a mid-edit refetch would
+    // clobber the form state the user is actively changing.
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   // When ?resendFrom=<deliveryId> is set, fetch the prior delivery so the form
