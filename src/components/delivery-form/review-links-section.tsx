@@ -17,6 +17,10 @@ interface ReviewLinksSectionProps {
   /** Per-client overrides for the FIELD label (e.g. googleDeliverableLink →
    *  "Box Link" for KeyBank). Overrides LINK_VARIABLE_MAP[varName].label. */
   fieldLabelOverrides?: Record<string, string>;
+  /** True when a URL is blocked for this client (drives the inline red warning). */
+  isBlockedUrl?: (url: string) => boolean;
+  /** Note shown under a blocked link field (e.g. "KeyBank can't open this link..."). */
+  blockedLinkNote?: string;
   extraLinks: Array<{ url: string; label: string }>;
   onReviewLinkChange: (field: string, value: string) => void;
   onLinkLabelChange: (field: string, value: string) => void;
@@ -31,6 +35,8 @@ export function ReviewLinksSection({
   linkLabels,
   defaultLinkLabels,
   fieldLabelOverrides,
+  isBlockedUrl,
+  blockedLinkNote,
   extraLinks,
   onReviewLinkChange,
   onLinkLabelChange,
@@ -72,6 +78,10 @@ export function ReviewLinksSection({
     onLinkLabelChange("flexLink", "");
   }, [onReviewLinkChange, onLinkLabelChange]);
 
+  const blockedFor = (url: string | undefined) =>
+    !!url && !!isBlockedUrl?.(url);
+  const blockedInputClass = "border-red-500 focus-visible:ring-red-500";
+
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">Review Links</Label>
@@ -106,6 +116,7 @@ export function ReviewLinksSection({
                   placeholder="https://..."
                   value={value}
                   onChange={(e) => onReviewLinkChange(varName, e.target.value)}
+                  className={blockedFor(value) ? blockedInputClass : undefined}
                 />
               </div>
               {value && (
@@ -131,6 +142,9 @@ export function ReviewLinksSection({
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+            {blockedFor(value) && blockedLinkNote && (
+              <p className="text-xs font-medium text-red-500">{blockedLinkNote}</p>
+            )}
           </div>
         );
       })}
@@ -163,6 +177,9 @@ export function ReviewLinksSection({
                 placeholder="https://..."
                 value={reviewLinks.flexLink ?? ""}
                 onChange={(e) => onReviewLinkChange("flexLink", e.target.value)}
+                className={
+                  blockedFor(reviewLinks.flexLink) ? blockedInputClass : undefined
+                }
               />
             </div>
             {reviewLinks.flexLink && (
@@ -183,6 +200,9 @@ export function ReviewLinksSection({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
+          {blockedFor(reviewLinks.flexLink) && blockedLinkNote && (
+            <p className="text-xs font-medium text-red-500">{blockedLinkNote}</p>
+          )}
         </div>
       )}
 
@@ -205,6 +225,7 @@ export function ReviewLinksSection({
                 placeholder="https://..."
                 value={link.url}
                 onChange={(e) => onExtraLinkChange(index, "url", e.target.value)}
+                className={blockedFor(link.url) ? blockedInputClass : undefined}
               />
             </div>
             {link.url && (
@@ -225,6 +246,9 @@ export function ReviewLinksSection({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
+          {blockedFor(link.url) && blockedLinkNote && (
+            <p className="text-xs font-medium text-red-500">{blockedLinkNote}</p>
+          )}
         </div>
       ))}
 

@@ -521,6 +521,14 @@ export function DeliveryForm({
   const linkFieldLabelOverrides = clientPreference?.deliverableLinkLabel
     ? { googleDeliverableLink: clientPreference.deliverableLinkLabel }
     : undefined;
+  // Inline (per-field) warning: flag a review link the moment it's a blocked
+  // domain for this client, before Send.
+  const isBlockedReviewUrl = clientPreference
+    ? (url: string) => findBlockedLinks(clientPreference, [url]).length > 0
+    : undefined;
+  const blockedLinkNote = clientPreference
+    ? `${clientPreference.clientName} can't open this link. Upload to their folder and paste that link instead.`
+    : undefined;
 
   // ── Full deliverable type options from ClickUp field definition ──
 
@@ -1204,6 +1212,8 @@ export function DeliveryForm({
             linkLabels={linkLabels}
             defaultLinkLabels={defaultLinkLabels}
             fieldLabelOverrides={linkFieldLabelOverrides}
+            isBlockedUrl={isBlockedReviewUrl}
+            blockedLinkNote={blockedLinkNote}
             extraLinks={extraLinks}
             onReviewLinkChange={handleReviewLinkChange}
             onLinkLabelChange={(field, value) =>
@@ -1243,6 +1253,8 @@ export function DeliveryForm({
                 linkLabels={addonLinkLabels}
                 defaultLinkLabels={addonTaskDetail.template ? getLinkLabelsFromTemplate(addonTaskDetail.template.snippet) : {}}
                 fieldLabelOverrides={linkFieldLabelOverrides}
+                isBlockedUrl={isBlockedReviewUrl}
+                blockedLinkNote={blockedLinkNote}
                 extraLinks={[]}
                 onReviewLinkChange={(field, value) =>
                   setAddonReviewLinks((prev) => ({ ...prev, [field]: value }))
