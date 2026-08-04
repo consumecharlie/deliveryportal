@@ -336,3 +336,18 @@ UI (message + Box destination link + Google restriction) after deploy.
   entered (red border + inline note "<Client> can't open this link...") on the
   standard, flexible, and extra link fields, driven by the same detection as the
   send-time guardrail. So the mistake is caught at input, not only at Send.
+
+### 2026-08-04 fixes (client-prefs polish + cache)
+- **Guardrail ordering:** the client-preference blocker now fires on the Send/
+  Schedule click, *before* the Send Delivery confirm (was gating the send action
+  so it appeared after). No-lint confirm converted to a controlled dialog.
+- **Em dashes:** removed from the guardrail dialog title and the Settings relabel
+  helper text.
+- **Editor staleness:** the delivery editor now loads fresh ClickUp data on every
+  open (staleTime 0 + refetchOnMount always; window-focus refetch disabled so it
+  can't clobber a mid-edit form). Fixes stale template/field data (e.g. a link
+  field showing an old "Frame.io Review Link" label).
+- **Still open:** dashboard `/api/tasks` Vercel Data Cache (5-min + resets each
+  deploy) causes slow cold loads, amplified by many deploys in a dev session.
+  Candidate: swap to demand-driven Neon-backed cache (survives deploys). Pending
+  Michael's call.
