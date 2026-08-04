@@ -1,4 +1,5 @@
 import { AllowedSendersSection } from "@/components/settings/allowed-senders-section";
+import { ClientPreferencesSection } from "@/components/settings/client-preferences-section";
 
 export default function SettingsPage() {
   return (
@@ -10,6 +11,7 @@ export default function SettingsPage() {
         </p>
       </div>
       <AllowedSendersSection />
+      <ClientPreferencesSection />
     </div>
   );
 }
