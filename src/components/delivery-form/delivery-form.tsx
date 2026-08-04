@@ -484,7 +484,11 @@ export function DeliveryForm({
 
   // ── Recipient logic ──
 
-  const primaryContact = contacts.find((c) => c.role === "Primary");
+  // ClickUp allows more than one contact to be marked Primary, and every one
+  // should receive the delivery. Address the email "To" to ALL primaries (not
+  // just the first), and keep CC as the remaining non-primary, non-log
+  // contacts. n8n's Gmail node accepts a comma-separated "To".
+  const primaryContacts = contacts.filter((c) => c.role === "Primary");
   const ccContacts = contacts.filter(
     (c) => c.role !== "Primary" && c.role !== "Log"
   );
@@ -495,10 +499,13 @@ export function DeliveryForm({
   ]
     .filter(Boolean)
     .join(", ");
-  const postToSlack = !!primaryContact?.slackUserId;
+  const primaryEmails = primaryContacts
+    .map((c) => c.email)
+    .filter(Boolean)
+    .join(", ");
 
   // Display values: use edited overrides if set, otherwise defaults
-  const displayToEmail = editedToEmail ?? primaryContact?.email ?? "";
+  const displayToEmail = editedToEmail ?? primaryEmails;
   const displayCcEmails = editedCcEmails ?? ccEmails;
   const displaySenderEmail = editedSenderEmail ?? activeTemplate?.senderEmail ?? "";
 

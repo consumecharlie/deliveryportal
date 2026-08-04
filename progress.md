@@ -233,3 +233,31 @@ during business hours).
 will live with the Vercel Data Cache for a bit before deciding whether the
 deploy-reset is annoying enough to warrant the Neon-backed fallback. No action
 until he circles back.
+
+---
+
+## 2026-08-04 — Multiple Primary contacts: only one got the email
+
+### Bug
+When a ClickUp project has >1 contact set to **Primary** (e.g. KeyBank — Travis
++ another), only ONE received the email. Root cause was portal-side, not n8n:
+`delivery-form.tsx` derived the "To" with `contacts.find(c => role==="Primary")`
+— the FIRST primary only — and the CC filter *excluded* all primaries. So a
+second primary landed in neither To nor CC and was dropped before n8n saw it.
+
+### Fix
+Address the "To" to ALL primaries:
+- `primaryContacts = contacts.filter(role==="Primary")`, then
+  `displayToEmail = editedToEmail ?? primaryContacts.map(email).join(", ")`.
+- CC unchanged (non-primary, non-log) — no duplication.
+Removed now-dead `primaryContact`/`postToSlack` locals (every consumer already
+used `showSlack`).
+
+Verified the n8n side needs no change: workflow `FIDejOggbPPWppIB` ("Sub
+Workflow: Email and Slack") Gmail nodes map `sendTo: {{ $json.primary_email }}`
+/ `ccList: {{ $json.cc_emails }}`, and the Gmail node accepts a comma-separated
+`sendTo`. (Inspected via the n8n REST API — the n8n MCP server is currently
+broken with a missing `ssrf-protection` module.) The greeting already addresses
+everyone (`formatContacts*` include all non-Log contacts).
+
+Build + 169 tests green. Needs a live multi-primary test send to confirm.
