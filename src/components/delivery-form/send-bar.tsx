@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { DeliveryFormState, MergedContent } from "@/lib/types";
+import type { ClientPreferenceData } from "@/lib/client-preferences";
 import type { SlackLintError } from "@/lib/slack-lint";
 import type { ScheduledSendPayload } from "@/lib/schedule-send";
 import { SchedulePicker } from "./schedule-picker";
@@ -69,6 +70,11 @@ interface SendBarProps {
   scheduledMode?: boolean;
   onUpdateSchedule?: () => void | Promise<void>;
   isUpdatingSchedule?: boolean;
+  /** Flagged client's preference; when enabled with a message, Send/Schedule
+   *  re-prompt with a soft override. */
+  clientPreference?: ClientPreferenceData | null;
+  /** Review-link URLs that match the client's blocked domains (for escalation). */
+  blockedReviewLinks?: string[];
 }
 
 export function SendBar({
@@ -100,6 +106,8 @@ export function SendBar({
   scheduledMode = false,
   onUpdateSchedule,
   isUpdatingSchedule = false,
+  clientPreference,
+  blockedReviewLinks,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -107,6 +115,10 @@ export function SendBar({
   const [isScheduling, setIsScheduling] = useState(false);
   const [showLintWarning, setShowLintWarning] = useState(false);
   const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
+  const [showClientPrefConfirm, setShowClientPrefConfirm] = useState(false);
+  // Acknowledged once per editing session; the pending action re-runs after "Send anyway".
+  const clientPrefAckRef = useRef(false);
+  const pendingActionRef = useRef<null | (() => void)>(null);
 
   const canSchedule = !adhocMode;
 
@@ -135,7 +147,7 @@ export function SendBar({
     ...(resendOf ? { resendOf } : {}),
   });
 
-  const handleSchedule = async (isoString: string) => {
+  const doSchedule = async (isoString: string) => {
     if (!canSchedule) return;
     setIsScheduling(true);
     try {
@@ -191,7 +203,7 @@ export function SendBar({
     }
   };
 
-  const handleSend = async () => {
+  const doSend = async () => {
     setIsSending(true);
     try {
       const endpoint = adhocMode
@@ -293,6 +305,26 @@ export function SendBar({
     }
   };
 
+  // ── Client-preference guardrail ──
+  // For a flagged (enabled) client, re-prompt on Send/Schedule with a soft
+  // override before the action actually fires. Covers every path (both Send
+  // button branches + the schedule picker) by gating the two action fns.
+  const needsClientPrefConfirm =
+    !!clientPreference?.enabled && !!clientPreference.warningMessage.trim();
+
+  const runGuarded = (action: () => void) => {
+    if (needsClientPrefConfirm && !clientPrefAckRef.current) {
+      pendingActionRef.current = action;
+      setShowClientPrefConfirm(true);
+      return;
+    }
+    action();
+  };
+
+  const handleSend = () => runGuarded(() => void doSend());
+  const handleSchedule = (isoString: string) =>
+    runGuarded(() => void doSchedule(isoString));
+
   // Email mode requires recipient + sender; Slack mode just needs content + channel
   const isReady =
     !!mergedContent &&
@@ -306,6 +338,61 @@ export function SendBar({
           : "bg-background/95"
       }`}
     >
+      {/* Client-preference re-prompt (soft override) */}
+      <AlertDialog open={showClientPrefConfirm} onOpenChange={setShowClientPrefConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              {clientPreference?.clientName} — before you send
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p className="whitespace-pre-line">
+                  {clientPreference?.warningMessage}
+                </p>
+                {blockedReviewLinks && blockedReviewLinks.length > 0 && (
+                  <p className="rounded bg-amber-500/10 px-2 py-1 font-medium text-amber-600 break-all">
+                    Heads up: this review link looks like one they can&apos;t
+                    open — {blockedReviewLinks[0]}
+                  </p>
+                )}
+                {clientPreference?.destinationLink && (
+                  <a
+                    href={clientPreference.destinationLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 font-medium text-amber-600 hover:underline"
+                  >
+                    Open {clientPreference.clientName}&apos;s folder
+                  </a>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                pendingActionRef.current = null;
+              }}
+            >
+              Go back
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                clientPrefAckRef.current = true;
+                setShowClientPrefConfirm(false);
+                const action = pendingActionRef.current;
+                pendingActionRef.current = null;
+                action?.();
+              }}
+            >
+              Send anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="container mx-auto flex items-center justify-between px-4 py-3">
         <div className="text-sm text-muted-foreground">
           {!isReady &&

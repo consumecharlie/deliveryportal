@@ -54,6 +54,17 @@ function hostOf(url: string): string | null {
   }
 }
 
+/** All review-link URLs on a delivery (standard fields + extra links). */
+export function collectReviewLinkUrls(
+  reviewLinks: Record<string, string> | undefined,
+  extraLinks: Array<{ url?: string }> | undefined
+): string[] {
+  return [
+    ...Object.values(reviewLinks ?? {}),
+    ...(extraLinks ?? []).map((l) => l.url ?? ""),
+  ].filter((u): u is string => Boolean(u && u.trim()));
+}
+
 /** Returns the subset of `urls` that match this client's blocked domains. */
 export function findBlockedLinks(
   pref: ClientPreferenceData,

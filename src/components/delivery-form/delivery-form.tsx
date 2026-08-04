@@ -24,6 +24,7 @@ import { DepartmentBadge } from "@/components/dashboard/department-badge";
 import { ReviewLinksSection } from "./review-links-section";
 import { ScopeSection } from "./scope-section";
 import { ClientPreferenceBanner } from "./client-preference-banner";
+import { findBlockedLinks, collectReviewLinkUrls } from "@/lib/client-preferences";
 import { VersionNotesSection } from "./version-notes-section";
 import { RecipientsSection } from "./recipients-section";
 import { SenderSelect } from "./sender-select";
@@ -510,6 +511,12 @@ export function DeliveryForm({
   const displayToEmail = editedToEmail ?? primaryEmails;
   const displayCcEmails = editedCcEmails ?? ccEmails;
   const displaySenderEmail = editedSenderEmail ?? activeTemplate?.senderEmail ?? "";
+
+  // ── Client preference (flagged clients: banner + send guardrail) ──
+  const clientPreference = taskDetail.clientPreference ?? null;
+  const blockedReviewLinks = clientPreference
+    ? findBlockedLinks(clientPreference, collectReviewLinkUrls(reviewLinks, extraLinks))
+    : [];
 
   // ── Full deliverable type options from ClickUp field definition ──
 
@@ -1426,6 +1433,8 @@ export function DeliveryForm({
           slackChannelName: slackChannelName || undefined,
         }}
         slackLintErrors={showSlack ? slackLintErrors : undefined}
+        clientPreference={clientPreference}
+        blockedReviewLinks={blockedReviewLinks}
         adhocMode={adhocMode}
         adhocListId={adhocListId}
         adhocDeliverableType={adhocDeliverableType}

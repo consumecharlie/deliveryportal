@@ -3,6 +3,7 @@ import {
   RESTRICTION_OPTIONS,
   resolveBlockedDomains,
   findBlockedLinks,
+  collectReviewLinkUrls,
   type ClientPreferenceData,
 } from "@/lib/client-preferences";
 
@@ -76,5 +77,19 @@ describe("findBlockedLinks", () => {
 
   it("exposes google as a predefined restriction option", () => {
     expect(RESTRICTION_OPTIONS.map((o) => o.key)).toContain("google");
+  });
+});
+
+describe("collectReviewLinkUrls", () => {
+  it("collects standard + extra link urls, dropping empties", () => {
+    const urls = collectReviewLinkUrls(
+      { googleDeliverableLink: "https://docs.google.com/x", frameReviewLink: "" },
+      [{ url: "https://app.box.com/y" }, { url: "" }]
+    );
+    expect(urls).toEqual(["https://docs.google.com/x", "https://app.box.com/y"]);
+  });
+
+  it("handles undefined inputs", () => {
+    expect(collectReviewLinkUrls(undefined, undefined)).toEqual([]);
   });
 });
