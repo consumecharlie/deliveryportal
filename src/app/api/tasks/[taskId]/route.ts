@@ -246,6 +246,15 @@ export async function GET(
           : undefined,
     };
 
+    let clientPreference = null;
+    try {
+      clientPreference = await prisma.clientPreference.findUnique({
+        where: { clientFolderId: task.folder.id },
+      });
+    } catch {
+      clientPreference = null; // DB down → feature no-ops
+    }
+
     const result: TaskDetail = {
       task: {
         id: task.id,
@@ -271,6 +280,7 @@ export async function GET(
       },
       contacts,
       feedbackDeadline,
+      clientPreference,
       slackChannelId,
       projectPlanLink,
       template,

@@ -2,6 +2,8 @@
  * Core TypeScript types for the Deliverable Portal
  */
 
+import type { ClientPreferenceData } from "@/lib/client-preferences";
+
 // ClickUp API response types
 
 export interface ClickUpCustomField {
@@ -116,6 +118,7 @@ export interface TaskDetail {
   task: DeliverableTask;
   contacts: ProjectContact[];
   feedbackDeadline: FeedbackDeadline | null;
+  clientPreference?: ClientPreferenceData | null;
   slackChannelId: string | null;
   slackChannelName?: string;
   projectPlanLink: string | null;
