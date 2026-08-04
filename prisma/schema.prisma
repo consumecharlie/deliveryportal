@@ -105,3 +105,17 @@ model AllowedSender {
 
   @@index([addedAt])
 }
+
+model ClientPreference {
+  clientFolderId       String   @id
+  clientName           String
+  enabled              Boolean  @default(true)
+  warningMessage       String   @db.Text
+  destinationLink      String?
+  restrictions         String[]
+  customBlockedDomains String[]
+  updatedBy            String
+  updatedAt            DateTime @updatedAt
+
+  @@index([updatedAt])
+}
