@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import type { DeliverableTask } from "@/lib/types";
 
 const CACHE_KEY = "dashboard-tasks";
-const REVALIDATE_MS = 5 * 60_000; // serve cached, refresh in background past this
+const REVALIDATE_MS = 2 * 60_000; // serve cached, refresh in background past this
 
 /**
  * Fetch the non-complete Delivery Deadline tasks for the dashboard, mapped to
