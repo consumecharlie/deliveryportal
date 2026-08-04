@@ -294,3 +294,32 @@ Wording chosen by Michael: "Feedback Deadline: Tue, Aug 4 by 12:00 PM ET"
 
 Note: relies on the 08:00-UTC date-only sentinel (empirically 204/214). If
 ClickUp changes that default, the detection would need revisiting.
+
+---
+
+## 2026-08-04 — Client Preferences feature (shipped)
+
+Per-client access-constraint flags (driving case: KeyBank can't open Google
+Docs). Design + plan: `docs/plans/2026-08-04-client-preferences-{design,}.md`.
+
+Built via subagent-driven execution (8 tasks, TDD, per-task review):
+- **`ClientPreference` Neon table** keyed by ClickUp folderId (additive `db push`
+  applied to prod). Restrictions stored as keys → domains via a code-side map
+  (`RESTRICTION_OPTIONS`, v1 = Google Docs/Drive) unioned with per-client custom
+  domains. Adding a predefined restriction = one map entry, no migration.
+- **`src/lib/client-preferences.ts`** (pure, tested): `resolveBlockedDomains`,
+  `findBlockedLinks`, `collectReviewLinkUrls`.
+- **Admin CRUD** at `/api/settings/client-preferences` (+ `[folderId]` DELETE) and
+  `/api/settings/clients` (folder picker). Managed in a new **Settings → Client
+  Preferences** section (mirrors Allowed Senders).
+- **Editor**: matching preference folded into `/api/tasks/[taskId]`; persistent
+  warning **banner** at the top of the delivery editor.
+- **Send/Schedule guardrail**: soft re-prompt dialog for flagged clients
+  (gates `handleSend`/`handleSchedule` — covers both Send-button branches +
+  scheduling), escalating with a callout when a review link matches a blocked
+  domain. Soft override ("Send anyway"/"Go back"); never hard-blocks.
+- **DB-safe**: every preference read degrades to null/no-op if the DB is down;
+  sends are never blocked. Neon-touch is demand-driven (no new cron).
+
+189 tests green, build clean. **Follow-up:** seed KeyBank in the live Settings
+UI (message + Box destination link + Google restriction) after deploy.
