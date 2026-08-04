@@ -36,6 +36,7 @@ export async function PUT(req: Request) {
       customBlockedDomains: Array.isArray(body.customBlockedDomains)
         ? body.customBlockedDomains.map((d) => d.trim()).filter(Boolean)
         : [],
+      deliverableLinkLabel: body.deliverableLinkLabel?.trim() || null,
       updatedBy,
     };
     const saved = await prisma.clientPreference.upsert({

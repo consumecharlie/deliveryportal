@@ -6,6 +6,9 @@ export interface ClientPreferenceData {
   destinationLink: string | null;
   restrictions: string[];
   customBlockedDomains: string[];
+  /** Optional relabel for the "Google Deliverable Link" review-link field
+   *  (e.g. "Box Link"). Null/absent = keep the default label. */
+  deliverableLinkLabel?: string | null;
 }
 
 /**

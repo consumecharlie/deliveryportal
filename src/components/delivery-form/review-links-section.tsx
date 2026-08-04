@@ -14,6 +14,9 @@ interface ReviewLinksSectionProps {
   linkLabels: Record<string, string>;
   /** Default labels from the template's [Link Text | varName] patterns */
   defaultLinkLabels: Record<string, string>;
+  /** Per-client overrides for the FIELD label (e.g. googleDeliverableLink →
+   *  "Box Link" for KeyBank). Overrides LINK_VARIABLE_MAP[varName].label. */
+  fieldLabelOverrides?: Record<string, string>;
   extraLinks: Array<{ url: string; label: string }>;
   onReviewLinkChange: (field: string, value: string) => void;
   onLinkLabelChange: (field: string, value: string) => void;
@@ -27,6 +30,7 @@ export function ReviewLinksSection({
   reviewLinks,
   linkLabels,
   defaultLinkLabels,
+  fieldLabelOverrides,
   extraLinks,
   onReviewLinkChange,
   onLinkLabelChange,
@@ -80,10 +84,12 @@ export function ReviewLinksSection({
         const labelValue = linkLabels[varName] ?? "";
         const defaultLabel = defaultLinkLabels[varName] ?? "";
 
+        const fieldLabel = fieldLabelOverrides?.[varName] ?? meta.label;
+
         return (
           <div key={varName} className="space-y-1">
             <Label className="text-xs text-muted-foreground">
-              {meta.label}
+              {fieldLabel}
             </Label>
             <div className="flex items-center gap-2">
               <div className="w-2/5">

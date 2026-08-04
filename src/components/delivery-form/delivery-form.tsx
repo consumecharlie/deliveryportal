@@ -517,6 +517,10 @@ export function DeliveryForm({
   const blockedReviewLinks = clientPreference
     ? findBlockedLinks(clientPreference, collectReviewLinkUrls(reviewLinks, extraLinks))
     : [];
+  // Relabel the "Google Deliverable Link" field for this client (e.g. "Box Link").
+  const linkFieldLabelOverrides = clientPreference?.deliverableLinkLabel
+    ? { googleDeliverableLink: clientPreference.deliverableLinkLabel }
+    : undefined;
 
   // ── Full deliverable type options from ClickUp field definition ──
 
@@ -1199,6 +1203,7 @@ export function DeliveryForm({
             reviewLinks={reviewLinks}
             linkLabels={linkLabels}
             defaultLinkLabels={defaultLinkLabels}
+            fieldLabelOverrides={linkFieldLabelOverrides}
             extraLinks={extraLinks}
             onReviewLinkChange={handleReviewLinkChange}
             onLinkLabelChange={(field, value) =>
@@ -1237,6 +1242,7 @@ export function DeliveryForm({
                 reviewLinks={addonReviewLinks}
                 linkLabels={addonLinkLabels}
                 defaultLinkLabels={addonTaskDetail.template ? getLinkLabelsFromTemplate(addonTaskDetail.template.snippet) : {}}
+                fieldLabelOverrides={linkFieldLabelOverrides}
                 extraLinks={[]}
                 onReviewLinkChange={(field, value) =>
                   setAddonReviewLinks((prev) => ({ ...prev, [field]: value }))

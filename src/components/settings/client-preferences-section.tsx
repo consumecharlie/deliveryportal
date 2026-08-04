@@ -37,6 +37,7 @@ interface ClientPreferenceRow {
   destinationLink: string | null;
   restrictions: string[];
   customBlockedDomains: string[];
+  deliverableLinkLabel: string | null;
   updatedBy: string;
   updatedAt: string;
 }
@@ -54,6 +55,7 @@ interface FormState {
   destinationLink: string;
   restrictions: string[];
   customBlockedDomainsText: string;
+  deliverableLinkLabel: string;
 }
 
 function emptyForm(): FormState {
@@ -65,6 +67,7 @@ function emptyForm(): FormState {
     destinationLink: "",
     restrictions: [],
     customBlockedDomainsText: "",
+    deliverableLinkLabel: "",
   };
 }
 
@@ -77,6 +80,7 @@ function rowToForm(row: ClientPreferenceRow): FormState {
     destinationLink: row.destinationLink ?? "",
     restrictions: row.restrictions ?? [],
     customBlockedDomainsText: (row.customBlockedDomains ?? []).join("\n"),
+    deliverableLinkLabel: row.deliverableLinkLabel ?? "",
   };
 }
 
@@ -148,6 +152,7 @@ export function ClientPreferencesSection() {
           destinationLink: state.destinationLink.trim() || null,
           restrictions: state.restrictions,
           customBlockedDomains: parseDomains(state.customBlockedDomainsText),
+          deliverableLinkLabel: state.deliverableLinkLabel.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -412,6 +417,28 @@ export function ClientPreferencesSection() {
                   }))
                 }
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="client-pref-link-label">
+                Relabel &quot;Google Deliverable Link&quot; field (optional)
+              </Label>
+              <Input
+                id="client-pref-link-label"
+                type="text"
+                placeholder="e.g. Box Link"
+                value={form.deliverableLinkLabel}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    deliverableLinkLabel: e.target.value,
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Renames the Google Deliverable Link field in the editor for this
+                client (the field only — the link itself is unchanged).
+              </p>
             </div>
 
             <div className="space-y-2">
