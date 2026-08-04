@@ -351,3 +351,13 @@ UI (message + Box destination link + Google restriction) after deploy.
   deploy) causes slow cold loads, amplified by many deploys in a dev session.
   Candidate: swap to demand-driven Neon-backed cache (survives deploys). Pending
   Michael's call.
+
+### 2026-08-04 — Dashboard now on a Neon-backed cache (resolved the open item)
+Replaced the Vercel Data Cache on `/api/tasks` with a `DashboardCache` Postgres
+table (pushed to prod), stale-while-revalidate:
+- Serves the cached list instantly; refreshes in the background via `after()`
+  when older than 5 min. **Survives deploys** — no more repeated ~15s cold loads
+  after each push (the key pain during dev sessions).
+- Demand-driven (no cron); falls back to a live ClickUp fetch if Neon is down.
+  `?refresh=1` forces fresh. Verified the Json upsert/read round-trip against
+  live Neon.
