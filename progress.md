@@ -332,3 +332,7 @@ UI (message + Box destination link + Google restriction) after deploy.
   Deliverable Link" for that client (e.g. "Box Link" for KeyBank), on both the
   primary and add-on link fields. Editable in Settings. Field label only — the
   link value/behavior is unchanged.
+- **Inline link warning:** a blocked-domain review link now flags the instant it's
+  entered (red border + inline note "<Client> can't open this link...") on the
+  standard, flexible, and extra link fields, driven by the same detection as the
+  send-time guardrail. So the mistake is caught at input, not only at Send.
