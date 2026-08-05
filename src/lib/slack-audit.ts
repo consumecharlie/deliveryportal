@@ -30,6 +30,76 @@ export async function getChannelMembership(channelId: string): Promise<ChannelMe
   };
 }
 
+export async function getOurTeamId(): Promise<string | null> {
+  const r = await fetch(`${SLACK}/auth.test`, { headers: authHeader() });
+  const d = await r.json();
+  return d.ok ? d.team_id : null;
+}
+
+export interface ChannelPerson {
+  userId: string;
+  name: string;
+  email?: string;
+  teamId?: string;
+  isBot: boolean;
+}
+
+/** All members of a channel, resolved to name/email/team via users.info. */
+export async function listChannelPeople(channelId: string): Promise<ChannelPerson[]> {
+  const people: ChannelPerson[] = [];
+  let cursor = "";
+  for (let i = 0; i < 10; i++) {
+    const params = new URLSearchParams({ channel: channelId, limit: "200" });
+    if (cursor) params.set("cursor", cursor);
+    const r = await fetch(`${SLACK}/conversations.members?${params}`, { headers: authHeader() });
+    const d = await r.json();
+    if (!d.ok) break;
+    for (const uid of (d.members ?? []) as string[]) {
+      const u = await (await fetch(`${SLACK}/users.info?user=${uid}`, { headers: authHeader() })).json();
+      if (!u.ok) continue;
+      people.push({
+        userId: uid,
+        name: u.user.profile?.real_name || u.user.name,
+        email: u.user.profile?.email || undefined,
+        teamId: u.user.team_id,
+        isBot: !!u.user.is_bot,
+      });
+    }
+    cursor = d.response_metadata?.next_cursor || "";
+    if (!cursor) break;
+  }
+  return people;
+}
+
+export interface VisibleChannel {
+  id: string;
+  name: string;
+  isMember: boolean;
+  isPrivate: boolean;
+}
+
+/** Channels the bot can see (public + shared, joined or not) for suggestion. */
+export async function listVisibleChannels(): Promise<VisibleChannel[]> {
+  const out: VisibleChannel[] = [];
+  let cursor = "";
+  for (let i = 0; i < 20; i++) {
+    const params = new URLSearchParams({
+      types: "public_channel,private_channel",
+      exclude_archived: "true",
+      limit: "200",
+    });
+    if (cursor) params.set("cursor", cursor);
+    const d = await (await fetch(`${SLACK}/conversations.list?${params}`, { headers: authHeader() })).json();
+    if (!d.ok) break;
+    for (const c of d.channels ?? []) {
+      out.push({ id: c.id, name: c.name, isMember: !!c.is_member, isPrivate: !!c.is_private });
+    }
+    cursor = d.response_metadata?.next_cursor || "";
+    if (!cursor) break;
+  }
+  return out;
+}
+
 export async function joinChannel(channelId: string): Promise<{ ok: boolean; error?: string }> {
   // conversations.join only works for public channels (bot self-join).
   const res = await fetch(`${SLACK}/conversations.join`, {
