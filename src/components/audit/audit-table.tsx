@@ -3,19 +3,30 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  AtSign,
+  Check,
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  FileText,
+  Hash,
+  Loader2,
+  Mail,
+  Map as MapIcon,
+  MessageSquare,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  Users,
+  UserX,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { WORKSPACE_ID } from "@/lib/custom-field-ids";
 
-function clickupLinkFor(issue: AuditIssue, row: ProjectAudit): string {
-  // Contact-specific issues (detail = contact name) deep-link to that task.
-  if (issue.detail) {
-    const c = row.contacts.find((c) => c.name === issue.detail);
-    if (c) return `https://app.clickup.com/t/${c.taskId}`;
-  }
-  // List-level issues open the project list.
-  return `https://app.clickup.com/${WORKSPACE_ID}/v/li/${row.listId}`;
-}
+const GREEN = "#6AC387";
 
 interface AuditIssue {
   type: string;
@@ -44,6 +55,16 @@ interface AuditResponse {
   lastScannedAt: string | null;
 }
 
+type Health = "blocker" | "warning" | "healthy" | "error";
+
+function clickupLinkFor(issue: AuditIssue, row: ProjectAudit): string {
+  if (issue.detail) {
+    const c = row.contacts.find((c) => c.name === issue.detail);
+    if (c) return `https://app.clickup.com/t/${c.taskId}`;
+  }
+  return `https://app.clickup.com/${WORKSPACE_ID}/v/li/${row.listId}`;
+}
+
 function countIssues(issues: AuditIssue[]) {
   let blockers = 0;
   let warnings = 0;
@@ -54,51 +75,115 @@ function countIssues(issues: AuditIssue[]) {
   return { blockers, warnings };
 }
 
-// Sort rank: lower sorts first. Blockers before warnings before healthy.
-// scanError rows sort after healthy (can't determine health).
-function sortRank(row: ProjectAudit): number {
-  if (row.scanError) return 3;
+function health(row: ProjectAudit): Health {
+  if (row.scanError) return "error";
   const { blockers, warnings } = countIssues(row.issues);
-  if (blockers > 0) return 0;
-  if (warnings > 0) return 1;
-  return 2;
+  if (blockers > 0) return "blocker";
+  if (warnings > 0) return "warning";
+  return "healthy";
 }
 
+const RANK: Record<Health, number> = { blocker: 0, warning: 1, healthy: 2, error: 3 };
+
+const ISSUE_ICON: Record<string, LucideIcon> = {
+  no_slack_channel: Hash,
+  bot_not_in_channel: MessageSquare,
+  contact_missing_slack_user_id: AtSign,
+  no_contacts: Users,
+  no_primary_contact: UserX,
+  multiple_primary_contacts: Users,
+  contact_missing_email: Mail,
+  no_project_plan: MapIcon,
+  no_template: FileText,
+};
+
+// Health → accent styling (bar + pill).
+const ACCENT: Record<Health, { bar: string; pillBg: string; pillText: string; label: string; Icon: LucideIcon }> = {
+  blocker: { bar: "bg-red-500", pillBg: "bg-red-500/15", pillText: "text-red-400", label: "blocker", Icon: ShieldAlert },
+  warning: { bar: "bg-[#DBEF00]", pillBg: "bg-[#DBEF00]/15", pillText: "text-[#DBEF00]", label: "warning", Icon: AlertTriangle },
+  healthy: { bar: "bg-[#6AC387]", pillBg: "bg-[#6AC387]/15", pillText: "text-[#6AC387]", label: "Healthy", Icon: ShieldCheck },
+  error: { bar: "bg-muted-foreground/40", pillBg: "bg-muted", pillText: "text-muted-foreground", label: "Couldn't check", Icon: AlertCircle },
+};
+
 function StatusPill({ row }: { row: ProjectAudit }) {
-  if (row.scanError) {
-    return (
-      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        Couldn&apos;t check
-      </span>
-    );
-  }
+  const h = health(row);
+  const a = ACCENT[h];
   const { blockers, warnings } = countIssues(row.issues);
-  if (blockers > 0) {
-    return (
-      <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
-        {blockers} blocker{blockers === 1 ? "" : "s"}
-      </span>
-    );
-  }
-  if (warnings > 0) {
-    return (
-      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-        {warnings} warning{warnings === 1 ? "" : "s"}
-      </span>
-    );
-  }
+  const text =
+    h === "blocker"
+      ? `${blockers} blocker${blockers === 1 ? "" : "s"}`
+      : h === "warning"
+        ? `${warnings} warning${warnings === 1 ? "" : "s"}`
+        : a.label;
   return (
-    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-      Healthy
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${a.pillBg} ${a.pillText}`}>
+      <a.Icon className="h-3.5 w-3.5" />
+      {text}
     </span>
   );
 }
 
 function ModeBadge({ mode }: { mode: ProjectAudit["mode"] }) {
+  const slack = mode === "slack";
   return (
-    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-      {mode === "slack" ? "Slack" : "Email"}
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+        slack
+          ? "border-[#6AC387]/40 bg-[#6AC387]/10 text-[#6AC387]"
+          : "border-border bg-muted/60 text-muted-foreground"
+      }`}
+    >
+      {slack ? <MessageSquare className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+      {slack ? "Slack" : "Email"}
     </span>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  color,
+  Icon,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  Icon: LucideIcon;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-3xl font-semibold tabular-nums" style={{ color }}>
+          {value}
+        </span>
+        <Icon className="h-5 w-5 opacity-70" style={{ color }} />
+      </div>
+      <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function InviteSnippet({ channel }: { channel: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span>Ask a channel admin to run</span>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard?.writeText("/invite @n8n");
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-1 font-mono text-[11px] text-foreground transition hover:border-[#6AC387]/50"
+      >
+        /invite @n8n
+        {copied ? <Check className="h-3 w-3 text-[#6AC387]" /> : <Copy className="h-3 w-3 opacity-60" />}
+      </button>
+      <span>in #{channel}</span>
+    </div>
   );
 }
 
@@ -119,9 +204,7 @@ export function AuditTable() {
     mutationFn: async () => {
       const res = await fetch("/api/audit/scan", { method: "POST" });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || "Scan failed");
       }
       return res.json() as Promise<{ ok: true; scanned: number }>;
@@ -130,15 +213,11 @@ export function AuditTable() {
       queryClient.invalidateQueries({ queryKey: ["audit"] });
       toast.success("Scan complete");
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Scan failed");
-    },
+    onError: (error: Error) => toast.error(error.message || "Scan failed"),
   });
 
   const rescanProject = async (listId: string) => {
-    await fetch(`/api/audit/scan?listId=${encodeURIComponent(listId)}`, {
-      method: "POST",
-    });
+    await fetch(`/api/audit/scan?listId=${encodeURIComponent(listId)}`, { method: "POST" });
     queryClient.invalidateQueries({ queryKey: ["audit"] });
   };
 
@@ -151,8 +230,7 @@ export function AuditTable() {
       });
       if (!res.ok) {
         throw new Error(
-          ((await res.json().catch(() => ({}))) as { error?: string }).error ||
-            "Join failed"
+          ((await res.json().catch(() => ({}))) as { error?: string }).error || "Join failed"
         );
       }
       return res.json();
@@ -169,56 +247,53 @@ export function AuditTable() {
       const res = await fetch("/api/audit/fix/sync-user-ids", { method: "POST" });
       if (!res.ok) {
         throw new Error(
-          ((await res.json().catch(() => ({}))) as { error?: string }).error ||
-            "Sync failed"
+          ((await res.json().catch(() => ({}))) as { error?: string }).error || "Sync failed"
         );
       }
       return res.json();
     },
-    onSuccess: () =>
-      toast.success("Slack user-ID sync started; re-scan in a minute."),
+    onSuccess: () => toast.success("Slack user-ID sync started; re-scan in a minute."),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const renderFix = (issue: AuditIssue, row: ProjectAudit) => {
     if (issue.type === "bot_not_in_channel") {
-      const publicChannel =
-        !!row.slackChannelId && !row.channelPrivate && !row.channelNotVisible;
+      const publicChannel = !!row.slackChannelId && !row.channelPrivate && !row.channelNotVisible;
       if (publicChannel) {
         return (
           <Button
             size="sm"
-            variant="outline"
-            className="mt-1 h-7"
+            className="h-7 bg-[#6AC387] text-[#151919] hover:bg-[#5aad74]"
             disabled={joinMutation.isPending}
             onClick={() =>
-              joinMutation.mutate({
-                channelId: row.slackChannelId as string,
-                listId: row.listId,
-              })
+              joinMutation.mutate({ channelId: row.slackChannelId as string, listId: row.listId })
             }
           >
+            {joinMutation.isPending ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Hash className="mr-1.5 h-3.5 w-3.5" />
+            )}
             Join channel
           </Button>
         );
       }
-      return (
-        <span className="mt-1 block text-xs opacity-80">
-          Ask a channel admin to run{" "}
-          <code className="rounded bg-black/10 px-1">/invite @n8n</code> in #
-          {row.slackChannelName ?? row.slackChannelId}
-        </span>
-      );
+      return <InviteSnippet channel={row.slackChannelName ?? row.slackChannelId ?? ""} />;
     }
     if (issue.type === "contact_missing_slack_user_id") {
       return (
         <Button
           size="sm"
           variant="outline"
-          className="mt-1 h-7"
+          className="h-7 border-[#6AC387]/50 text-[#6AC387] hover:bg-[#6AC387]/10"
           disabled={syncMutation.isPending}
           onClick={() => syncMutation.mutate()}
         >
+          {syncMutation.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          )}
           Run Slack user-ID sync
         </Button>
       );
@@ -228,8 +303,9 @@ export function AuditTable() {
         href={clickupLinkFor(issue, row)}
         target="_blank"
         rel="noreferrer"
-        className="mt-1 inline-block text-xs font-medium underline opacity-80"
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
       >
+        <ExternalLink className="h-3.5 w-3.5" />
         Open in ClickUp
       </a>
     );
@@ -238,12 +314,24 @@ export function AuditTable() {
   const results = data?.results ?? [];
   const lastScannedAt = data?.lastScannedAt ?? null;
 
+  const summary = useMemo(() => {
+    let blocker = 0, warning = 0, healthy = 0, error = 0;
+    for (const r of results) {
+      const h = health(r);
+      if (h === "blocker") blocker += 1;
+      else if (h === "warning") warning += 1;
+      else if (h === "healthy") healthy += 1;
+      else error += 1;
+    }
+    return { total: results.length, blocker, warning, healthy, error };
+  }, [results]);
+
   const sortedResults = useMemo(() => {
     const filtered = onlyIssues
       ? results.filter((r) => r.scanError || r.issues.length > 0)
       : results;
     return [...filtered].sort((a, b) => {
-      const rankDiff = sortRank(a) - sortRank(b);
+      const rankDiff = RANK[health(a)] - RANK[health(b)];
       if (rankDiff !== 0) return rankDiff;
       return a.clientName.localeCompare(b.clientName);
     });
@@ -251,28 +339,42 @@ export function AuditTable() {
 
   const scanButton = (
     <Button
-      variant="outline"
-      size="sm"
       onClick={() => scanMutation.mutate()}
       disabled={scanMutation.isPending}
+      className="bg-[#6AC387] text-[#151919] hover:bg-[#5aad74]"
     >
+      {scanMutation.isPending ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <RefreshCw className="mr-2 h-4 w-4" />
+      )}
       {scanMutation.isPending ? "Scanning…" : "Re-scan"}
     </Button>
   );
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
+      {/* Summary strip */}
+      {results.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Projects" value={summary.total} color="var(--foreground)" Icon={Users} />
+          <StatTile label="Blockers" value={summary.blocker} color="#ef4444" Icon={ShieldAlert} />
+          <StatTile label="Warnings" value={summary.warning} color="#DBEF00" Icon={AlertTriangle} />
+          <StatTile label="Healthy" value={summary.healthy} color={GREEN} Icon={ShieldCheck} />
+        </div>
+      )}
+
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
-          {lastScannedAt
-            ? `Last scanned ${new Date(lastScannedAt).toLocaleString()}`
-            : "No scan yet"}
+        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#6AC387]" />
+          {lastScannedAt ? `Scanned ${new Date(lastScannedAt).toLocaleString()}` : "No scan yet"}
         </div>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-input"
+              className="h-4 w-4 rounded border-input accent-[#6AC387]"
               checked={onlyIssues}
               onChange={(e) => setOnlyIssues(e.target.checked)}
             />
@@ -282,65 +384,86 @@ export function AuditTable() {
         </div>
       </div>
 
+      {/* Body */}
       {isLoading ? (
-        <Card className="px-6 py-4 text-sm text-muted-foreground">
-          Loading…
-        </Card>
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-5 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading audit…
+        </div>
       ) : isError ? (
-        <Card className="px-6 py-4 text-sm text-destructive">
-          Failed to load audit
-        </Card>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-6 py-5 text-sm text-red-400">
+          Failed to load audit.
+        </div>
       ) : results.length === 0 ? (
-        <Card className="flex-row items-center justify-between gap-4 px-6 py-4">
-          <span className="text-sm text-muted-foreground">
-            No scan yet — run one.
-          </span>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+          <ShieldCheck className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No scan yet. Run one to check every project&apos;s comms config.</p>
           {scanButton}
-        </Card>
+        </div>
       ) : sortedResults.length === 0 ? (
-        <Card className="px-6 py-4 text-sm text-muted-foreground">
-          No projects with issues. 🎉
-        </Card>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-[#6AC387]/30 bg-[#6AC387]/5 px-6 py-12 text-center">
+          <ShieldCheck className="h-8 w-8 text-[#6AC387]" />
+          <p className="text-sm font-medium text-[#6AC387]">All clear — no projects with issues.</p>
+        </div>
       ) : (
-        <div className="space-y-2">
-          {sortedResults.map((row) => (
-            <Card key={row.listId} className="gap-3 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">{row.clientName}</span>
-                <span className="text-muted-foreground">/</span>
-                <span className="text-sm">{row.projectName}</span>
-                <ModeBadge mode={row.mode} />
-                <span className="ml-auto">
-                  <StatusPill row={row} />
-                </span>
-              </div>
+        <div className="space-y-3">
+          {sortedResults.map((row) => {
+            const h = health(row);
+            const a = ACCENT[h];
+            return (
+              <div
+                key={row.listId}
+                className="relative overflow-hidden rounded-xl border border-border bg-card transition hover:border-foreground/20"
+              >
+                <span className={`absolute left-0 top-0 h-full w-1 ${a.bar}`} />
+                <div className="pl-5 pr-4 py-4">
+                  {/* Card header */}
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span className="text-sm font-semibold text-foreground">{row.clientName}</span>
+                    <span className="text-muted-foreground/40">/</span>
+                    <span className="text-sm text-muted-foreground">{row.projectName}</span>
+                    <ModeBadge mode={row.mode} />
+                    <span className="ml-auto">
+                      <StatusPill row={row} />
+                    </span>
+                  </div>
 
-              {row.scanError ? (
-                <p className="text-xs text-muted-foreground">{row.scanError}</p>
-              ) : row.issues.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {row.issues.map((issue, i) => (
-                    <li
-                      key={`${issue.type}-${i}`}
-                      className={
-                        issue.severity === "blocker"
-                          ? "text-sm text-red-600 dark:text-red-400"
-                          : "text-sm text-amber-600 dark:text-amber-400"
-                      }
-                    >
-                      <span className="font-medium">{issue.message}</span>
-                      {issue.detail ? (
-                        <span className="block text-xs opacity-80">
-                          {issue.detail}
-                        </span>
-                      ) : null}
-                      <span className="block">{renderFix(issue, row)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </Card>
-          ))}
+                  {/* Issues */}
+                  {row.scanError ? (
+                    <p className="mt-3 text-xs text-muted-foreground">{row.scanError}</p>
+                  ) : row.issues.length > 0 ? (
+                    <ul className="mt-3 divide-y divide-border/60">
+                      {row.issues.map((issue, i) => {
+                        const Icon = ISSUE_ICON[issue.type] ?? AlertCircle;
+                        const isBlocker = issue.severity === "blocker";
+                        return (
+                          <li key={`${issue.type}-${i}`} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                            <span
+                              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                                isBlocker ? "bg-red-500/15 text-red-400" : "bg-[#DBEF00]/15 text-[#DBEF00]"
+                              }`}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-foreground">{issue.message}</p>
+                              {issue.detail ? (
+                                <p className="text-xs text-muted-foreground">{issue.detail}</p>
+                              ) : null}
+                              <div className="mt-1.5">{renderFix(issue, row)}</div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-[#6AC387]">
+                      <Check className="h-3.5 w-3.5" /> Fully configured.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
