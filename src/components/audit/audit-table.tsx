@@ -16,6 +16,7 @@ import {
   Map as MapIcon,
   MessageSquare,
   RefreshCw,
+  Settings2,
   ShieldAlert,
   ShieldCheck,
   AlertTriangle,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfigureWizard } from "@/components/setup/configure-wizard";
 import { WORKSPACE_ID } from "@/lib/custom-field-ids";
 
 const GREEN = "#6AC387";
@@ -190,6 +192,11 @@ function InviteSnippet({ channel }: { channel: string }) {
 export function AuditTable() {
   const queryClient = useQueryClient();
   const [onlyIssues, setOnlyIssues] = useState(true);
+  const [wizardTarget, setWizardTarget] = useState<{
+    listId: string;
+    clientName: string;
+    projectName: string;
+  } | null>(null);
 
   const { data, isLoading, isError } = useQuery<AuditResponse>({
     queryKey: ["audit"],
@@ -435,6 +442,23 @@ export function AuditTable() {
                       <ModeBadge mode={row.mode} />
                       <StatusPill row={row} />
                     </div>
+                    {row.mode === "slack" ? (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="w-fit whitespace-nowrap border-[#6AC387]/50 text-[#6AC387] hover:bg-[#6AC387]/10"
+                        onClick={() =>
+                          setWizardTarget({
+                            listId: row.listId,
+                            clientName: row.clientName,
+                            projectName: row.projectName,
+                          })
+                        }
+                      >
+                        <Settings2 className="mr-1 h-3 w-3" />
+                        Configure from channel
+                      </Button>
+                    ) : null}
                   </div>
 
                   {/* Right: issues */}
@@ -495,6 +519,18 @@ export function AuditTable() {
           })}
         </div>
       )}
+
+      {wizardTarget ? (
+        <ConfigureWizard
+          listId={wizardTarget.listId}
+          clientName={wizardTarget.clientName}
+          projectName={wizardTarget.projectName}
+          open={!!wizardTarget}
+          onOpenChange={(v) => {
+            if (!v) setWizardTarget(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
