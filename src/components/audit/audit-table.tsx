@@ -256,36 +256,41 @@ export function AuditTable() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const renderFix = (issue: AuditIssue, row: ProjectAudit) => {
+  // The private/external bot case renders a wide inline snippet (below the
+  // message) rather than a compact right-aligned control.
+  const isInviteFix = (issue: AuditIssue, row: ProjectAudit) =>
+    issue.type === "bot_not_in_channel" &&
+    !(!!row.slackChannelId && !row.channelPrivate && !row.channelNotVisible);
+
+  // Compact control shown on the right of the issue row. null when the fix is
+  // the inline invite snippet.
+  const controlFor = (issue: AuditIssue, row: ProjectAudit) => {
     if (issue.type === "bot_not_in_channel") {
-      const publicChannel = !!row.slackChannelId && !row.channelPrivate && !row.channelNotVisible;
-      if (publicChannel) {
-        return (
-          <Button
-            size="sm"
-            className="h-7 bg-[#6AC387] text-[#151919] hover:bg-[#5aad74]"
-            disabled={joinMutation.isPending}
-            onClick={() =>
-              joinMutation.mutate({ channelId: row.slackChannelId as string, listId: row.listId })
-            }
-          >
-            {joinMutation.isPending ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Hash className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Join channel
-          </Button>
-        );
-      }
-      return <InviteSnippet channel={row.slackChannelName ?? row.slackChannelId ?? ""} />;
+      if (isInviteFix(issue, row)) return null;
+      return (
+        <Button
+          size="sm"
+          className="h-7 bg-[#6AC387] text-[#151919] hover:bg-[#5aad74]"
+          disabled={joinMutation.isPending}
+          onClick={() =>
+            joinMutation.mutate({ channelId: row.slackChannelId as string, listId: row.listId })
+          }
+        >
+          {joinMutation.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Hash className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Join
+        </Button>
+      );
     }
     if (issue.type === "contact_missing_slack_user_id") {
       return (
         <Button
           size="sm"
           variant="outline"
-          className="h-7 border-[#6AC387]/50 text-[#6AC387] hover:bg-[#6AC387]/10"
+          className="h-7 whitespace-nowrap border-[#6AC387]/50 text-[#6AC387] hover:bg-[#6AC387]/10"
           disabled={syncMutation.isPending}
           onClick={() => syncMutation.mutate()}
         >
@@ -294,7 +299,7 @@ export function AuditTable() {
           ) : (
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
           )}
-          Run Slack user-ID sync
+          Sync IDs
         </Button>
       );
     }
@@ -303,10 +308,10 @@ export function AuditTable() {
         href={clickupLinkFor(issue, row)}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
+        className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
       >
         <ExternalLink className="h-3.5 w-3.5" />
-        Open in ClickUp
+        ClickUp
       </a>
     );
   };
@@ -415,51 +420,75 @@ export function AuditTable() {
                 className="relative overflow-hidden rounded-xl border border-border bg-card transition hover:border-foreground/20"
               >
                 <span className={`absolute left-0 top-0 h-full w-1 ${a.bar}`} />
-                <div className="pl-5 pr-4 py-4">
-                  {/* Card header */}
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <span className="text-sm font-semibold text-foreground">{row.clientName}</span>
-                    <span className="text-muted-foreground/40">/</span>
-                    <span className="text-sm text-muted-foreground">{row.projectName}</span>
-                    <ModeBadge mode={row.mode} />
-                    <span className="ml-auto">
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(200px,240px)_1fr]">
+                  {/* Left: project identity */}
+                  <div className="flex flex-col gap-2 py-3.5 pl-5 pr-4 md:border-r md:border-border/60">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-foreground">
+                        {row.clientName}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {row.projectName}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ModeBadge mode={row.mode} />
                       <StatusPill row={row} />
-                    </span>
+                    </div>
                   </div>
 
-                  {/* Issues */}
-                  {row.scanError ? (
-                    <p className="mt-3 text-xs text-muted-foreground">{row.scanError}</p>
-                  ) : row.issues.length > 0 ? (
-                    <ul className="mt-3 divide-y divide-border/60">
-                      {row.issues.map((issue, i) => {
-                        const Icon = ISSUE_ICON[issue.type] ?? AlertCircle;
-                        const isBlocker = issue.severity === "blocker";
-                        return (
-                          <li key={`${issue.type}-${i}`} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                            <span
-                              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
-                                isBlocker ? "bg-red-500/15 text-red-400" : "bg-[#DBEF00]/15 text-[#DBEF00]"
-                              }`}
+                  {/* Right: issues */}
+                  <div className="py-3.5 pl-5 pr-4 md:pl-4">
+                    {row.scanError ? (
+                      <p className="text-xs text-muted-foreground">{row.scanError}</p>
+                    ) : row.issues.length > 0 ? (
+                      <ul className="divide-y divide-border/50">
+                        {row.issues.map((issue, i) => {
+                          const Icon = ISSUE_ICON[issue.type] ?? AlertCircle;
+                          const isBlocker = issue.severity === "blocker";
+                          const control = controlFor(issue, row);
+                          return (
+                            <li
+                              key={`${issue.type}-${i}`}
+                              className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0"
                             >
-                              <Icon className="h-3.5 w-3.5" />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm text-foreground">{issue.message}</p>
-                              {issue.detail ? (
-                                <p className="text-xs text-muted-foreground">{issue.detail}</p>
-                              ) : null}
-                              <div className="mt-1.5">{renderFix(issue, row)}</div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-[#6AC387]">
-                      <Check className="h-3.5 w-3.5" /> Fully configured.
-                    </p>
-                  )}
+                              <div className="flex min-w-0 items-start gap-2.5">
+                                <span
+                                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                                    isBlocker
+                                      ? "bg-red-500/15 text-red-400"
+                                      : "bg-[#DBEF00]/15 text-[#DBEF00]"
+                                  }`}
+                                >
+                                  <Icon className="h-3 w-3" />
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-sm leading-snug text-foreground">
+                                    {issue.message}
+                                  </p>
+                                  {issue.detail ? (
+                                    <p className="text-xs text-muted-foreground">
+                                      {issue.detail}
+                                    </p>
+                                  ) : null}
+                                  {isInviteFix(issue, row) ? (
+                                    <InviteSnippet
+                                      channel={row.slackChannelName ?? row.slackChannelId ?? ""}
+                                    />
+                                  ) : null}
+                                </div>
+                              </div>
+                              {control ? <div className="shrink-0">{control}</div> : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-xs text-[#6AC387]">
+                        <Check className="h-3.5 w-3.5" /> Fully configured.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             );
