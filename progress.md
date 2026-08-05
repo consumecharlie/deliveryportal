@@ -397,3 +397,33 @@ TDD). 212 tests green.
 **TODO (prod):** add `N8N_FIND_SLACK_ID_WEBHOOK_URL` to Vercel env, or the "Run
 Slack user-ID sync" fix returns 501 (button surfaces "not configured"). First
 `/audit` Re-scan on the deploy populates the cache.
+
+---
+
+## 2026-08-05 — Project Setup: configure-from-channel (code complete)
+
+Design/plan: `docs/plans/2026-08-05-project-setup-channel-autoconfig-{design,}.md`.
+Built subagent-driven (8 tasks, TDD). 230 tests green.
+
+**The unlock:** a project's Slack channel is a complete client directory —
+`conversations.members` + `users.info` returns name + email + Slack user ID for
+every member, **including external Slack Connect (client) users**
+(`users.lookupByEmail` fails for them; `users.info` via the shared channel works).
+Un-joined public/shared channels are visible (suggestable); only private-not-
+joined are invisible (Slack limit → guided `/invite`).
+
+- **Tab renamed Audit → Project Setup**; the health audit is the "Health" function.
+- **Configure-from-channel wizard** on each Slack project: suggest channel (name
+  rank, incl un-joined) → confirm (writes channel ID + joins bot) → review the
+  channel's external people (auto-filters out Consume Media + bots), matched to
+  existing contacts (email-first, name fallback) into create/update/ambiguous,
+  pick who + role (default Standard) → Apply → re-scan.
+- **Writes to ClickUp:** `createProjectContact` (task type Project Contact + first
+  name/email/user ID/role via validated option ids) / `updateContactFields` /
+  `setSlackChannel` (find-or-create Slack Channel task). Handles + the n8n
+  Find-Slack-ID workflow become obsolete (workflow left running, unused).
+- Pure libs unit-tested: `channel-suggest` (ranking), `channel-people` (matcher).
+
+**PENDING (before real use):** the ClickUp *write* path (create/update contacts,
+set channel) is build-verified + unit-tested but NOT yet run live. Validate Apply
+against a SAFE test project before pointing the wizard at a live client.
