@@ -27,6 +27,16 @@ describe("mode inference", () => {
     });
     expect(types(cfg)).toContain("no_slack_channel");
   });
+
+  it("is a Slack client when a contact has a user ID but no handle (Katie/Dataiku case)", () => {
+    // No email, no handle, but has a Slack user ID → Slack client, so a missing
+    // email must NOT be flagged.
+    const cfg = base({
+      contacts: [{ name: "Katie", email: "", role: "Primary", slackUserId: "U123" }],
+    });
+    expect(types(cfg)).toContain("no_slack_channel"); // treated as Slack
+    expect(types(cfg)).not.toContain("contact_missing_email");
+  });
 });
 
 describe("email-client checks", () => {

@@ -43,7 +43,12 @@ export interface AuditIssue {
 const NON_LOG = (c: AuditContact) => c.role !== "Log";
 
 export function isSlackClient(contacts: AuditContact[]): boolean {
-  return contacts.some((c) => NON_LOG(c) && !!c.slackHandle?.trim());
+  // A Slack handle OR a Slack user ID marks a Slack client — the user ID is
+  // what actually drives the @mention (and is how the send flow decides mode),
+  // so a contact with an ID but no handle still counts.
+  return contacts.some(
+    (c) => NON_LOG(c) && (!!c.slackHandle?.trim() || !!c.slackUserId?.trim())
+  );
 }
 
 export function auditProject(cfg: ProjectCommsConfig): AuditIssue[] {
