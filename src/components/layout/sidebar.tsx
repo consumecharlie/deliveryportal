@@ -15,7 +15,7 @@ const navItems = [
   { href: "/templates", label: "Templates", icon: "/icons/folder.svg" },
   { href: "/projects", label: "Project Links", icon: "/icons/bookmark.svg" },
   { href: "/analytics", label: "Analytics", icon: "/icons/timer.svg" },
-  { href: "/audit", label: "Audit", icon: "/icons/rules.svg" },
+  { href: "/project-setup", label: "Project Setup", icon: "/icons/rules.svg" },
   { href: "/settings", label: "Settings", icon: "/icons/rules.svg" },
 ];
 
