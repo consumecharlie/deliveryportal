@@ -5,6 +5,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { WORKSPACE_ID } from "@/lib/custom-field-ids";
+
+function clickupLinkFor(issue: AuditIssue, row: ProjectAudit): string {
+  // Contact-specific issues (detail = contact name) deep-link to that task.
+  if (issue.detail) {
+    const c = row.contacts.find((c) => c.name === issue.detail);
+    if (c) return `https://app.clickup.com/t/${c.taskId}`;
+  }
+  // List-level issues open the project list.
+  return `https://app.clickup.com/${WORKSPACE_ID}/v/li/${row.listId}`;
+}
 
 interface AuditIssue {
   type: string;
@@ -124,6 +135,106 @@ export function AuditTable() {
     },
   });
 
+  const rescanProject = async (listId: string) => {
+    await fetch(`/api/audit/scan?listId=${encodeURIComponent(listId)}`, {
+      method: "POST",
+    });
+    queryClient.invalidateQueries({ queryKey: ["audit"] });
+  };
+
+  const joinMutation = useMutation({
+    mutationFn: async (v: { channelId: string; listId: string }) => {
+      const res = await fetch("/api/audit/fix/join-channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: v.channelId }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          ((await res.json().catch(() => ({}))) as { error?: string }).error ||
+            "Join failed"
+        );
+      }
+      return res.json();
+    },
+    onSuccess: async (_d, v) => {
+      toast.success("Bot joined the channel");
+      await rescanProject(v.listId);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/audit/fix/sync-user-ids", { method: "POST" });
+      if (!res.ok) {
+        throw new Error(
+          ((await res.json().catch(() => ({}))) as { error?: string }).error ||
+            "Sync failed"
+        );
+      }
+      return res.json();
+    },
+    onSuccess: () =>
+      toast.success("Slack user-ID sync started; re-scan in a minute."),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const renderFix = (issue: AuditIssue, row: ProjectAudit) => {
+    if (issue.type === "bot_not_in_channel") {
+      const publicChannel =
+        !!row.slackChannelId && !row.channelPrivate && !row.channelNotVisible;
+      if (publicChannel) {
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-1 h-7"
+            disabled={joinMutation.isPending}
+            onClick={() =>
+              joinMutation.mutate({
+                channelId: row.slackChannelId as string,
+                listId: row.listId,
+              })
+            }
+          >
+            Join channel
+          </Button>
+        );
+      }
+      return (
+        <span className="mt-1 block text-xs opacity-80">
+          Ask a channel admin to run{" "}
+          <code className="rounded bg-black/10 px-1">/invite @n8n</code> in #
+          {row.slackChannelName ?? row.slackChannelId}
+        </span>
+      );
+    }
+    if (issue.type === "contact_missing_slack_user_id") {
+      return (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-1 h-7"
+          disabled={syncMutation.isPending}
+          onClick={() => syncMutation.mutate()}
+        >
+          Run Slack user-ID sync
+        </Button>
+      );
+    }
+    return (
+      <a
+        href={clickupLinkFor(issue, row)}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-block text-xs font-medium underline opacity-80"
+      >
+        Open in ClickUp
+      </a>
+    );
+  };
+
   const results = data?.results ?? [];
   const lastScannedAt = data?.lastScannedAt ?? null;
 
@@ -223,6 +334,7 @@ export function AuditTable() {
                           {issue.detail}
                         </span>
                       ) : null}
+                      <span className="block">{renderFix(issue, row)}</span>
                     </li>
                   ))}
                 </ul>
