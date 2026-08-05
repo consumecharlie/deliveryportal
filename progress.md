@@ -364,3 +364,36 @@ table (pushed to prod), stale-while-revalidate:
   Verified the Json upsert/read round-trip against live Neon.
 - Staleness ceiling ≈ the revalidate window; the load that trips the refresh
   still serves stale, fresh lands on the next load.
+
+---
+
+## 2026-08-05 — Project Communications Audit (shipped)
+
+Cross-project config-audit console at **/audit**. Design + plan:
+`docs/plans/2026-08-05-comms-audit-{design,}.md`. Built subagent-driven (8 tasks,
+TDD). 212 tests green.
+
+- **Mode inference:** a project is a Slack client if any contact has a Slack
+  handle (else email). Checks are mode-aware.
+- **Engine** `src/lib/comms-audit.ts` (pure, tested): no contacts / no or multiple
+  Primary / missing email (email mode) / no Slack channel / bot not in channel /
+  handle-without-user-ID (slack mode) / no project plan / no template.
+- **Resolver** `src/lib/project-comms.ts` mirrors the detail route's ClickUp
+  sibling resolution. **Slack** `src/lib/slack-audit.ts`: getChannelMembership
+  (conversations.info) + joinChannel.
+- **Scan** `src/lib/audit-scan.ts` sweeps folders/lists, checks Slack membership,
+  runs the engine, upserts a per-project `AuditResult` Neon row (pushed to prod).
+  `POST /api/audit/scan` (full or `?listId=` single); `GET /api/audit` reads cache.
+- **Page** `/audit` + nav: status pills, mode badge, "only issues" filter,
+  Re-scan. **Fixes:** Join (public channels, self-join + re-scan), guided
+  `/invite @n8n` (private/external), Run Slack user-ID sync (Find Slack ID
+  webhook), Open-in-ClickUp deep-links.
+- **n8n:** added a **Portal Trigger** webhook node to workflow `h8e33InXoUk2ExaR`
+  ("Find Slack ID") via API (18 nodes, still active). Webhook:
+  `https://consumemedia.app.n8n.cloud/webhook/find-slack-id-run`.
+- Live-validated the scan data path (Goldie = slack+2 contacts; Iterable config
+  resolves via full pagination — no false positives on big lists).
+
+**TODO (prod):** add `N8N_FIND_SLACK_ID_WEBHOOK_URL` to Vercel env, or the "Run
+Slack user-ID sync" fix returns 501 (button surfaces "not configured"). First
+`/audit` Re-scan on the deploy populates the cache.
