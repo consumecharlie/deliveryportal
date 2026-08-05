@@ -87,9 +87,9 @@ export async function scanProject(
       channelNotVisible = m.notVisible;
     }
 
-    const hasTemplateForDeliverable =
-      resolved.deliverableTypes.length === 0 ||
-      resolved.deliverableTypes.every((dt) => templates.has(dt));
+    const missingTemplateTypes = resolved.deliverableTypes.filter(
+      (dt) => !templates.has(dt)
+    );
 
     const issues = auditProject({
       listId: meta.listId,
@@ -100,7 +100,7 @@ export async function scanProject(
       slackChannelName,
       botInChannel,
       projectPlanLink: resolved.projectPlanLink,
-      hasTemplateForDeliverable,
+      missingTemplateTypes,
     });
 
     const audit: ProjectAudit = {

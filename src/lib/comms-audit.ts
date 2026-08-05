@@ -16,7 +16,8 @@ export interface ProjectCommsConfig {
   /** true/false when a Slack channel is set and membership was checked; null otherwise. */
   botInChannel: boolean | null;
   projectPlanLink: string | null;
-  hasTemplateForDeliverable: boolean;
+  /** Deliverable types on this project that have no delivery-snippet template. */
+  missingTemplateTypes: string[];
 }
 
 export type AuditSeverity = "blocker" | "warning";
@@ -75,8 +76,12 @@ export function auditProject(cfg: ProjectCommsConfig): AuditIssue[] {
   if (!cfg.projectPlanLink) {
     issues.push({ type: "no_project_plan", severity: "warning", message: "No project plan link." });
   }
-  if (!cfg.hasTemplateForDeliverable) {
-    issues.push({ type: "no_template", severity: "warning", message: "No delivery template for this deliverable type." });
+  if (cfg.missingTemplateTypes.length > 0) {
+    issues.push({
+      type: "no_template",
+      severity: "warning",
+      message: `No delivery template for: ${cfg.missingTemplateTypes.join(", ")}.`,
+    });
   }
 
   if (slackClient) {

@@ -11,7 +11,7 @@ function base(over: Partial<ProjectCommsConfig> = {}): ProjectCommsConfig {
     slackChannelName: null,
     botInChannel: null,
     projectPlanLink: "https://clickup.com/plan",
-    hasTemplateForDeliverable: true,
+    missingTemplateTypes: [],
     ...over,
   };
 }
@@ -85,7 +85,10 @@ describe("both modes", () => {
     expect(types(base({ projectPlanLink: null }))).toContain("no_project_plan");
   });
   it("flags missing template mapping", () => {
-    expect(types(base({ hasTemplateForDeliverable: false }))).toContain("no_template");
+    const issue = auditProject(base({ missingTemplateTypes: ["Edit V3 - Animated"] })).find(
+      (i) => i.type === "no_template"
+    );
+    expect(issue?.message).toContain("Edit V3 - Animated");
   });
   it("assigns blocker severity to a missing Slack channel", () => {
     const issue = auditProject(base({
