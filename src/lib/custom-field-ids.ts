@@ -47,6 +47,13 @@ export const PROJECT_TASK_TYPES = {
   DELIVERY_DEADLINE: "9946beb1-b5e1-4ee9-829d-278edf707812",
 } as const;
 
+// CONTACT_ROLE dropdown option ids (for writing a contact's role).
+export const CONTACT_ROLES = {
+  Primary: "91b18aff-3125-489b-b694-58597311020b",
+  Standard: "5309f153-79f4-453f-b74f-cbb8d10bd7d0",
+  Log: "cabd0435-f2d5-4de7-9449-2d182a9022ea",
+} as const;
+
 // Space and list IDs
 export const SPACES = {
   PROJECTS: "90030181746",
