@@ -131,3 +131,13 @@ model DashboardCache {
   data      Json
   updatedAt DateTime @updatedAt
 }
+
+/** Per-project result of the communications audit scan. One row per project
+ *  list so a single-project re-scan (after a fix) updates just that row. */
+model AuditResult {
+  listId      String   @id
+  clientName  String
+  projectName String
+  data        Json
+  scannedAt   DateTime @updatedAt
+}
