@@ -33,6 +33,7 @@ export async function createProjectContact(
   const task = await createTask(listId, {
     name: "Project Contact",
     custom_item_id: TASK_TYPES.Person,
+    status: "ongoing",
     custom_fields,
   });
   return task.id;
@@ -78,6 +79,7 @@ export async function setSlackChannel(
     await createTask(listId, {
       name: "Slack Channel",
       custom_item_id: TASK_TYPES.Communication,
+      status: "ongoing",
       custom_fields: [
         { id: CUSTOM_FIELDS.PROJECT_TASK_TYPE, value: PROJECT_TASK_TYPES.SLACK_CHANNEL },
         { id: CUSTOM_FIELDS.SLACK_DELIVERY_CHANNEL_ID, value: channelId },

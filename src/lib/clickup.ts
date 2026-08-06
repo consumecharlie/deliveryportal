@@ -169,6 +169,8 @@ export async function createTask(
     name: string;
     /** ClickUp native Task Type (custom_item_id) — omit for the default "Task". */
     custom_item_id?: number;
+    /** Initial status (must exist on the list). */
+    status?: string;
     custom_fields?: Array<{ id: string; value: unknown }>;
   }
 ): Promise<ClickUpTask> {
