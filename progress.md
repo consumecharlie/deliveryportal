@@ -424,6 +424,8 @@ joined are invisible (Slack limit → guided `/invite`).
   Find-Slack-ID workflow become obsolete (workflow left running, unused).
 - Pure libs unit-tested: `channel-suggest` (ranking), `channel-people` (matcher).
 
-**PENDING (before real use):** the ClickUp *write* path (create/update contacts,
-set channel) is build-verified + unit-tested but NOT yet run live. Validate Apply
-against a SAFE test project before pointing the wizard at a live client.
+**Write path validated (2026-08-06):** created a Project Contact + Slack Channel
+task on test list `901326970366` via the exact `createProjectContact` /
+`setSlackChannel` format — both resolved correctly (task type, role, email, user
+ID, channel id) and were deleted afterward. The Apply path is proven; ready for
+real use.
