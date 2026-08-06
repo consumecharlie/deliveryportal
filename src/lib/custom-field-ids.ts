@@ -47,6 +47,13 @@ export const PROJECT_TASK_TYPES = {
   DELIVERY_DEADLINE: "9946beb1-b5e1-4ee9-829d-278edf707812",
 } as const;
 
+// ClickUp native Task Type ids (custom_item_id) — views filter on these, so
+// created tasks must set the right one, not the default "Task".
+export const TASK_TYPES = {
+  Person: 1011, // Project Contact tasks
+  Communication: 1013, // Slack Channel tasks
+} as const;
+
 // CONTACT_ROLE dropdown option ids (for writing a contact's role).
 export const CONTACT_ROLES = {
   Primary: "91b18aff-3125-489b-b694-58597311020b",

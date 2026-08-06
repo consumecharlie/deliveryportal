@@ -8,6 +8,7 @@ import {
   CUSTOM_FIELDS,
   PROJECT_TASK_TYPES,
   CONTACT_ROLES,
+  TASK_TYPES,
 } from "@/lib/custom-field-ids";
 
 export interface NewContact {
@@ -29,7 +30,11 @@ export async function createProjectContact(
   ];
   if (c.email) custom_fields.push({ id: CUSTOM_FIELDS.CONTACT_EMAIL, value: c.email });
   if (c.userId) custom_fields.push({ id: CUSTOM_FIELDS.SLACK_USER_ID, value: c.userId });
-  const task = await createTask(listId, { name: "Project Contact", custom_fields });
+  const task = await createTask(listId, {
+    name: "Project Contact",
+    custom_item_id: TASK_TYPES.Person,
+    custom_fields,
+  });
   return task.id;
 }
 
@@ -72,6 +77,7 @@ export async function setSlackChannel(
   } else {
     await createTask(listId, {
       name: "Slack Channel",
+      custom_item_id: TASK_TYPES.Communication,
       custom_fields: [
         { id: CUSTOM_FIELDS.PROJECT_TASK_TYPE, value: PROJECT_TASK_TYPES.SLACK_CHANNEL },
         { id: CUSTOM_FIELDS.SLACK_DELIVERY_CHANNEL_ID, value: channelId },
