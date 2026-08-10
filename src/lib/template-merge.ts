@@ -6,6 +6,7 @@
  */
 
 import type { MergedContent, ProjectContact } from "./types";
+import { collapseListItemGaps } from "./markdown-normalize";
 
 interface MergeVariables {
   contacts: ProjectContact[];
@@ -490,6 +491,9 @@ export function mergeTemplate(
   subjectLine: string,
   variables: MergeVariables
 ): MergedContent {
+  // A stray blank line between bullets (e.g. from an old edited snippet) would
+  // otherwise carry a gap through to the sent message. Normalize it away.
+  template = collapseListItemGaps(template);
   // Derive primary contact info for individual contact variables
   const primaryContact = variables.contacts.find((c) => c.role === "Primary") ?? variables.contacts[0];
   const contactName = primaryContact?.name ?? "";
@@ -1045,7 +1049,8 @@ export function mergeCombinedTemplate(input: {
   primaryVariables: MergeVariables;
   addonVariables: CombinedAddonVariables;
 }): MergedContent {
-  const { combinedTemplate, subjectLine, primaryProjectName, addonProjectName } = input;
+  const combinedTemplate = collapseListItemGaps(input.combinedTemplate);
+  const { subjectLine, primaryProjectName, addonProjectName } = input;
   const pv = input.primaryVariables;
   const av = input.addonVariables;
 

@@ -15,6 +15,7 @@ import {
   type MentionListRef,
 } from "./mention-list";
 import { filterMentionItems } from "@/lib/mention-filter";
+import { collapseListItemGaps } from "@/lib/markdown-normalize";
 import {
   Bold,
   Italic,
@@ -74,7 +75,9 @@ export type { MentionItem };
 export function markdownToHtml(md: string): string {
   if (!md) return "";
 
-  let html = md;
+  // A blank line between bullets would otherwise split one list into two
+  // (un-mergeable in TipTap), so a stray gap becomes un-editable. Collapse it.
+  let html = collapseListItemGaps(md);
 
   // Mentions: @[DisplayName](userId) → TipTap mention span
   // Must run before link conversion since the syntax is similar.
