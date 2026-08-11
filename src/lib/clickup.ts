@@ -6,8 +6,11 @@
  */
 
 import type { ClickUpTask, ClickUpCustomField } from "./types";
+import { WORKSPACE_ID } from "./custom-field-ids";
+import { buildAppendedOptions, verifyOptionsUnchanged } from "./template-version";
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
+const CLICKUP_API_V3 = "https://api.clickup.com/api/v3";
 
 function getToken(): string {
   const token = process.env.CLICKUP_API_TOKEN;
@@ -310,4 +313,101 @@ export function resolveDropdownOptionId(
     (o) => o.name === optionName || o.label === optionName
   );
   return option ? String(option.orderindex) : null;
+}
+
+// ── v3 Field Config (drop_down option append) ──
+
+async function clickupFetchV3<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const res = await fetch(`${CLICKUP_API_V3}${endpoint}`, {
+    ...options,
+    headers: {
+      Authorization: getToken(),
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`ClickUp v3 error ${res.status}: ${res.statusText} - ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Append a single option to a drop_down custom field, safely.
+ *
+ * The only ClickUp endpoint that can add an option is a full-config v3 PUT of the
+ * whole field, so this is guarded: back up current options, PUT append-only,
+ * re-read, verify every original is intact and the new one is present, and
+ * restore + throw on any mismatch. Returns the new option's orderindex as the
+ * string value used by updateTaskCustomField.
+ *
+ * NOTE: the v3 PUT body shape below is presumed (type_config.options) and pending
+ * a controller idempotent-PUT validation. The verify+restore guard makes a wrong
+ * shape safe: a rejected/odd PUT throws rather than corrupting the field.
+ */
+export async function appendDeliverableTypeOption(
+  listId: string,
+  fieldId: string,
+  newName: string
+): Promise<string> {
+  const readOptions = async () => {
+    const { fields } = await getListFields(listId);
+    const field = fields.find((f) => f.id === fieldId);
+    if (!field?.type_config?.options) throw new Error(`Field ${fieldId} has no options`);
+    return field.type_config.options as Array<{
+      id: string;
+      name: string;
+      orderindex: number;
+      color?: string | null;
+    }>;
+  };
+
+  const before = await readOptions();
+  const match = before.find((o) => o.name.trim().toLowerCase() === newName.trim().toLowerCase());
+  if (match) return String(match.orderindex); // already exists (race) — resolve its orderindex
+
+  const appended = buildAppendedOptions(before, newName);
+  const putBody = {
+    type_config: {
+      options: appended.map((o) => ({
+        ...(o.id ? { id: o.id } : {}),
+        name: o.name,
+        color: o.color ?? null,
+        orderindex: o.orderindex,
+      })),
+    },
+  };
+
+  await clickupFetchV3(`/workspaces/${WORKSPACE_ID}/fields/${fieldId}`, {
+    method: "PUT",
+    body: JSON.stringify(putBody),
+  });
+
+  const after = await readOptions();
+  if (!verifyOptionsUnchanged(before, after, newName)) {
+    await clickupFetchV3(`/workspaces/${WORKSPACE_ID}/fields/${fieldId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        type_config: {
+          options: before.map((o) => ({
+            id: o.id,
+            name: o.name,
+            color: o.color ?? null,
+            orderindex: o.orderindex,
+          })),
+        },
+      }),
+    });
+    throw new Error(`Option append verification failed for "${newName}"; field restored.`);
+  }
+
+  const created = after.find(
+    (o) => o.name.trim().toLowerCase() === newName.trim().toLowerCase()
+  );
+  if (!created) throw new Error(`Option "${newName}" not found after append`);
+  return String(created.orderindex);
 }
