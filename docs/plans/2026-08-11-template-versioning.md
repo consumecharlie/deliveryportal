@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router, TypeScript, React 19, TanStack Query, Shadcn/ui (Dialog), Vitest, ClickUp API v2 (read/create/set) + v3 (field option PUT).
 
-**Naming note (disambiguation):** The detail page already has a "Version History" feature — edit-snapshots of a *single* template task, backed by the `TemplateVersion` Prisma model. THIS feature is unrelated: it spins off a *new* template task for a *new deliverable type*. Keep them distinct in code and copy. The user-facing button label ("New Version") is flagged as an open confirmation item in the design; default to "New Version" but the controller should confirm with Michael before finalizing copy.
+**Naming note (disambiguation):** The detail page already has a "Version History" feature — edit-snapshots of a *single* template task, backed by the `TemplateVersion` Prisma model. THIS feature is unrelated: it spins off a *new* template task for a *new deliverable type*. Keep them distinct in code and copy. **Confirmed user-facing label: "Duplicate as Version"** (button + dialog title), chosen to avoid confusion with the "Version History" panel.
 
 **Reference:** Design doc at `docs/plans/2026-08-11-template-versioning-design.md`.
 
@@ -485,13 +485,13 @@ git commit -m "feat: POST /api/templates/version — spin off a new-version temp
 
 ---
 
-### Task 4: "New Version" modal on the template detail page
+### Task 4: "Duplicate as Version" modal on the template detail page
 
 **Files:**
 - Modify: `src/app/templates/[taskId]/page.tsx`
 - Create: `src/components/templates/new-version-dialog.tsx`
 
-**Behavior:** A "New Version" button in the header (next to History/Save). Opens a Dialog:
+**Behavior:** A "Duplicate as Version" button in the header (next to History/Save). Opens a Dialog:
 - Segmented choice: `V2` / `V3` / `Final`, plus a free-text input for anything else. Selecting one calls `deriveVersionName(templateName, label)` and fills an editable "Target name" input.
 - Editable target-name input (user can fix `+ Loom` oddities).
 - Live indicator computed from the already-loaded `fieldOptions.deliverableType`: if some option name equals the target (case-insensitive), show "Type exists"; else "Will create new deliverable type" (subtle amber).
@@ -576,7 +576,7 @@ export function NewVersionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" /> New Version
+            <GitBranch className="h-4 w-4" /> Duplicate as Version
           </DialogTitle>
           <DialogDescription>
             Create a new template from “{sourceName}”. Pick a version, confirm the name, and it’s copied for you.
@@ -645,7 +645,7 @@ In `src/app/templates/[taskId]/page.tsx`:
 ```tsx
 <Button variant="outline" size="sm" onClick={() => setNewVersionOpen(true)}>
   <GitBranch className="mr-1 h-4 w-4" />
-  New Version
+  Duplicate as Version
 </Button>
 ```
 
@@ -673,7 +673,7 @@ Expected: compiles; no prerender errors. (Per project convention, `next build` c
 
 ```bash
 git add src/app/templates/[taskId]/page.tsx src/components/templates/new-version-dialog.tsx
-git commit -m "feat: New Version dialog on template editor"
+git commit -m "feat: Duplicate as Version dialog on template editor"
 ```
 
 ---
@@ -696,5 +696,5 @@ git push
 
 ## Open items for the controller (not code)
 
-- **Button label** — "New Version" vs an alternative that won't be confused with the existing "Version History" (edit-snapshots) panel. Confirm copy with Michael before final.
+- **Button label** — RESOLVED: "Duplicate as Version".
 - **Task 2a** must be controller-run against prod with the backup file in hand before any real append ships.
