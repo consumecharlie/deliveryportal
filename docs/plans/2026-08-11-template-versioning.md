@@ -2,11 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (or superpowers:subagent-driven-development) to implement this plan task-by-task.
 
-**Goal:** Add a "New Version" action to the template editor that creates a new delivery template from the current one for a target deliverable type (V2 / V3 / Final), auto-creating the deliverable-type dropdown option in ClickUp when it doesn't already exist.
+**Goal:** Add a "Duplicate as Version" action to the template editor that creates a new delivery template from the current one for a target deliverable type (V2 / V3 / Final). When the target type already exists it's an instant one-step duplicate; when it doesn't, the template is still created and the user is guided to add the type in ClickUp (guided-add / "B2").
 
-**Architecture:** A pure name-derivation helper proposes the target deliverable-type name (rewriting the source's version token in place). A guarded ClickUp v3 helper appends a new option to the `DELIVERABLE_TYPE` dropdown with a back-up → append-only → verify → restore-on-mismatch protocol (the one hazardous op). A new API route copies the source template's snippet/subject/department into a new task in the Delivery Snippets list, tagged to the target type. A modal on the template detail page drives the flow with a live "type exists / will create" indicator.
+**Architecture:** A pure name-derivation helper proposes the target deliverable-type name (rewriting the source's version token in place). A new API route copies the source template's snippet/subject/department into a new task in the Delivery Snippets list; if the target deliverable-type option exists it tags the task, otherwise it leaves the type unset and reports `typeExists: false`. A modal on the template detail page drives the flow with a live "type exists / new type" indicator; for a new type the user is redirected to the new template and guided (deep-link into ClickUp) to add the option, then pick it in the existing Deliverable Type dropdown and Save.
 
-**Tech Stack:** Next.js 16 App Router, TypeScript, React 19, TanStack Query, Shadcn/ui (Dialog), Vitest, ClickUp API v2 (read/create/set) + v3 (field option PUT).
+**Tech Stack:** Next.js 16 App Router, TypeScript, React 19, TanStack Query, Shadcn/ui (Dialog), Vitest, ClickUp API v2 (read/create/set custom-field VALUES only).
 
 **Naming note (disambiguation):** The detail page already has a "Version History" feature — edit-snapshots of a *single* template task, backed by the `TemplateVersion` Prisma model. THIS feature is unrelated: it spins off a *new* template task for a *new deliverable type*. Keep them distinct in code and copy. **Confirmed user-facing label: "Duplicate as Version"** (button + dialog title), chosen to avoid confusion with the "Version History" panel.
 
@@ -14,9 +14,15 @@
 
 ---
 
-## ⚠️ Controller-only hazardous step (Task 2, do NOT delegate blindly)
+## REVISION 2026-08-17 — B1 (auto-create the type) proven impossible; pivoting to B2 (guided-add)
 
-Adding a `DELIVERABLE_TYPE` option requires a full-config `PUT` of the entire field (v3 endpoint `/api/v3/workspaces/{team}/fields/{fieldId}` allows only `PUT`; no add-option endpoint exists). A bad write corrupts every project's deliverable type. The exact v3 PUT body is NOT yet confirmed. **Task 2a is a controller-run validation spike (idempotent PUT + verify) against prod with the field backed up — run it yourself, watching output, before any real append.** Do not let a subagent perform live PUTs to that field until 2a has confirmed the exact body shape and the verify passes.
+Task 2a (controller-run validation) established definitively that **ClickUp denies field-option management for our API token**: `PATCH /api/v2/field/{fieldId}` (the correct field-update endpoint per `OPTIONS ... allow: PATCH`) returns `403 {"err":"Access denied for updating field api","ECODE":"FIELD_262"}`. The v3 `/workspaces/{team}/fields/{uuid}` endpoint 404s on PUT (v3 keys fields by a different id) and 500s on GET. Conclusion: we cannot create a `DELIVERABLE_TYPE` option programmatically. Michael chose **B2 (Create + guided add)**.
+
+Consequences:
+- **Task 2b is now DEAD** — the guarded append helper (`appendDeliverableTypeOption`, `clickupFetchV3`) and the pure `buildAppendedOptions`/`verifyOptionsUnchanged` helpers + their tests must be **removed** (see "Task 2b CLEANUP" below). Keep `deriveVersionName`.
+- **Task 3** creates the template and only *sets* the deliverable type when the option already exists; otherwise leaves it unset and returns `typeExists: false`.
+- **Task 4** adds guided-add UI for the new-type case (redirect to the new template + deep-link to add the option in ClickUp, then use the existing dropdown + Save).
+- `scripts/validate-field-put.mjs` may be kept as committed provenance of the finding, or deleted. Controller's choice.
 
 ---
 
@@ -385,26 +391,20 @@ git commit -m "feat: guarded appendDeliverableTypeOption (v3 append + verify + r
 - Create: `src/app/api/templates/version/route.ts`
 - Reference: `src/app/api/templates/create/route.ts` (mirror its dropdown-resolve pattern)
 
-**Behavior:** Input `{ snippet, subjectLine, department, deliverableType }` where `deliverableType` is the confirmed target name. Steps:
+**Behavior (B2):** Input `{ snippet, subjectLine, department, deliverableType }` where `deliverableType` is the confirmed target name. Steps:
 1. Validate `deliverableType` non-empty (400 if not).
 2. Collision check: `getListTasks(LISTS.DELIVERY_SNIPPETS, true)` → if any task `name` equals the target (case-insensitive, trimmed), return `409 { error, existingTaskId }`.
-3. Resolve the `DELIVERABLE_TYPE` option orderindex via `getListFields`. If missing, call `appendDeliverableTypeOption(LISTS.DELIVERY_SNIPPETS, TEMPLATE_FIELDS.DELIVERABLE_TYPE, deliverableType)` to create it and get the orderindex.
+3. Resolve the `DELIVERABLE_TYPE` option via `getListFields`. If it EXISTS → we'll set it and `typeExists = true`. If it does NOT exist → leave the type unset, `typeExists = false` (we cannot create the option; the UI guides the user to add it in ClickUp).
 4. `createTask(LISTS.DELIVERY_SNIPPETS, { name: deliverableType, custom_fields: [snippet, subjectLine text fields] })`.
-5. Set `DELIVERABLE_TYPE` (resolved orderindex) and, if `department` resolves, `DEPARTMENT` via `updateTaskCustomField`.
-6. Return `{ success: true, taskId, name, createdType: <bool> }`.
+5. If the option exists, set `DELIVERABLE_TYPE`. Always set `DEPARTMENT` if it resolves.
+6. Return `{ success: true, taskId, name, typeExists }`.
 
 **Step 1: Write the route**
 
 ```ts
 // src/app/api/templates/version/route.ts
 import { NextResponse } from "next/server";
-import {
-  createTask,
-  getListFields,
-  getListTasks,
-  updateTaskCustomField,
-  appendDeliverableTypeOption,
-} from "@/lib/clickup";
+import { createTask, getListFields, getListTasks, updateTaskCustomField } from "@/lib/clickup";
 import { LISTS, TEMPLATE_FIELDS } from "@/lib/custom-field-ids";
 
 export async function POST(req: Request) {
@@ -425,24 +425,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Resolve (or create) the deliverable-type dropdown option.
+    // Resolve the deliverable-type option — we can only SET an existing one.
     const { fields } = await getListFields(LISTS.DELIVERY_SNIPPETS);
     const dtField = fields.find((f) => f.id === TEMPLATE_FIELDS.DELIVERABLE_TYPE);
     const existingOpt = dtField?.type_config?.options?.find(
       (o) => (o.name ?? o.label) === dt
     );
-    let dtOrderIndex: string;
-    let createdType = false;
-    if (existingOpt) {
-      dtOrderIndex = String(existingOpt.orderindex);
-    } else {
-      dtOrderIndex = await appendDeliverableTypeOption(
-        LISTS.DELIVERY_SNIPPETS,
-        TEMPLATE_FIELDS.DELIVERABLE_TYPE,
-        dt
-      );
-      createdType = true;
-    }
+    const typeExists = !!existingOpt;
 
     // Create the task with the copied text fields.
     const customFields: Array<{ id: string; value: unknown }> = [];
@@ -450,8 +439,11 @@ export async function POST(req: Request) {
     if (subjectLine) customFields.push({ id: TEMPLATE_FIELDS.DELIVERY_SUBJECT_LINE, value: subjectLine });
     const newTask = await createTask(LISTS.DELIVERY_SNIPPETS, { name: dt, custom_fields: customFields });
 
-    // Set the dropdowns.
-    await updateTaskCustomField(newTask.id, TEMPLATE_FIELDS.DELIVERABLE_TYPE, dtOrderIndex);
+    // Set deliverable type only if the option already exists.
+    if (existingOpt) {
+      await updateTaskCustomField(newTask.id, TEMPLATE_FIELDS.DELIVERABLE_TYPE, String(existingOpt.orderindex));
+    }
+    // Department always resolves from an existing option set.
     if (department) {
       const deptField = fields.find((f) => f.id === TEMPLATE_FIELDS.DEPARTMENT);
       const deptOpt = deptField?.type_config?.options?.find((o) => (o.name ?? o.label) === department);
@@ -460,7 +452,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, taskId: newTask.id, name: newTask.name, createdType });
+    return NextResponse.json({ success: true, taskId: newTask.id, name: newTask.name, typeExists });
   } catch (error) {
     console.error("Failed to create template version:", error);
     return NextResponse.json(
@@ -480,7 +472,7 @@ Expected: no errors. (If `getListFields` option typing complains about `label`, 
 
 ```bash
 git add src/app/api/templates/version/route.ts
-git commit -m "feat: POST /api/templates/version — spin off a new-version template"
+git commit -m "feat: POST /api/templates/version — duplicate a template as a new version"
 ```
 
 ---
@@ -554,14 +546,18 @@ export function NewVersionDialog({
       });
       const data = await res.json();
       if (!res.ok) throw Object.assign(new Error(data.error || "Failed"), { data });
-      return data as { taskId: string; createdType: boolean };
+      return data as { taskId: string; typeExists: boolean };
     },
     onSuccess: (data) => {
       onOpenChange(false);
-      toast.success("New version created", {
-        description: data.createdType ? "New deliverable type added in ClickUp." : undefined,
+      toast.success("Version created", {
+        description: data.typeExists
+          ? "Content copied and tagged to the deliverable type."
+          : "Content copied. One quick step left: add the new type in ClickUp.",
       });
-      router.push(`/templates/${data.taskId}`);
+      // For a brand-new type we can't set the dropdown (ClickUp denies option
+      // creation via API), so route with a flag that triggers the guided-add banner.
+      router.push(`/templates/${data.taskId}${data.typeExists ? "" : "?newType=1"}`);
     },
     onError: (err: Error & { data?: { existingTaskId?: string } }) => {
       const existingTaskId = err.data?.existingTaskId;
@@ -614,7 +610,7 @@ export function NewVersionDialog({
               typeExists ? "text-muted-foreground" : "text-amber-600")}>
               {typeExists
                 ? (<><Check className="h-3 w-3" /> Type exists — the template will be tagged to it.</>)
-                : (<><AlertTriangle className="h-3 w-3" /> Will create a new deliverable type in ClickUp.</>)}
+                : (<><AlertTriangle className="h-3 w-3" /> New type — you’ll add it in ClickUp in one guided step after.</>)}
             </p>
           </div>
         </div>
@@ -664,28 +660,69 @@ In `src/app/templates/[taskId]/page.tsx`:
 />
 ```
 
-**Step 3: Typecheck + build**
+**Step 3: Guided-add banner for the new-type case (in `src/app/templates/[taskId]/page.tsx`)**
+
+When the version was created for a type ClickUp doesn't have yet, we land on the new template with `?newType=1`. Show a dismissible banner guiding the user to add the option in ClickUp, then pick it in the existing Deliverable Type dropdown and Save.
+
+- Read the flag: `import { useSearchParams } from "next/navigation";` then `const newType = useSearchParams().get("newType") === "1";`
+- Compute whether the type is still missing from the loaded options:
+  ```tsx
+  const typeMissing = newType && !!deliverableType === false &&
+    !(fieldOptions?.deliverableType ?? []).some((o) => o.name === templateName);
+  ```
+  (The new task has its deliverable type unset, so `deliverableType` is empty and the type name equals `templateName`.)
+- Render a banner near the top of the return (above the editor grid) when `typeMissing`:
+  ```tsx
+  {typeMissing && (
+    <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="space-y-2">
+          <p className="text-amber-800 dark:text-amber-300">
+            <strong>“{templateName}”</strong> isn’t a Deliverable Type in ClickUp yet. Add it there, then
+            select it in the Deliverable Type dropdown and Save. (ClickUp doesn’t allow creating dropdown
+            options via API, so this one step is manual.)
+          </p>
+          <div className="flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <a href={`https://app.clickup.com/t/${template.taskId}`} target="_blank" rel="noopener noreferrer">
+                Open task in ClickUp
+              </a>
+            </Button>
+            <Button size="sm" variant="ghost"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["template-field-options"] })}>
+              Refresh types
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+  ```
+  This reuses the page's existing `queryClient`, `fieldOptions`, `deliverableType`, `templateName`, `template`, and `AlertTriangle` import. After the user adds the option in ClickUp and clicks "Refresh types", the option appears in the dropdown; selecting it + Save writes it through the existing save flow.
+
+**Step 4: Typecheck + build**
 
 Run: `npx tsc --noEmit && npx next build`
-Expected: compiles; no prerender errors. (Per project convention, `next build` catches prerender issues that lint/tsc miss.)
+Expected: compiles; no prerender errors. (Per project convention, `next build` catches prerender issues that lint/tsc miss. Note `useSearchParams` requires the page to already be a client component — it is.)
 
-**Step 4: Commit**
+**Step 5: Commit**
 
 ```bash
 git add src/app/templates/[taskId]/page.tsx src/components/templates/new-version-dialog.tsx
-git commit -m "feat: Duplicate as Version dialog on template editor"
+git commit -m "feat: Duplicate as Version dialog + guided-add banner on template editor"
 ```
 
 ---
 
 ### Task 5: Manual verification (live) + push
 
-**Do NOT rely on CI for the ClickUp writes.** After Task 2a confirms the PUT shape:
+**Do NOT rely on CI for the ClickUp writes.**
 
 1. Run `npx vitest run` — all unit tests green.
-2. On the live Vercel deploy (project convention: test on prod, not localhost), open a template with a clean base name (e.g. one whose `... V2` type already exists) and create a `V2` → confirm the new template opens, content copied, type tagged, and NO new option was created (indicator said "Type exists").
-3. Repeat for a base whose target type does NOT exist (e.g. a `... Final` that's missing) → confirm the new option is appended (check the `DELIVERABLE_TYPE` dropdown in ClickUp shows exactly one new option, all originals intact and correctly ordered) and the template is tagged to it.
-4. Trigger the collision path (create the same version twice) → confirm the 409 toast with "Open existing".
+2. On the live Vercel deploy (project convention: test on prod, not localhost), open a template whose target `... V2`/`... Final` type ALREADY exists and duplicate it → confirm the new template opens, content copied, deliverable type tagged, department set, NO `?newType` banner.
+3. Repeat for a base whose target type does NOT exist → confirm: the template is still created with content + department, the dropdown is empty, and the amber guided-add banner appears with a working "Open task in ClickUp" link. Add the option in ClickUp, click "Refresh types", pick it, Save → confirm it persists.
+4. Trigger the collision path (duplicate the same version twice) → confirm the 409 toast with "Open existing".
 5. Push:
 
 ```bash
