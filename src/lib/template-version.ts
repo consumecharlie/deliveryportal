@@ -18,31 +18,3 @@ export function deriveVersionName(sourceName: string, targetLabel: string): stri
     : `${src} ${targetLabel}`;
   return out.replace(/\s+/g, " ").trim();
 }
-
-export interface DropdownOption {
-  id: string;
-  name: string;
-  orderindex: number;
-  color?: string | null;
-}
-
-/** Append a new option after the current max orderindex, leaving originals byte-for-byte. */
-export function buildAppendedOptions(existing: DropdownOption[], newName: string): DropdownOption[] {
-  const maxIdx = existing.reduce((m, o) => Math.max(m, o.orderindex), -1);
-  return [...existing, { id: "", name: newName, orderindex: maxIdx + 1, color: null }];
-}
-
-/** True iff every `before` option is intact (id/name/orderindex) in `after` and `newName` is present. */
-export function verifyOptionsUnchanged(
-  before: Array<Pick<DropdownOption, "id" | "name" | "orderindex">>,
-  after: Array<Pick<DropdownOption, "id" | "name" | "orderindex">>,
-  newName: string
-): boolean {
-  const byId = new Map(after.map((o) => [o.id, o]));
-  const allIntact = before.every((b) => {
-    const a = byId.get(b.id);
-    return !!a && a.name === b.name && String(a.orderindex) === String(b.orderindex);
-  });
-  const newPresent = after.some((o) => o.name.trim().toLowerCase() === newName.trim().toLowerCase());
-  return allIntact && newPresent;
-}

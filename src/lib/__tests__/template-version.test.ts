@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  deriveVersionName,
-  buildAppendedOptions,
-  verifyOptionsUnchanged,
-} from "@/lib/template-version";
+import { deriveVersionName } from "@/lib/template-version";
 
 describe("deriveVersionName", () => {
   it("appends when the source has no version token", () => {
@@ -39,40 +35,5 @@ describe("deriveVersionName", () => {
 
   it("trims and collapses whitespace it introduces", () => {
     expect(deriveVersionName("Generative Stills ", "V2")).toBe("Generative Stills V2");
-  });
-});
-
-describe("buildAppendedOptions", () => {
-  it("appends a new option after the highest orderindex, preserving originals", () => {
-    const existing = [
-      { id: "a", name: "Alpha", orderindex: 0, color: null },
-      { id: "b", name: "Beta", orderindex: 1, color: null },
-    ];
-    const result = buildAppendedOptions(existing, "Gamma");
-    expect(result.slice(0, 2)).toEqual(existing);
-    expect(result[2].name).toBe("Gamma");
-    expect(result[2].orderindex).toBe(2);
-  });
-});
-
-describe("verifyOptionsUnchanged", () => {
-  const before = [
-    { id: "a", name: "Alpha", orderindex: 0 },
-    { id: "b", name: "Beta", orderindex: 1 },
-  ];
-  it("passes when every original id/name/orderindex is intact and the new name is present", () => {
-    const after = [...before, { id: "c", name: "Gamma", orderindex: 2 }];
-    expect(verifyOptionsUnchanged(before, after, "Gamma")).toBe(true);
-  });
-  it("fails when an original option's orderindex shifted", () => {
-    const after = [
-      { id: "a", name: "Alpha", orderindex: 1 },
-      { id: "b", name: "Beta", orderindex: 0 },
-      { id: "c", name: "Gamma", orderindex: 2 },
-    ];
-    expect(verifyOptionsUnchanged(before, after, "Gamma")).toBe(false);
-  });
-  it("fails when the new option is absent", () => {
-    expect(verifyOptionsUnchanged(before, before, "Gamma")).toBe(false);
   });
 });
