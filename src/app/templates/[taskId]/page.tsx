@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,7 @@ import {
   AlertTriangle,
   Sparkles,
   Pencil,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ import type { DeliverySnippetTemplate } from "@/lib/types";
 import type { SlackLintError } from "@/lib/slack-lint";
 import { magicCleanup } from "@/lib/template-cleanup";
 import { lintTemplate, countBySeverity, type LintIssue } from "@/lib/template-lint";
+import { NewVersionDialog } from "@/components/templates/new-version-dialog";
 
 // Template variables grouped by category
 const VARIABLE_GROUPS: {
@@ -334,6 +336,7 @@ export default function TemplateEditorPage() {
   const params = useParams();
   const queryClient = useQueryClient();
   const taskId = params.taskId as string;
+  const newType = useSearchParams().get("newType") === "1";
 
   const [templateName, setTemplateName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -356,6 +359,7 @@ export default function TemplateEditorPage() {
     useState<TemplateVersionRecord | null>(null);
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
   const [showLintWarning, setShowLintWarning] = useState(false);
+  const [newVersionOpen, setNewVersionOpen] = useState(false);
 
   // Template-level lint (formatting + variable hygiene + cleanup
   // compliance). Recomputed live as the snippet changes; gates the
@@ -519,8 +523,38 @@ export default function TemplateEditorPage() {
     );
   }
 
+  const typeMissing =
+    newType &&
+    !deliverableType &&
+    !(fieldOptions?.deliverableType ?? []).some((o) => o.name === templateName);
+
   return (
     <div className="space-y-6">
+      {typeMissing && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="space-y-2">
+              <p className="text-amber-800 dark:text-amber-300">
+                <strong>“{templateName}”</strong> isn’t a Deliverable Type in ClickUp yet. Add it there, then
+                select it in the Deliverable Type dropdown and Save. (ClickUp doesn’t allow creating dropdown
+                options via API, so this one step is manual.)
+              </p>
+              <div className="flex gap-2">
+                <Button asChild size="sm" variant="outline">
+                  <a href={`https://app.clickup.com/t/${template.taskId}`} target="_blank" rel="noopener noreferrer">
+                    Open task in ClickUp
+                  </a>
+                </Button>
+                <Button size="sm" variant="ghost"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["template-field-options"] })}>
+                  Refresh types
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -575,6 +609,10 @@ export default function TemplateEditorPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setNewVersionOpen(true)}>
+            <GitBranch className="mr-1 h-4 w-4" />
+            Duplicate as Version
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1176,6 +1214,16 @@ export default function TemplateEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NewVersionDialog
+        open={newVersionOpen}
+        onOpenChange={setNewVersionOpen}
+        sourceName={templateName}
+        snippet={snippet}
+        subjectLine={subjectLine}
+        department={department}
+        existingTypeNames={(fieldOptions?.deliverableType ?? []).map((o) => o.name)}
+      />
     </div>
   );
 }
