@@ -9,6 +9,10 @@ interface TaskMeta {
   taskName?: string;
   clientName?: string;
   projectName?: string;
+  // Ad-hoc drafts persist these so the Drafts list can rebuild a resume link
+  // back to the New Delivery page (there's no real task to reopen).
+  listId?: string;
+  deliverableType?: string;
 }
 
 interface UseAutoSaveOptions {
@@ -48,7 +52,7 @@ export function useAutoSave({
     if (currentJson === lastSavedRef.current) return;
 
     try {
-      const res = await fetch(`/api/drafts/${taskId}`, {
+      const res = await fetch(`/api/drafts/${encodeURIComponent(taskId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -85,7 +89,7 @@ export function useAutoSave({
       // Fire-and-forget save on unmount
       const currentJson = JSON.stringify(formStateRef.current);
       if (currentJson !== lastSavedRef.current) {
-        fetch(`/api/drafts/${taskId}`, {
+        fetch(`/api/drafts/${encodeURIComponent(taskId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

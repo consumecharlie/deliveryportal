@@ -282,6 +282,16 @@ export function SendBar({
             : "Email draft created, Slack message posted, and task marked complete.",
         });
 
+        // Ad-hoc drafts are keyed by project + deliverable type (there's no
+        // real task for the server-side send to delete against), so clear the
+        // autosaved draft here so it doesn't linger in the Drafts list.
+        if (adhocMode && adhocListId) {
+          fetch(
+            `/api/drafts/${encodeURIComponent(`adhoc:${adhocListId}:${adhocDeliverableType ?? ""}`)}`,
+            { method: "DELETE" }
+          ).catch(() => {});
+        }
+
         // In adhoc mode, use the new task ID from the response
         const resultTaskId = adhocMode ? result.taskId : taskId;
 

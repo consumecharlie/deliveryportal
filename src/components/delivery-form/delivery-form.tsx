@@ -43,6 +43,7 @@ import {
 import { AddonProjectModal } from "./addon-project-modal";
 import type { AddonSelection } from "./addon-project-modal";
 import { DEPARTMENT_CC_EMAILS } from "@/lib/custom-field-ids";
+import { formatManualDeadline, deadlineMsToInputs } from "@/lib/feedback-deadline";
 import type {
   TaskDetail,
   DeliverySnippetTemplate,
@@ -99,6 +100,16 @@ export function DeliveryForm({
   const { task, contacts, feedbackDeadline, template: initialTemplate } = taskDetail;
   const { data: session } = useSession();
 
+  // Draft identity. Real deliveries key drafts by their ClickUp task id.
+  // Ad-hoc deliveries have no task, so they key by project + deliverable type —
+  // a stable identity so autosave/resume works and two different selections
+  // never share (and clobber) one draft the way the old constant "__adhoc__"
+  // key did.
+  const draftKey =
+    adhocMode && adhocListId
+      ? `adhoc:${adhocListId}:${adhocDeliverableType ?? ""}`
+      : task.id;
+
   // ── Form state ──
 
   const [deliverableType, setDeliverableType] = useState(task.deliverableType);
@@ -137,6 +148,25 @@ export function DeliveryForm({
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
   const [slackChannelName, setSlackChannelName] = useState<string>("");
 
+  // Manual feedback deadline (date + optional time). Ad-hoc deliveries often
+  // have no ClickUp Feedback Deadline task to detect; this control feeds the
+  // same snippet merge vars and is prefilled from a detected deadline when one
+  // exists.
+  const initialDeadlineInputs = useMemo(
+    () => deadlineMsToInputs(feedbackDeadline?.dueDate),
+    [feedbackDeadline?.dueDate]
+  );
+  const [manualFeedbackDate, setManualFeedbackDate] = useState(
+    initialDeadlineInputs.date
+  );
+  const [manualFeedbackTime, setManualFeedbackTime] = useState(
+    initialDeadlineInputs.time
+  );
+  const effectiveDeadline = useMemo(
+    () => formatManualDeadline(manualFeedbackDate, manualFeedbackTime),
+    [manualFeedbackDate, manualFeedbackTime]
+  );
+
   // ── Add-on project state ──
   const [addonProject, setAddonProject] = useState<AddonSelection | null>(null);
   const [showAddonModal, setShowAddonModal] = useState(false);
@@ -159,10 +189,13 @@ export function DeliveryForm({
   const queryClient = useQueryClient();
 
   // ── Delivery mode (email or slack) ──
-  // Auto-detect: if primary contact has a Slack user ID → slack, otherwise email
-  const detectedMode = contacts.find((c) => c.role === "Primary")?.slackUserId
-    ? "slack"
-    : "email";
+  // Auto-detect: a project is "Slack" if it has a configured Slack delivery
+  // channel, or (fallback) its primary contact carries a Slack user ID.
+  const detectedMode =
+    taskDetail.slackChannelId ||
+    contacts.find((c) => c.role === "Primary")?.slackUserId
+      ? "slack"
+      : "email";
   const [deliveryMode, setDeliveryMode] = useState<"email" | "slack">(detectedMode);
 
   // ── Test mode ──
@@ -204,6 +237,8 @@ export function DeliveryForm({
     setRushedProject(false);
     setRepeatClient(false);
     setSlackChannelId(taskDetail.slackChannelId ?? "");
+    setManualFeedbackDate(initialDeadlineInputs.date);
+    setManualFeedbackTime(initialDeadlineInputs.time);
     setEditedSnippet(null);
     setEditedSubject(null);
     setIsEditMode(false);
@@ -221,14 +256,14 @@ export function DeliveryForm({
     // 2. Delete the auto-saved draft so the next 30s tick doesn't
     //    re-create the old state we just cleared.
     try {
-      await fetch(`/api/drafts/${task.id}`, { method: "DELETE" });
+      await fetch(`/api/drafts/${encodeURIComponent(draftKey)}`, { method: "DELETE" });
     } catch {
       /* non-fatal — auto-save will overwrite shortly with the clean state */
     }
 
     setShowResetConfirm(false);
     toast.success("Reset to ClickUp defaults");
-  }, [task.id, task.deliverableType, taskDetail.reviewLinks, taskDetail.revisionRounds, taskDetail.feedbackWindows, taskDetail.versionNotes, taskDetail.slackChannelId, detectedMode]);
+  }, [draftKey, task.deliverableType, taskDetail.reviewLinks, taskDetail.revisionRounds, taskDetail.feedbackWindows, taskDetail.versionNotes, taskDetail.slackChannelId, detectedMode, initialDeadlineInputs]);
 
   const handleTestModeToggle = useCallback(() => {
     setTestMode((prev) => {
@@ -420,8 +455,8 @@ export function DeliveryForm({
       versionNotes,
       revisionRounds,
       feedbackWindows,
-      nextFeedbackDeadline: feedbackDeadline?.formattedDate ?? "",
-      feedbackDeadlineTime: feedbackDeadline?.timeLabel ?? "",
+      nextFeedbackDeadline: effectiveDeadline.formattedDate,
+      feedbackDeadlineTime: effectiveDeadline.timeLabel,
       googleDeliverableLink: reviewLinks.googleDeliverableLink,
       frameReviewLink: reviewLinks.frameReviewLink,
       animaticReviewLink: reviewLinks.animaticReviewLink,
@@ -470,7 +505,7 @@ export function DeliveryForm({
     versionNotes,
     revisionRounds,
     feedbackWindows,
-    feedbackDeadline,
+    effectiveDeadline,
     reviewLinks,
     taskDetail.projectPlanLink,
     extraLinks,
@@ -734,6 +769,8 @@ export function DeliveryForm({
     rushedProject,
     repeatClient,
     deliveryMode,
+    manualFeedbackDate,
+    manualFeedbackTime,
     // Legacy frozen-snapshot fields are no longer produced by the editor; the
     // server reads `?? mergedContent`, and mergedContent already reflects any
     // template edits. Kept null for backward compatibility.
@@ -760,17 +797,23 @@ export function DeliveryForm({
   };
 
   // ── Auto-save (every 30s, no ClickUp write) ──
-  // Disabled in adhoc mode since there's no real task ID to save against
+  // Keyed by draftKey so ad-hoc deliveries autosave under their own stable
+  // identity (project + deliverable type) rather than sharing one draft.
   useAutoSave({
-    taskId: task.id,
+    taskId: draftKey,
     formState,
     savedBy: session?.user?.email ?? "portal-user",
     taskMeta: {
       taskName: task.name,
       clientName: task.clientName,
       projectName: task.projectName,
+      // For ad-hoc drafts, persist the identity needed to resume from the
+      // Drafts list (there's no real task to reopen).
+      ...(adhocMode
+        ? { listId: adhocListId, deliverableType: adhocDeliverableType }
+        : {}),
     },
-    enabled: !adhocMode,
+    enabled: true,
   });
 
   // ── Restore draft on mount ──
@@ -781,7 +824,7 @@ export function DeliveryForm({
 
     async function loadDraft() {
       try {
-        const res = await fetch(`/api/drafts/${task.id}`);
+        const res = await fetch(`/api/drafts/${encodeURIComponent(draftKey)}`);
         if (!res.ok) return;
         const { draft } = await res.json();
         if (!draft || cancelled) return;
@@ -806,6 +849,8 @@ export function DeliveryForm({
         if (typeof saved.rushedProject === "boolean") setRushedProject(saved.rushedProject);
         if (typeof saved.repeatClient === "boolean") setRepeatClient(saved.repeatClient);
         if (saved.deliveryMode) setDeliveryMode(saved.deliveryMode);
+        if (typeof saved.manualFeedbackDate === "string") setManualFeedbackDate(saved.manualFeedbackDate);
+        if (typeof saved.manualFeedbackTime === "string") setManualFeedbackTime(saved.manualFeedbackTime);
         if (saved.reviewLinks) {
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
         }
@@ -845,7 +890,7 @@ export function DeliveryForm({
 
     loadDraft();
     return () => { cancelled = true; };
-  }, [task.id, draftLoaded]);
+  }, [draftKey, draftLoaded]);
 
   // ── Resend prefill ──
   //
@@ -1157,7 +1202,7 @@ export function DeliveryForm({
           <Plus className="h-4 w-4 text-[#6AC387] shrink-0" />
           <span className="text-sm flex-1">
             Combined with <strong>{addonProject.projectName}</strong>
-            <span className="text-muted-foreground"> — {addonProject.deliverableType}</span>
+            <span className="text-muted-foreground"> - {addonProject.deliverableType}</span>
           </span>
           <button
             type="button"
@@ -1205,6 +1250,45 @@ export function DeliveryForm({
             )}
           </div>
 
+          {/* Feedback Deadline — always editable; prefilled from a detected
+              ClickUp Feedback Deadline task, or set manually for ad-hoc
+              deliveries that have none. Feeds the snippet's deadline merge vars. */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Feedback Deadline</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={manualFeedbackDate}
+                onChange={(e) => setManualFeedbackDate(e.target.value)}
+                aria-label="Feedback deadline date"
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <input
+                type="time"
+                value={manualFeedbackTime}
+                onChange={(e) => setManualFeedbackTime(e.target.value)}
+                aria-label="Feedback deadline time (optional)"
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              {manualFeedbackTime && (
+                <button
+                  type="button"
+                  onClick={() => setManualFeedbackTime("")}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Clear time
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {manualFeedbackDate
+                ? `Shows as: ${effectiveDeadline.formattedDate}${effectiveDeadline.timeLabel ? ` at ${effectiveDeadline.timeLabel}` : " (no time)"}`
+                : feedbackDeadline
+                  ? "No date set — the deadline line will be blank in the message."
+                  : "No feedback deadline task found for this delivery. Set one so it appears in the message."}
+            </p>
+          </div>
+
           {/* Review Links */}
           <ReviewLinksSection
             requiredFields={requiredLinkFields}
@@ -1243,7 +1327,7 @@ export function DeliveryForm({
             <div className="space-y-6 rounded-lg border border-[#6AC387]/30 bg-[#6AC387]/5 p-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  📎 {addonProject.projectName} — {addonProject.deliverableType}
+                  📎 {addonProject.projectName} - {addonProject.deliverableType}
                 </span>
               </div>
 

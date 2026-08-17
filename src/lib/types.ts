@@ -165,6 +165,11 @@ export interface DeliveryFormState {
   /** Email vs Slack channel choice. Optional for the same backward-compat
    *  reason; falls back to auto-detection when absent. */
   deliveryMode?: "email" | "slack";
+  /** Manually-entered feedback deadline (date "YYYY-MM-DD" + optional time
+   *  "HH:MM"). Used for ad-hoc deliveries with no detected deadline, or to
+   *  override a detected one. Optional for backward compat with older drafts. */
+  manualFeedbackDate?: string;
+  manualFeedbackTime?: string;
   editedEmailContent: string | null; // legacy frozen snapshot (kept for server `?? mergedContent`)
   editedSlackContent: string | null;
   editedSubjectLine: string | null;

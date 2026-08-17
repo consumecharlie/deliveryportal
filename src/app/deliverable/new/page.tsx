@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,32 @@ interface ClientWithProjects {
 }
 
 export default function NewDeliveryPage() {
-  const [selectedListId, setSelectedListId] = useState("");
-  const [selectedDeliverableType, setSelectedDeliverableType] = useState("");
+  // useSearchParams (in NewDeliveryInner) requires a Suspense boundary so the
+  // route can be statically shelled without bailing the whole page to CSR.
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <PacmanLoader size={144} />
+        </div>
+      }
+    >
+      <NewDeliveryInner />
+    </Suspense>
+  );
+}
+
+function NewDeliveryInner() {
+  // Resuming an ad-hoc draft from the Drafts list pre-selects the project +
+  // deliverable type via query params, which then rehydrates the full form
+  // (its autosaved draft is keyed by the same project + type).
+  const searchParams = useSearchParams();
+  const [selectedListId, setSelectedListId] = useState(
+    searchParams.get("listId") ?? ""
+  );
+  const [selectedDeliverableType, setSelectedDeliverableType] = useState(
+    searchParams.get("deliverableType") ?? ""
+  );
 
   // Fetch all projects (including those without deliveries)
   const { data: projectsData } = useQuery<{
@@ -61,7 +86,7 @@ export default function NewDeliveryPage() {
       for (const project of client.projects) {
         options.push({
           value: project.listId,
-          label: `${client.name} — ${project.name}`,
+          label: `${client.name} - ${project.name}`,
         });
       }
     }

@@ -140,7 +140,7 @@ export function DraftsTable() {
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {(draft.formData as Record<string, string>)?.clientName && (draft.formData as Record<string, string>)?.projectName
-                  ? `${(draft.formData as Record<string, string>).clientName} — ${(draft.formData as Record<string, string>).projectName}`
+                  ? `${(draft.formData as Record<string, string>).clientName} - ${(draft.formData as Record<string, string>).projectName}`
                   : (draft.formData as Record<string, string>)?.projectName || "—"}
               </TableCell>
               <TableCell>
@@ -186,7 +186,22 @@ export function DraftsTable() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push(`/deliverable/${draft.taskId}`)}
+                  onClick={() => {
+                    const fd = draft.formData as Record<string, string>;
+                    // Ad-hoc drafts have no real task to reopen — route back to
+                    // the New Delivery page pre-selected so the form rehydrates.
+                    if (
+                      draft.taskId.startsWith("adhoc:") &&
+                      fd?.listId &&
+                      fd?.deliverableType
+                    ) {
+                      router.push(
+                        `/deliverable/new?listId=${encodeURIComponent(fd.listId)}&deliverableType=${encodeURIComponent(fd.deliverableType)}`
+                      );
+                    } else {
+                      router.push(`/deliverable/${draft.taskId}`);
+                    }
+                  }}
                 >
                   <FileEdit className="mr-1 h-3 w-3" />
                   Resume
