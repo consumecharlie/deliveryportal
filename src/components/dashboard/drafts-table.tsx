@@ -141,10 +141,10 @@ export function DraftsTable() {
               <TableCell className="text-sm text-muted-foreground">
                 {(draft.formData as Record<string, string>)?.clientName && (draft.formData as Record<string, string>)?.projectName
                   ? `${(draft.formData as Record<string, string>).clientName} - ${(draft.formData as Record<string, string>).projectName}`
-                  : (draft.formData as Record<string, string>)?.projectName || "—"}
+                  : (draft.formData as Record<string, string>)?.projectName || "-"}
               </TableCell>
               <TableCell>
-                {(draft.formData as Record<string, string>)?.deliverableType || "—"}
+                {(draft.formData as Record<string, string>)?.deliverableType || "-"}
               </TableCell>
               <TableCell className="text-sm">
                 {(() => {

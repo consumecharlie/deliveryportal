@@ -55,7 +55,7 @@ export function DepartmentBadge({ department }: { department: string }) {
         colorClass
       )}
     >
-      {department || "—"}
+      {department || "-"}
     </Badge>
   );
 }

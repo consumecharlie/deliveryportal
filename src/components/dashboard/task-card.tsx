@@ -18,7 +18,7 @@ import type { DeliverableTask } from "@/lib/types";
 /* ------------------------------------------------------------------ */
 
 function formatDate(timestamp: string | null): string {
-  if (!timestamp) return "—";
+  if (!timestamp) return "-";
   const date = new Date(Number(timestamp));
   return date.toLocaleDateString("en-US", {
     month: "short",
@@ -59,7 +59,7 @@ function TaskRow({
     >
       {/* Column 1: Client / Project — left-aligned */}
       <div className="min-w-0">
-        <div className="truncate font-medium">{task.clientName || "—"}</div>
+        <div className="truncate font-medium">{task.clientName || "-"}</div>
         <div className="truncate text-xs text-muted-foreground">
           {task.projectName}
         </div>
@@ -70,7 +70,7 @@ function TaskRow({
         {task.department ? (
           <DepartmentBadge department={task.department} />
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">-</span>
         )}
       </div>
 
@@ -78,7 +78,7 @@ function TaskRow({
       <div className="min-w-0 text-center">
         <div className="truncate font-medium">{task.name}</div>
         <div className="truncate text-xs text-muted-foreground">
-          {task.deliverableType || "—"}
+          {task.deliverableType || "-"}
         </div>
       </div>
 
@@ -105,7 +105,7 @@ function TaskRow({
           />
         )}
         <span className="text-sm">
-          {task.assignee?.name?.split(" ")[0] ?? "—"}
+          {task.assignee?.name?.split(" ")[0] ?? "-"}
         </span>
       </div>
     </div>

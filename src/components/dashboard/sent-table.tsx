@@ -314,7 +314,7 @@ export function SentTable() {
 
   function renderPerson(email: string | null | undefined) {
     if (!email) {
-      return <span className="text-xs text-muted-foreground">—</span>;
+      return <span className="text-xs text-muted-foreground">-</span>;
     }
     const lookup = clickupByEmail.get(email.toLowerCase());
     const name = lookup?.name ?? email;
@@ -335,7 +335,7 @@ export function SentTable() {
     if (delivery.slackChannel) {
       const ids = extractSlackMentionIds(delivery.slackContent);
       if (ids.length === 0) {
-        return <span className="text-xs text-muted-foreground">—</span>;
+        return <span className="text-xs text-muted-foreground">-</span>;
       }
       return (
         <div className="flex items-center gap-2 min-w-0">
@@ -362,7 +362,7 @@ export function SentTable() {
 
     // Email mode: show the primary recipient (truncated).
     if (!delivery.primaryEmail) {
-      return <span className="text-xs text-muted-foreground">—</span>;
+      return <span className="text-xs text-muted-foreground">-</span>;
     }
     return (
       <span
@@ -426,15 +426,15 @@ export function SentTable() {
                           aria-label="Send error"
                         />
                       )}
-                      {delivery.clientName || "—"}
+                      {delivery.clientName || "-"}
                     </span>
                   </TableCell>
                   <TableCell className={cellClass}>
-                    {delivery.projectName || "—"}
+                    {delivery.projectName || "-"}
                   </TableCell>
                   <TableCell className={`${cellClass} text-sm text-muted-foreground`}>
                     <span className="inline-flex items-center gap-2">
-                      {delivery.deliverableType || "—"}
+                      {delivery.deliverableType || "-"}
                       {delivery.replacesDeliveryId && (
                         <span
                           className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-pixel tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
@@ -466,7 +466,7 @@ export function SentTable() {
                         #{delivery.slackChannelName || delivery.slackChannel}
                       </Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-xs text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -634,7 +634,7 @@ export function SentTable() {
                             <>
                               <p className="break-all">
                                 <span className="text-muted-foreground">To: </span>
-                                {selectedDelivery.primaryEmail || "—"}
+                                {selectedDelivery.primaryEmail || "-"}
                               </p>
                               {selectedDelivery.ccEmails && (
                                 <p className="break-all">
@@ -651,7 +651,7 @@ export function SentTable() {
                           SUBJECT
                         </p>
                         <p className="font-medium">
-                          {selectedDelivery.emailSubject || "—"}
+                          {selectedDelivery.emailSubject || "-"}
                         </p>
                       </div>
                       {selectedDelivery.wasEdited && (

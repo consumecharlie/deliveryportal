@@ -326,7 +326,7 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                         {delivery.emailSubject}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "—")}
+                        {delivery.primaryEmail || (delivery.slackChannel ? `#${delivery.slackChannelName || "slack"}` : "-")}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
@@ -346,7 +346,7 @@ function ProjectDetailPanel({ listId }: { listId: string }) {
                           ))}
                           {delivery.links.length === 0 && (
                             <span className="text-xs text-muted-foreground">
-                              —
+                              -
                             </span>
                           )}
                         </div>

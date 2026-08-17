@@ -213,14 +213,14 @@ export default function TemplatesAuditPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {t.deliverableType || "—"}
+                        {t.deliverableType || "-"}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {t.department ? (
                         <DepartmentBadge department={t.department} />
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell>

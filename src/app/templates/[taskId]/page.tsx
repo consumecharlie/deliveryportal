@@ -908,7 +908,7 @@ export default function TemplateEditorPage() {
                     )}
                   />
                 ) : (
-                  <p className="text-sm">{deliverableType || "—"}</p>
+                  <p className="text-sm">{deliverableType || "-"}</p>
                 )}
               </div>
 
@@ -962,7 +962,7 @@ export default function TemplateEditorPage() {
                     )}
                   />
                 ) : (
-                  <p className="text-sm">{department || "—"}</p>
+                  <p className="text-sm">{department || "-"}</p>
                 )}
               </div>
 

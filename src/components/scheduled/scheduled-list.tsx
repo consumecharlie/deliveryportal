@@ -41,7 +41,7 @@ interface ScheduledRow {
 }
 
 function fmtET(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleString("en-US", {
     timeZone: "America/New_York",
     weekday: "short",

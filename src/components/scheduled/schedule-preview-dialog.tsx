@@ -32,7 +32,7 @@ interface Props {
 }
 
 function fmtET(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleString("en-US", {
     timeZone: "America/New_York",
     weekday: "short",
@@ -88,7 +88,7 @@ export function SchedulePreviewDialog({ open, onOpenChange, row }: Props) {
               {row.postToSlack ? "Slack" : "Email"} preview
             </DialogTitle>
           </div>
-          <DialogDescription>{meta || "—"}</DialogDescription>
+          <DialogDescription>{meta || "-"}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 overflow-y-auto pr-1">
@@ -117,7 +117,7 @@ export function SchedulePreviewDialog({ open, onOpenChange, row }: Props) {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Subject:</span>{" "}
-                  <span className="font-medium">{row.subjectLine || "—"}</span>
+                  <span className="font-medium">{row.subjectLine || "-"}</span>
                 </div>
               </>
             )}
