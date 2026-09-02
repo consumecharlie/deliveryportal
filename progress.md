@@ -429,3 +429,53 @@ task on test list `901326970366` via the exact `createProjectContact` /
 `setSlackChannel` format — both resolved correctly (task type, role, email, user
 ID, channel id) and were deleted afterward. The Apply path is proven; ready for
 real use.
+
+---
+
+## 2026-09-02 — Feedback window / deadline conflict detection
+
+Design: `docs/plans/2026-09-02-feedback-conflict-design.md`. 82 new tests, 312 green.
+
+**The incident:** KeyBank Storyboards V2 (sent Sep 2, delivery `86ajdb5fv`) told the
+client "Feedback Windows: 48 Hours" alongside "Feedback Deadline: EOD Thu, Sep 3",
+one day after the Sep 2 delivery. The PM corrected the ClickUp field to 24 Hours
+afterward, confirming the deadline was the truth. Ruled out: templates (all 95
+swept, zero hardcode an hours value) and portal/ClickUp drift (the form matched
+the field at send time).
+
+**Root cause:** the two values have no relationship in the system. Feedback
+Windows is a dropdown on the Delivery Deadline task; the deadline is the due date
+of a separate sibling task. Nothing compared them.
+
+- **Engine** `src/lib/feedback-conflict.ts` (pure): counts the window in BUSINESS
+  days from the Delivery Deadline task's `due_date` (not the send moment, so a
+  late send is not itself a conflict) and compares Eastern calendar dates.
+  Unrecognized labels and `Flexible` return `unknown` and stay silent, since a
+  false conflict trains people to ignore the warning.
+- **Holidays** `src/lib/us-holidays.ts`: office closures are COMPUTED from their
+  rules, never stored, so the calendar never goes stale. Watch the New Year's
+  boundary: a Saturday Jan 1 is observed Dec 31 of the previous year, so
+  `holidaySet()` spans neighbouring years. One-off company closures pass in via
+  `extraClosures`.
+- **UX:** amber warning inside the Scope section with two resolutions plus
+  "Send as-is", and a matching soft confirm in the send bar (chained after the
+  client-preference guard). Never hard-blocks. Copy is derived in the tested lib
+  so the two surfaces cannot drift.
+- **Write-back** `POST /api/tasks/[taskId]/feedback-conflict`: sets the window
+  dropdown, or moves the sibling deadline task behind a confirm naming the task
+  and the before/after date. The normal send path is deliberately untouched.
+
+**ClickUp write semantics, live-validated 2026-09-02** (throwaway list in the
+Templates space, created and deleted):
+- `due_date_time: false` normalizes to the 08:00 UTC date-only sentinel for the
+  EASTERN calendar date, preserving the "EOD" phrasing.
+- **Never send naive UTC midnight**: it is the previous evening in Eastern and
+  files the task a day early. Build sentinels with `etDateToDateOnlyMs()`.
+- `due_date_time: true` preserves an exact timestamp, so a timed deadline keeps
+  its time while only the date moves. The API never returns `due_date_time`.
+- Dropdown writes accept BOTH the option orderindex and its UUID (both
+  round-trip), so the existing `resolveDropdownOptionId()` is correct.
+
+**Deferred:** sweeping all projects for mismatches in the `/audit` Project Setup
+console, and writing Feedback Windows / Revision Rounds back to ClickUp on every
+send (no drift was observed, so it adds send-path writes for no proven gain).

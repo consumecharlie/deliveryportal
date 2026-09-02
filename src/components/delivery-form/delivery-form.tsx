@@ -44,6 +44,12 @@ import { AddonProjectModal } from "./addon-project-modal";
 import type { AddonSelection } from "./addon-project-modal";
 import { DEPARTMENT_CC_EMAILS } from "@/lib/custom-field-ids";
 import { formatManualDeadline, deadlineMsToInputs } from "@/lib/feedback-deadline";
+import {
+  describeFeedbackConflict,
+  evaluateFeedbackConflict,
+  windowLabelForDays,
+} from "@/lib/feedback-conflict";
+import { FeedbackConflictWarning } from "./feedback-conflict-warning";
 import type {
   TaskDetail,
   DeliverySnippetTemplate,
@@ -166,6 +172,106 @@ export function DeliveryForm({
     () => formatManualDeadline(manualFeedbackDate, manualFeedbackTime),
     [manualFeedbackDate, manualFeedbackTime]
   );
+
+  // ── Feedback window / deadline conflict ──
+  // The window and the deadline come from unrelated ClickUp fields on different
+  // tasks, so they can silently contradict each other in the client's message.
+  // Counted in business days from the Delivery Deadline task's due date.
+  const [conflictDismissed, setConflictDismissed] = useState(false);
+  const [conflictBusy, setConflictBusy] = useState<"window" | "deadline" | null>(null);
+
+  const feedbackConflict = useMemo(
+    () =>
+      evaluateFeedbackConflict({
+        feedbackWindows,
+        anchorMs: task.dueDate,
+        deadlineDate: manualFeedbackDate,
+        nowMs: Date.now(),
+      }),
+    [feedbackWindows, task.dueDate, manualFeedbackDate]
+  );
+
+  const conflictCopy = useMemo(
+    () => describeFeedbackConflict(feedbackConflict, feedbackWindows),
+    [feedbackConflict, feedbackWindows]
+  );
+
+  // The window label matching the dates as they stand. Null when ClickUp offers
+  // no such option, in which case that resolution is not offered at all.
+  const suggestedWindowLabel = useMemo(
+    () =>
+      windowLabelForDays(
+        feedbackConflict.actualWindowDays,
+        taskDetail.feedbackWindowOptions
+      ),
+    [feedbackConflict.actualWindowDays, taskDetail.feedbackWindowOptions]
+  );
+
+  // A fresh edit to either value re-opens a dismissed warning.
+  useEffect(() => {
+    setConflictDismissed(false);
+  }, [feedbackWindows, manualFeedbackDate]);
+
+  /** "Window is right": move the feedback deadline to what the window implies. */
+  const handleUseWindow = async () => {
+    const target = feedbackConflict.expectedDate;
+    if (!target) return;
+    const deadlineTaskId = feedbackDeadline?.taskId;
+
+    // Ad-hoc deliveries have no ClickUp deadline task; the form still updates.
+    if (!deadlineTaskId) {
+      setManualFeedbackDate(target);
+      toast.success("Feedback deadline updated in this message.");
+      return;
+    }
+
+    setConflictBusy("window");
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/feedback-conflict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resolution: "deadline",
+          deadlineTaskId,
+          deadlineDate: target,
+          deadlineTime: manualFeedbackTime,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to move the deadline");
+      setManualFeedbackDate(target);
+      toast.success(
+        `Feedback deadline moved to ${formatManualDeadline(target, "").formattedDate} in ClickUp.`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move the deadline");
+    } finally {
+      setConflictBusy(null);
+    }
+  };
+
+  /** "Deadline is right": set the window to match the dates. */
+  const handleUseDeadline = async () => {
+    if (!suggestedWindowLabel) return;
+    setConflictBusy("deadline");
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/feedback-conflict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution: "window", windowLabel: suggestedWindowLabel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update the feedback window");
+      setFeedbackWindows(suggestedWindowLabel);
+      toast.success(`Feedback window set to ${suggestedWindowLabel} in ClickUp.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update the feedback window");
+    } finally {
+      setConflictBusy(null);
+    }
+  };
+
+  const showConflictWarning = !!conflictCopy && !conflictDismissed;
 
   // ── Add-on project state ──
   const [addonProject, setAddonProject] = useState<AddonSelection | null>(null);
@@ -1320,6 +1426,22 @@ export function DeliveryForm({
             onFeedbackWindowsChange={setFeedbackWindows}
             onRushedProjectChange={setRushedProject}
             onRepeatClientChange={setRepeatClient}
+            conflictWarning={
+              showConflictWarning && conflictCopy ? (
+                <FeedbackConflictWarning
+                  copy={conflictCopy}
+                  expectedDate={feedbackConflict.expectedDate ?? ""}
+                  actualDate={feedbackConflict.actualDate ?? ""}
+                  suggestedWindowLabel={suggestedWindowLabel}
+                  deadlineTaskName={feedbackDeadline?.name}
+                  writesToClickUp={!!feedbackDeadline?.taskId}
+                  onUseWindow={handleUseWindow}
+                  onUseDeadline={handleUseDeadline}
+                  onDismiss={() => setConflictDismissed(true)}
+                  busy={conflictBusy}
+                />
+              ) : null
+            }
           />
 
           {/* Add-on project fields */}
@@ -1535,6 +1657,19 @@ export function DeliveryForm({
           slackChannelName: slackChannelName || undefined,
         }}
         slackLintErrors={showSlack ? slackLintErrors : undefined}
+        feedbackConflict={
+          showConflictWarning && conflictCopy
+            ? {
+                copy: conflictCopy,
+                onUseWindow: handleUseWindow,
+                useWindowLabel: `Window is right, move deadline to ${formatManualDeadline(feedbackConflict.expectedDate ?? "", "").formattedDate}`,
+                onUseDeadline: suggestedWindowLabel ? handleUseDeadline : undefined,
+                useDeadlineLabel: suggestedWindowLabel
+                  ? `Deadline is right, set window to ${suggestedWindowLabel}`
+                  : undefined,
+              }
+            : null
+        }
         clientPreference={clientPreference}
         blockedReviewLinks={blockedReviewLinks}
         adhocMode={adhocMode}

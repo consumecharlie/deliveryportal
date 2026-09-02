@@ -19,6 +19,8 @@ interface ScopeSectionProps {
   onFeedbackWindowsChange: (value: string) => void;
   onRushedProjectChange: (value: boolean) => void;
   onRepeatClientChange: (value: boolean) => void;
+  /** Feedback window / deadline conflict warning, rendered under the controls. */
+  conflictWarning?: React.ReactNode;
 }
 
 // Fallbacks used only when ClickUp options aren't available (e.g. API failure).
@@ -52,6 +54,7 @@ export function ScopeSection({
   onFeedbackWindowsChange,
   onRushedProjectChange,
   onRepeatClientChange,
+  conflictWarning,
 }: ScopeSectionProps) {
   const revisionOpts = withCurrentValue(
     revisionOptions?.length ? revisionOptions : fallbackRevisionOptions,
@@ -90,6 +93,7 @@ export function ScopeSection({
           />
         </div>
       </div>
+      {conflictWarning}
       <div className="space-y-2 pt-1">
         <label className="flex items-center gap-2 cursor-pointer">
           <input

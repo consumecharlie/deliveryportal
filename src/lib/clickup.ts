@@ -153,6 +153,32 @@ export async function updateTaskStatus(
   });
 }
 
+/**
+ * Move a task's due date.
+ *
+ * Live-validated 2026-09-02 against the v2 API:
+ * - `dueDateTime: false` normalizes the timestamp to the 08:00 UTC date-only
+ *   sentinel for whatever EASTERN calendar date it falls on, which is exactly
+ *   what `formatFeedbackDeadline()` reads back as "EOD".
+ * - `dueDateTime: true` preserves an exact timestamp.
+ * - Never pass naive UTC midnight: that is the previous evening in Eastern and
+ *   lands the task a day early. Build date-only values with
+ *   `etDateToDateOnlyMs()`.
+ *
+ * The API never returns `due_date_time`, so this write is one-way; the mode can
+ * only be inferred later from the sentinel.
+ */
+export async function updateTaskDueDate(
+  taskId: string,
+  dueDateMs: number,
+  dueDateTime: boolean
+): Promise<void> {
+  await clickupFetch(`/task/${taskId}`, {
+    method: "PUT",
+    body: JSON.stringify({ due_date: dueDateMs, due_date_time: dueDateTime }),
+  });
+}
+
 export async function updateTaskName(
   taskId: string,
   name: string

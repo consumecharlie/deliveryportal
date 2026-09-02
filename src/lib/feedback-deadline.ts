@@ -128,3 +128,44 @@ export function deadlineMsToInputs(
   const tm = timeParts.find((p) => p.type === "minute")?.value ?? "00";
   return { date, time: `${th}:${tm}` };
 }
+
+/**
+ * The ClickUp date-only sentinel (08:00 UTC) for an Eastern calendar date.
+ *
+ * Live-validated 2026-09-02: writing this with `due_date_time: false` round-trips
+ * unchanged, and the task reads back as date-only so the message keeps saying
+ * "EOD". Do NOT build the timestamp from naive UTC midnight — that is the
+ * previous evening in Eastern and ClickUp files the task a day early.
+ */
+export function etDateToDateOnlyMs(dateStr: string): number {
+  if (!dateStr) return NaN;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return Date.UTC(y, m - 1, d, DATE_ONLY_UTC_HOUR, 0, 0);
+}
+
+/** How far behind UTC Eastern is at a given instant, in ms (DST-aware). */
+function etOffsetMs(instant: number): number {
+  const d = new Date(instant);
+  const asUtc = new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
+  const asEt = new Date(d.toLocaleString("en-US", { timeZone: TIME_ZONE }));
+  return asUtc.getTime() - asEt.getTime();
+}
+
+/**
+ * Inverse of `deadlineMsToInputs`: turn Eastern wall-clock date + time inputs
+ * back into a timestamp. Used when moving a deadline that has a real
+ * time-of-day, so the time is preserved while only the date changes.
+ *
+ * An empty time yields the date-only sentinel.
+ */
+export function etInputsToMs(dateStr: string, timeStr: string): number {
+  if (!dateStr) return NaN;
+  if (!timeStr) return etDateToDateOnlyMs(dateStr);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [hh, mm] = timeStr.split(":").map(Number);
+  const naive = Date.UTC(y, m - 1, d, hh, mm);
+  // Two passes so a guess that lands on the far side of a DST boundary settles.
+  let ms = naive;
+  for (let i = 0; i < 2; i++) ms = naive + etOffsetMs(ms);
+  return ms;
+}

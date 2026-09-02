@@ -31,6 +31,7 @@ import {
 import type { DeliveryFormState, MergedContent } from "@/lib/types";
 import type { ClientPreferenceData } from "@/lib/client-preferences";
 import type { SlackLintError } from "@/lib/slack-lint";
+import type { FeedbackConflictCopy } from "@/lib/feedback-conflict";
 import type { ScheduledSendPayload } from "@/lib/schedule-send";
 import { SchedulePicker } from "./schedule-picker";
 
@@ -74,6 +75,14 @@ interface SendBarProps {
   clientPreference?: ClientPreferenceData | null;
   /** Review-link URLs that match the client's blocked domains (for escalation). */
   blockedReviewLinks?: string[];
+  /** Unresolved feedback window / deadline conflict. Warns once, never blocks. */
+  feedbackConflict?: {
+    copy: FeedbackConflictCopy;
+    onUseWindow: () => void | Promise<void>;
+    useWindowLabel: string;
+    onUseDeadline?: () => void | Promise<void>;
+    useDeadlineLabel?: string;
+  } | null;
 }
 
 export function SendBar({
@@ -107,6 +116,7 @@ export function SendBar({
   isUpdatingSchedule = false,
   clientPreference,
   blockedReviewLinks,
+  feedbackConflict,
 }: SendBarProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -116,6 +126,9 @@ export function SendBar({
   const [showConfirmAfterLint, setShowConfirmAfterLint] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showClientPrefConfirm, setShowClientPrefConfirm] = useState(false);
+  const [showConflictConfirm, setShowConflictConfirm] = useState(false);
+  // Acknowledged once per editing session, same as the client-preference guard.
+  const conflictAckRef = useRef(false);
   // Acknowledged once per editing session; the pending action re-runs after "Send anyway".
   const clientPrefAckRef = useRef(false);
   const pendingActionRef = useRef<null | (() => void)>(null);
@@ -332,6 +345,20 @@ export function SendBar({
     proceed();
   };
 
+  // ── Feedback window / deadline guardrail ──
+  // A message that promises one window while granting another cannot go out
+  // silently. This warns and offers the same two fixes as the inline warning,
+  // but "Send as-is" is always available: rushed jobs and client-requested
+  // extensions are legitimate.
+  const guardFeedbackConflict = (proceed: () => void) => {
+    if (feedbackConflict && !conflictAckRef.current) {
+      pendingActionRef.current = proceed;
+      setShowConflictConfirm(true);
+      return;
+    }
+    proceed();
+  };
+
   // Opens the normal confirm flow: the Slack-lint warning first if there are
   // lint errors, otherwise the Send Delivery confirm.
   const openSendConfirm = () => {
@@ -339,12 +366,15 @@ export function SendBar({
     else setShowSendConfirm(true);
   };
 
-  // Send button → client-pref guard → normal confirm → doSend.
-  const initiateSend = () => guardClientPref(openSendConfirm);
+  // Send button → client-pref guard → conflict guard → normal confirm → doSend.
+  const initiateSend = () =>
+    guardClientPref(() => guardFeedbackConflict(openSendConfirm));
   const handleSend = () => void doSend();
   // Schedule has no intermediate confirm, so the guard wraps it directly.
   const handleSchedule = (isoString: string) =>
-    guardClientPref(() => void doSchedule(isoString));
+    guardClientPref(() =>
+      guardFeedbackConflict(() => void doSchedule(isoString))
+    );
 
   // Email mode requires recipient + sender; Slack mode just needs content + channel
   const isReady =
@@ -359,6 +389,61 @@ export function SendBar({
           : "bg-background/95"
       }`}
     >
+      {/* Feedback window / deadline conflict (soft override) */}
+      <AlertDialog open={showConflictConfirm} onOpenChange={setShowConflictConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Feedback window does not match the deadline
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p className="font-medium text-foreground">{feedbackConflict?.copy.headline}</p>
+                <p>{feedbackConflict?.copy.detail}</p>
+                <p>{feedbackConflict?.copy.consequence}</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <AlertDialogAction
+              onClick={() => {
+                setShowConflictConfirm(false);
+                pendingActionRef.current = null;
+                void feedbackConflict?.onUseWindow();
+              }}
+              className="w-full"
+            >
+              {feedbackConflict?.useWindowLabel}
+            </AlertDialogAction>
+            {feedbackConflict?.onUseDeadline && (
+              <AlertDialogAction
+                onClick={() => {
+                  setShowConflictConfirm(false);
+                  pendingActionRef.current = null;
+                  void feedbackConflict.onUseDeadline?.();
+                }}
+                className="w-full"
+              >
+                {feedbackConflict.useDeadlineLabel}
+              </AlertDialogAction>
+            )}
+            <AlertDialogCancel
+              onClick={() => {
+                conflictAckRef.current = true;
+                setShowConflictConfirm(false);
+                const next = pendingActionRef.current;
+                pendingActionRef.current = null;
+                next?.();
+              }}
+              className="w-full"
+            >
+              Send as-is
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Client-preference re-prompt (soft override) */}
       <AlertDialog open={showClientPrefConfirm} onOpenChange={setShowClientPrefConfirm}>
         <AlertDialogContent>
