@@ -43,7 +43,11 @@ import {
 import { AddonProjectModal } from "./addon-project-modal";
 import type { AddonSelection } from "./addon-project-modal";
 import { DEPARTMENT_CC_EMAILS } from "@/lib/custom-field-ids";
-import { formatManualDeadline, deadlineMsToInputs } from "@/lib/feedback-deadline";
+import {
+  formatManualDeadline,
+  deadlineMsToInputs,
+  resolveDraftDeadlineInputs,
+} from "@/lib/feedback-deadline";
 import {
   describeFeedbackConflict,
   evaluateFeedbackConflict,
@@ -955,8 +959,14 @@ export function DeliveryForm({
         if (typeof saved.rushedProject === "boolean") setRushedProject(saved.rushedProject);
         if (typeof saved.repeatClient === "boolean") setRepeatClient(saved.repeatClient);
         if (saved.deliveryMode) setDeliveryMode(saved.deliveryMode);
-        if (typeof saved.manualFeedbackDate === "string") setManualFeedbackDate(saved.manualFeedbackDate);
-        if (typeof saved.manualFeedbackTime === "string") setManualFeedbackTime(saved.manualFeedbackTime);
+        // An empty saved date must not clobber a deadline we can now detect:
+        // drafts are often saved before the ClickUp deadline task is tagged.
+        const draftDeadline = resolveDraftDeadlineInputs(
+          { date: saved.manualFeedbackDate, time: saved.manualFeedbackTime },
+          initialDeadlineInputs
+        );
+        setManualFeedbackDate(draftDeadline.date);
+        setManualFeedbackTime(draftDeadline.time);
         if (saved.reviewLinks) {
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
         }
@@ -996,7 +1006,7 @@ export function DeliveryForm({
 
     loadDraft();
     return () => { cancelled = true; };
-  }, [draftKey, draftLoaded]);
+  }, [draftKey, draftLoaded, initialDeadlineInputs]);
 
   // ── Resend prefill ──
   //

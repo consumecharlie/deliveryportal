@@ -4,6 +4,7 @@ import {
   etInputsToMs,
   deadlineMsToInputs,
   formatFeedbackDeadline,
+  resolveDraftDeadlineInputs,
 } from "@/lib/feedback-deadline";
 
 describe("etDateToDateOnlyMs", () => {
@@ -46,5 +47,41 @@ describe("etInputsToMs", () => {
     ]) {
       expect(deadlineMsToInputs(etInputsToMs(date, time))).toEqual({ date, time });
     }
+  });
+});
+
+describe("resolveDraftDeadlineInputs", () => {
+  const detected = { date: "2026-09-08", time: "" };
+
+  it("ignores a draft's empty date so a now-detectable deadline wins", () => {
+    // The real case: task 86akand3t had a Sep 8 deadline but its draft stored
+    // "", blanking the field on every resume.
+    expect(resolveDraftDeadlineInputs({ date: "", time: "" }, detected)).toEqual(detected);
+  });
+
+  it("ignores a missing date the same way", () => {
+    expect(resolveDraftDeadlineInputs({}, detected)).toEqual(detected);
+    expect(resolveDraftDeadlineInputs({ date: null }, detected)).toEqual(detected);
+  });
+
+  it("keeps a deliberately chosen date", () => {
+    expect(resolveDraftDeadlineInputs({ date: "2026-09-10", time: "14:00" }, detected)).toEqual({
+      date: "2026-09-10",
+      time: "14:00",
+    });
+  });
+
+  it("round-trips an explicitly cleared time alongside a set date", () => {
+    expect(
+      resolveDraftDeadlineInputs({ date: "2026-09-10", time: "" }, { date: "2026-09-08", time: "09:00" })
+    ).toEqual({ date: "2026-09-10", time: "" });
+  });
+
+  it("stays blank when nothing was detected either", () => {
+    // "Final Delivery" tasks legitimately have no deadline sibling.
+    expect(resolveDraftDeadlineInputs({ date: "", time: "" }, { date: "", time: "" })).toEqual({
+      date: "",
+      time: "",
+    });
   });
 });

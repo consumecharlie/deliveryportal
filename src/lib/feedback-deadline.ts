@@ -169,3 +169,27 @@ export function etInputsToMs(dateStr: string, timeStr: string): number {
   for (let i = 0; i < 2; i++) ms = naive + etOffsetMs(ms);
   return ms;
 }
+
+/**
+ * Decide which feedback-deadline inputs a resumed draft should show.
+ *
+ * A draft that saved an EMPTY date must not clobber a deadline we can now
+ * detect. Drafts are often saved before the ClickUp Feedback Deadline task
+ * exists or before its Deliverable Type is set, so the blank was correct when
+ * written and wrong by the time the draft is resumed. Nothing else re-applies
+ * the prefill, so without this the blank is permanently sticky.
+ *
+ * A saved date that IS set wins, and carries its saved time with it, so an
+ * explicitly cleared time (the "Clear time" button) still round-trips.
+ */
+export function resolveDraftDeadlineInputs(
+  saved: { date?: unknown; time?: unknown },
+  detected: { date: string; time: string }
+): { date: string; time: string } {
+  const savedDate = typeof saved.date === "string" ? saved.date : "";
+  if (!savedDate) return detected;
+  return {
+    date: savedDate,
+    time: typeof saved.time === "string" ? saved.time : detected.time,
+  };
+}
