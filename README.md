@@ -40,7 +40,7 @@ Create a `.env.local` file in the project root:
 |---|---|---|
 | `CLICKUP_API_TOKEN` | ClickUp personal API token | Yes |
 | `CLICKUP_WORKSPACE_ID` | ClickUp workspace ID | Yes |
-| `SLACK_BOT_TOKEN` | Slack bot OAuth token (`xoxb-...`) — needs `channels:read`, `users:read`, `chat:write` scopes | Yes |
+| `SLACK_BOT_TOKEN` | Slack bot OAuth token (`xoxb-...`): needs `channels:read`, `channels:join` (so the bot can self-join public internal project channels), `users:read`, `chat:write`; add `groups:read` only if private channels are mapped as project channels | Yes |
 | `N8N_API_URL` | n8n cloud instance URL | Yes |
 | `N8N_API_KEY` | n8n API key for workflow triggers | Yes |
 | `N8N_PORTAL_REMINDER_WEBHOOK_URL` | n8n webhook that emails client feedback reminders (`/api/cron/portal-reminders`); reminders are skipped until set | For portal reminders |

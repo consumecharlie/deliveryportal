@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import {
   createOrRotateAccess,
@@ -107,19 +107,52 @@ describe("maskPortalToken", () => {
 });
 
 describe("getAppBaseUrl", () => {
+  const req = new Request("https://preview.example.com/api/deliveries/1");
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NEXTAUTH_URL", "");
+    vi.stubEnv("VERCEL_URL", "");
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
   it("prefers a non-empty NEXT_PUBLIC_APP_URL, else the request origin", () => {
-    const prev = process.env.NEXT_PUBLIC_APP_URL;
-    const req = new Request("https://preview.example.com/api/deliveries/1");
-    try {
-      process.env.NEXT_PUBLIC_APP_URL = "https://portal.example.com/";
-      expect(getAppBaseUrl(req)).toBe("https://portal.example.com");
-      process.env.NEXT_PUBLIC_APP_URL = "";
-      expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
-      delete process.env.NEXT_PUBLIC_APP_URL;
-      expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
-    } finally {
-      if (prev === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
-      else process.env.NEXT_PUBLIC_APP_URL = prev;
-    }
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://portal.example.com/");
+    expect(getAppBaseUrl(req)).toBe("https://portal.example.com");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "   ");
+    expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
+  });
+
+  it("falls back to NEXTAUTH_URL, then VERCEL_URL, before the request", () => {
+    vi.stubEnv("NEXTAUTH_URL", "https://auth.example.com/");
+    vi.stubEnv("VERCEL_URL", "deploy-abc.vercel.app");
+    expect(getAppBaseUrl(req)).toBe("https://auth.example.com");
+    vi.stubEnv("NEXTAUTH_URL", "");
+    expect(getAppBaseUrl(req)).toBe("https://deploy-abc.vercel.app");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://portal.example.com");
+    expect(getAppBaseUrl(req)).toBe("https://portal.example.com");
+  });
+
+  it("gives a bare host an https scheme and keeps an explicit http one", () => {
+    vi.stubEnv("NEXTAUTH_URL", "auth.example.com/");
+    expect(getAppBaseUrl(req)).toBe("https://auth.example.com");
+    vi.stubEnv("NEXTAUTH_URL", "http://localhost:3000");
+    expect(getAppBaseUrl(req)).toBe("http://localhost:3000");
+  });
+
+  it("honours x-forwarded-proto and host on the request when no env is set", () => {
+    const forwarded = new Request("http://internal:3000/api/cron/portal-reminders", {
+      headers: { "x-forwarded-proto": "https", host: "portal.example.com" },
+    });
+    expect(getAppBaseUrl(forwarded)).toBe("https://portal.example.com");
+    expect(getAppBaseUrl(new Request("http://internal:3000/x", { headers: { host: "only-host" } }))).toBe(
+      "http://internal:3000"
+    );
+  });
+
+  it("returns an empty string with no env, no request and no window", () => {
+    expect(getAppBaseUrl()).toBe("");
   });
 });

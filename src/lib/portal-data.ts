@@ -19,8 +19,6 @@ import {
   type ConfirmationRow,
 } from "@/lib/portal-status";
 
-export type { FeedbackStatus } from "@/lib/portal-status";
-
 export interface PortalAccessInfo {
   id: string;
   clientFolderId: string;

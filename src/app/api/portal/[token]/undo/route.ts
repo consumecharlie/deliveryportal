@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveAccess } from "@/lib/portal-data";
 import { undoFeedback, lastFeedbackActivity, PortalConfirmError } from "@/lib/portal-confirm";
 import { isDoubleClick } from "@/lib/portal-confirm-guard";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (isDoubleClick(await lastFeedbackActivity(deliveryId, access.clientFolderId), Date.now())) {
       return json({ error: "Please wait a moment before trying again" }, 429);
     }
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
     await undoFeedback({
       clientFolderId: access.clientFolderId,
       clientName: access.clientName,
       deliveryId,
-      portalUrl: `${base}/portal/${token}`,
+      portalUrl: `${getAppBaseUrl(req)}/portal/${token}`,
     });
     return json({ ok: true });
   } catch (err) {

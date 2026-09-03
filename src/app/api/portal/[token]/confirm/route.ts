@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { resolveAccess, loadPortal } from "@/lib/portal-data";
 import { confirmFeedback, lastFeedbackActivity, PortalConfirmError } from "@/lib/portal-confirm";
 import { isDoubleClick } from "@/lib/portal-confirm-guard";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       confirmedByName: typeof body.name === "string" ? body.name.trim().slice(0, 80) || null : null,
       feedbackDeadlineTaskId: status.feedbackDeadlineTaskId,
       deadlineLabel: status.dueLabel,
-      portalUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin}/portal/${token}`,
+      portalUrl: `${getAppBaseUrl(req)}/portal/${token}`,
     });
     return json({ ok: true });
   } catch (err) {

@@ -2,6 +2,7 @@ import type { PortalActionItem } from "@/lib/portal-data";
 import { pickReviewLink } from "@/lib/portal-view-model";
 import { FeedbackBadge } from "./feedback-badge";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
+import { ViewLink } from "./view-link";
 
 export function ActionItems({ token, items }: { token: string; items: PortalActionItem[] }) {
   return (
@@ -27,14 +28,16 @@ export function ActionItems({ token, items }: { token: string; items: PortalActi
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {review && (
-                    <a
+                    <ViewLink
+                      token={token}
+                      deliveryId={entry.id}
                       href={review.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="portal-btn portal-btn-secondary"
                     >
                       Open review
-                    </a>
+                    </ViewLink>
                   )}
                   <ConfirmButton
                     key={confirmButtonKey(entry.id, status)}

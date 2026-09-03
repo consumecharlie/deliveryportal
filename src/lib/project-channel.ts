@@ -62,14 +62,18 @@ export async function resolveProjectChannel(
   const top = pickConfident(ranked);
   if (top) {
     if (opts.persist) {
-      await prisma.projectChannel.create({
-        data: {
+      // Create-only: a concurrent confirm that raced us to the same list
+      // must not throw P2002, and must not overwrite what it wrote.
+      await prisma.projectChannel.upsert({
+        where: { projectListId },
+        create: {
           projectListId,
           channelId: top.id,
           channelName: top.name,
           autoMatched: true,
           confirmedBy: "auto-match",
         },
+        update: {},
       });
     }
     return { channelId: top.id, channelName: top.name, source: "auto", autoMatched: true, suggestions: ranked };

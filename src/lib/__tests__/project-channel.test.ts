@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@/lib/db", () => ({
-  prisma: { projectChannel: { findUnique: vi.fn(), create: vi.fn() } },
+  prisma: { projectChannel: { findUnique: vi.fn(), upsert: vi.fn() } },
 }));
 vi.mock("@/lib/slack-audit", () => ({ listVisibleChannels: vi.fn() }));
 
@@ -19,7 +19,7 @@ describe("resolveProjectChannel", () => {
   beforeEach(() => {
     vi.mocked(listVisibleChannels).mockResolvedValue(channels);
     vi.mocked(prisma.projectChannel.findUnique).mockResolvedValue(null);
-    vi.mocked(prisma.projectChannel.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.projectChannel.upsert).mockResolvedValue({} as never);
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -35,7 +35,7 @@ describe("resolveProjectChannel", () => {
     const r = await resolveProjectChannel("L1", "CallRail Wiggam Law Virtual Testimonial", "CallRail");
     expect(r).toMatchObject({ channelId: "C7", channelName: "seven", source: "confirmed", autoMatched: false });
     expect(listVisibleChannels).not.toHaveBeenCalled();
-    expect(prisma.projectChannel.create).not.toHaveBeenCalled();
+    expect(prisma.projectChannel.upsert).not.toHaveBeenCalled();
   });
 
   it("an existing auto-matched row reports auto", async () => {
@@ -55,7 +55,7 @@ describe("resolveProjectChannel", () => {
   it("does not persist a confident match by default", async () => {
     const r = await resolveProjectChannel("L1", "CallRail Wiggam Law Virtual Testimonial", "CallRail");
     expect(r).toMatchObject({ channelId: "C1", source: "auto", autoMatched: true });
-    expect(prisma.projectChannel.create).not.toHaveBeenCalled();
+    expect(prisma.projectChannel.upsert).not.toHaveBeenCalled();
   });
 
   it("persists a confident match only when asked", async () => {
@@ -63,14 +63,17 @@ describe("resolveProjectChannel", () => {
       persist: true,
     });
     expect(r.source).toBe("auto");
-    expect(prisma.projectChannel.create).toHaveBeenCalledWith({
-      data: {
+    // Create-only upsert: a concurrent auto-match cannot throw P2002 or clobber the other writer.
+    expect(prisma.projectChannel.upsert).toHaveBeenCalledWith({
+      where: { projectListId: "L1" },
+      create: {
         projectListId: "L1",
         channelId: "C1",
         channelName: "callrail-wiggam-law-virtual-testimonial",
         autoMatched: true,
         confirmedBy: "auto-match",
       },
+      update: {},
     });
   });
 
@@ -79,6 +82,6 @@ describe("resolveProjectChannel", () => {
     expect(r).toMatchObject({ channelId: null, source: "none", autoMatched: false });
     expect(r.suggestions.length).toBeGreaterThan(0);
     expect(r.suggestions.every((s) => !s.isShared)).toBe(true);
-    expect(prisma.projectChannel.create).not.toHaveBeenCalled();
+    expect(prisma.projectChannel.upsert).not.toHaveBeenCalled();
   });
 });

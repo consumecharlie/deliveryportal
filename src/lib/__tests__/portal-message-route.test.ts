@@ -139,6 +139,11 @@ describe("POST /api/portal/[token]/message", () => {
     await post({ name: "Dana", message: "hi", listId: "other-list" });
     expect(resolveProjectChannel).not.toHaveBeenCalled();
     expect(order).toEqual(["create", "dm", "update"]);
+    // The foreign list id is not recorded against the note and the DM links to the client root.
+    expect(prisma.portalMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ projectListId: null }) })
+    );
+    expect(sendSlackDM).toHaveBeenCalledWith("pm@consume-media.com", expect.stringContaining("/portal/tok|"));
   });
 
   it("falls back to a DM when the channel post fails", async () => {

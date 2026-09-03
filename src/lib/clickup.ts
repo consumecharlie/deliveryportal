@@ -10,7 +10,11 @@ import { WORKSPACE_ID } from "./custom-field-ids";
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
-/** A hung ClickUp endpoint fails fast instead of pinning a request (and a portal page) open. */
+/**
+ * Timeout for every ClickUp call in the app: reads, field writes and the send
+ * flow all go through clickupFetch, so a hung endpoint fails fast instead of
+ * pinning a request (or a portal page) open.
+ */
 const CLICKUP_TIMEOUT_MS = 20_000;
 
 function getToken(): string {

@@ -6,6 +6,8 @@ import type { PortalCardGroup, PortalCardStatus } from "@/lib/portal-view-model"
 import { renderPortalBody } from "@/lib/portal-render";
 import { FeedbackBadge } from "./feedback-badge";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
+import { ViewLink } from "./view-link";
+import { sendPortalView } from "@/lib/portal-view-beacon";
 
 const LINK_LABELS: Record<string, string> = {
   frameReviewLink: "Frame.io review",
@@ -75,15 +77,17 @@ export function DeliverableCard({ token, group, status }: Props) {
       {entry.links.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {entry.links.map((l) => (
-            <a
+            <ViewLink
               key={`${l.variableName ?? l.label}:${l.url}`}
+              token={token}
+              deliveryId={entry.id}
               href={l.url}
               target="_blank"
               rel="noopener noreferrer"
               className="portal-btn portal-btn-secondary"
             >
               {linkLabel(l)}
-            </a>
+            </ViewLink>
           ))}
         </div>
       )}
@@ -92,7 +96,10 @@ export function DeliverableCard({ token, group, status }: Props) {
         <div>
           <button
             type="button"
-            onClick={() => setShowBody((s) => !s)}
+            onClick={() => {
+              if (!showBody) sendPortalView(token, entry.id);
+              setShowBody((s) => !s);
+            }}
             aria-expanded={showBody}
             className="portal-btn portal-btn-secondary"
           >

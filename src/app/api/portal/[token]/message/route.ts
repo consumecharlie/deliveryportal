@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveAccess, type PortalAccessInfo } from "@/lib/portal-data";
 import { buildPortalUrl } from "@/lib/portal-access";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
 import {
@@ -26,16 +27,25 @@ function json(body: unknown, status = 200) {
 }
 
 /**
- * Post to the project's internal channel when the note came from a project
- * this client has deliveries for. Ownership is a DB check, not a live load.
+ * The project this note came from, only when this client has deliveries in
+ * it. Ownership is a DB check, not a live load; a foreign list id is treated
+ * as no project context at all (not stored, not posted).
  */
-async function postToProjectChannel(access: PortalAccessInfo, listId: string, text: string): Promise<boolean> {
-  const project = await prisma.delivery.findFirst({
+async function ownedProject(access: PortalAccessInfo, listId: string | null | undefined) {
+  if (!listId) return null;
+  return prisma.delivery.findFirst({
     where: { clientFolderId: access.clientFolderId, projectListId: listId },
     select: { id: true, projectName: true },
   });
-  if (!project) return false;
-  const ch = await resolveProjectChannel(listId, project.projectName, access.clientName);
+}
+
+async function postToProjectChannel(
+  access: PortalAccessInfo,
+  listId: string,
+  projectName: string,
+  text: string
+): Promise<boolean> {
+  const ch = await resolveProjectChannel(listId, projectName, access.clientName);
   if (!ch.channelId) return false;
   return Boolean(await postChannelMessage(ch.channelId, text));
 }
@@ -58,12 +68,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const body = await req.json().catch(() => null);
   const parsed = validateReachOut(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const { name, message, listId } = parsed.value;
+  const { name, message } = parsed.value;
 
   try {
     const since = new Date(Date.now() - REACH_OUT_RATE_WINDOW_MS);
     const recent = await prisma.portalMessage.count({ where: { accessId: access.id, createdAt: { gte: since } } });
     if (recent >= REACH_OUT_RATE_LIMIT) return json({ error: REACH_OUT_RATE_MESSAGE }, 429);
+
+    const project = await ownedProject(access, parsed.value.listId);
+    const listId = project ? parsed.value.listId : null;
 
     // 1. Persist first: the row is the record, Slack is the notification.
     const row = await prisma.portalMessage.create({
@@ -72,17 +85,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     });
 
     // 2. Slack, best effort.
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
     const text = buildReachOutText({
       clientName: access.clientName,
       name,
       message,
-      portalUrl: buildPortalUrl(base, token, listId),
+      portalUrl: buildPortalUrl(getAppBaseUrl(req), token, listId),
     });
     let slackOk = false;
-    if (listId) {
+    if (project && listId) {
       try {
-        slackOk = await postToProjectChannel(access, listId, text);
+        slackOk = await postToProjectChannel(access, listId, project.projectName, text);
       } catch (err) {
         console.error("[portal-message] channel post failed", listId, err);
       }

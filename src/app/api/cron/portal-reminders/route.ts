@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { loadPortal, type PortalAccessInfo } from "@/lib/portal-data";
 import { buildPortalUrl } from "@/lib/portal-access";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 import { easternDateString } from "@/lib/portal-deadline";
 import { holidaySet } from "@/lib/us-holidays";
 import {
@@ -29,15 +30,6 @@ export const dynamic = "force-dynamic";
 function authorized(req: Request): boolean {
   const auth = req.headers.get("authorization");
   return Boolean(process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`);
-}
-
-function deriveBaseUrl(req: Request): string {
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? process.env.VERCEL_URL ?? "";
-  if (envUrl) return envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
-  const proto = req.headers.get("x-forwarded-proto");
-  const host = req.headers.get("host");
-  if (proto && host) return `${proto}://${host}`;
-  return new URL(req.url).origin;
 }
 
 interface Summary {
@@ -248,7 +240,7 @@ async function runCron(req: Request) {
       now,
       sentOn,
       closures: holidaySet([Number(sentOn.slice(0, 4))]),
-      baseUrl: deriveBaseUrl(req),
+      baseUrl: getAppBaseUrl(req),
       dryRun,
       webhook: process.env.N8N_PORTAL_REMINDER_WEBHOOK_URL?.trim() ?? "",
     };

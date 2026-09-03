@@ -182,6 +182,7 @@ function scheduleRefresh(listIds: string[]): void {
   }
 }
 
+/** @internal exported for tests; production reads go through getLiveFeedbackMany. */
 export async function getLiveFeedback(listId: string, force = false): Promise<LiveFeedbackMap> {
   const row = await readRow(listId);
   const cached = row ? rowData(row) : null;
