@@ -11,7 +11,7 @@ import {
   type TimelineEntry,
   type MentionNames,
 } from "@/lib/portal-timeline";
-import { getLiveFeedback, type LiveFeedbackMap } from "@/lib/portal-live";
+import { getLiveFeedbackMany } from "@/lib/portal-live";
 import {
   decideFeedbackStatus,
   newestConfirmation,
@@ -112,16 +112,12 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   const status: PortalData["status"] = {};
   const actionItems: PortalData["actionItems"] = [];
 
+  // One cache read for every project, misses fetched a few at a time.
+  // Ad-hoc deliveries with no list ("" ids) have no ClickUp tasks to look up.
+  const liveByList = await getLiveFeedbackMany(timeline.projects.map((p) => p.listId));
+
   for (const project of timeline.projects) {
-    let live: LiveFeedbackMap = {};
-    // Ad-hoc deliveries with no list have no ClickUp tasks to look up.
-    if (project.listId) {
-      try {
-        live = await getLiveFeedback(project.listId);
-      } catch (err) {
-        console.warn("live feedback failed", project.listId, err);
-      }
-    }
+    const live = liveByList[project.listId] ?? {};
 
     for (const group of project.deliverables) {
       const e = group.latest;

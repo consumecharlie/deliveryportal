@@ -1,5 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { selectFeedbackTasks } from "@/lib/portal-live";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { selectFeedbackTasks, runPool, getLiveFeedback, getLiveFeedbackMany } from "@/lib/portal-live";
+import { prisma } from "@/lib/db";
+import { getListTasksByDropdownField } from "@/lib/clickup";
+import { after } from "next/server";
+
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    dashboardCache: { findUnique: vi.fn(), findMany: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
+  },
+}));
+vi.mock("@/lib/clickup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/clickup")>()),
+  getListTasksByDropdownField: vi.fn(),
+}));
+vi.mock("next/server", () => ({ after: vi.fn() }));
+
+const cache = vi.mocked(prisma.dashboardCache);
+const fetchTasks = vi.mocked(getListTasksByDropdownField);
+const afterMock = vi.mocked(after);
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
 import type { ClickUpTask } from "@/lib/types";
 
@@ -67,5 +85,111 @@ describe("selectFeedbackTasks", () => {
 
   it("skips tasks with no deliverable type", () => {
     expect(selectFeedbackTasks([t({ id: "a", deliverableType: null })])).toEqual({});
+  });
+});
+
+describe("runPool", () => {
+  it("bounds concurrency, preserves order, and captures rejections", async () => {
+    let active = 0;
+    let peak = 0;
+    const results = await runPool([1, 2, 3, 4, 5, 6], 2, async (n) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 5));
+      active--;
+      if (n === 4) throw new Error("boom");
+      return n * 10;
+    });
+    expect(peak).toBe(2);
+    expect(results.map((r) => (r.status === "fulfilled" ? r.value : "rejected"))).toEqual([10, 20, 30, "rejected", 50, 60]);
+  });
+
+  it("handles an empty list", async () => {
+    expect(await runPool([], 4, async () => 1)).toEqual([]);
+  });
+});
+
+const STALE_DATA = { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } };
+const FRESH_TASKS = [t({ id: "new", due: "2000" })];
+
+function row(key: string, ageMs: number) {
+  return { key, data: STALE_DATA, updatedAt: new Date(Date.now() - ageMs) };
+}
+
+describe("getLiveFeedback (cache + outage behaviour)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    cache.upsert.mockResolvedValue({} as never);
+  });
+
+  it("returns a fresh row without touching ClickUp", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:fd:L1", 60_000) as never);
+    expect(await getLiveFeedback("L1")).toEqual(STALE_DATA);
+    expect(fetchTasks).not.toHaveBeenCalled();
+    expect(afterMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a stale row immediately and refreshes in the background", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:fd:L1", 10 * 60_000) as never);
+    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
+    expect(await getLiveFeedback("L1")).toEqual(STALE_DATA);
+    expect(fetchTasks).not.toHaveBeenCalled();
+    expect(afterMock).toHaveBeenCalledTimes(1);
+    // Run the scheduled refresh: it fetches and stores the new map.
+    await (afterMock.mock.calls[0][0] as () => Promise<void>)();
+    expect(fetchTasks).toHaveBeenCalledWith("L1", expect.any(String), expect.any(String), true);
+    expect(cache.upsert).toHaveBeenCalledTimes(1);
+    expect((cache.upsert.mock.calls[0][0] as unknown as { update: { data: Record<string, { taskId: string }> } }).update.data["AV Script V1"].taskId).toBe("new");
+  });
+
+  it("a forced refresh that throws falls back to the stale row with a warning", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:fd:L1", 10 * 60_000) as never);
+    fetchTasks.mockRejectedValue(new Error("ClickUp down"));
+    expect(await getLiveFeedback("L1", true)).toEqual(STALE_DATA);
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("a total miss with a failing fetch returns an empty map", async () => {
+    cache.findUnique.mockResolvedValue(null);
+    fetchTasks.mockRejectedValue(new Error("ClickUp down"));
+    expect(await getLiveFeedback("L1")).toEqual({});
+  });
+
+  it("a miss fetches, stores, and returns the selected tasks", async () => {
+    cache.findUnique.mockResolvedValue(null);
+    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
+    const map = await getLiveFeedback("L1");
+    expect(map["AV Script V1"].taskId).toBe("new");
+    expect(cache.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getLiveFeedbackMany", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    cache.upsert.mockResolvedValue({} as never);
+  });
+
+  it("reads all rows in one query, serves fresh and stale rows, fetches only misses, skips blanks", async () => {
+    cache.findMany.mockResolvedValue([row("portal:fd:fresh", 1000), row("portal:fd:stale", 10 * 60_000)] as never);
+    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
+    const out = await getLiveFeedbackMany(["fresh", "stale", "miss", "", "miss"]);
+    expect(cache.findMany).toHaveBeenCalledTimes(1);
+    expect(Object.keys(out).sort()).toEqual(["fresh", "miss", "stale"]);
+    expect(out.fresh).toEqual(STALE_DATA);
+    expect(out.stale).toEqual(STALE_DATA);
+    expect(out.miss["AV Script V1"].taskId).toBe("new");
+    expect(fetchTasks).toHaveBeenCalledTimes(1);
+    expect(afterMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failing fetch for a miss yields an empty map for that list only", async () => {
+    cache.findMany.mockResolvedValue([row("portal:fd:ok", 1000)] as never);
+    fetchTasks.mockRejectedValue(new Error("down"));
+    const out = await getLiveFeedbackMany(["ok", "bad"]);
+    expect(out.ok).toEqual(STALE_DATA);
+    expect(out.bad).toEqual({});
   });
 });

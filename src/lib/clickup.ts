@@ -9,6 +9,9 @@ import type { ClickUpTask, ClickUpCustomField } from "./types";
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
+/** A hung ClickUp endpoint fails fast instead of pinning a request (and a portal page) open. */
+const CLICKUP_TIMEOUT_MS = 20_000;
+
 function getToken(): string {
   const token = process.env.CLICKUP_API_TOKEN;
   if (!token) throw new Error("CLICKUP_API_TOKEN is not set");
@@ -21,6 +24,7 @@ async function clickupFetch<T>(
 ): Promise<T> {
   const url = `${CLICKUP_API_BASE}${endpoint}`;
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(CLICKUP_TIMEOUT_MS),
     ...options,
     headers: {
       Authorization: getToken(),
@@ -75,6 +79,44 @@ export async function getListTasks(
       include_closed: String(includeClosed),
       subtasks: String(includeSubtasks),
       page: String(page),
+    });
+    const res = await clickupFetch<{ tasks: ClickUpTask[] }>(
+      `/list/${listId}/task?${params}`
+    );
+    const batch = res.tasks ?? [];
+    all.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  return { tasks: all };
+}
+
+/**
+ * Fetch one list's tasks narrowed server-side by a dropdown custom field, so
+ * a mature list is not paged through in full to find a handful of tasks.
+ *
+ * Live-validated 2026-09-03 on list 901328017603: the filter returned exactly
+ * the Feedback Deadline tasks the unfiltered crawl found (8 of 81 tasks).
+ */
+export async function getListTasksByDropdownField(
+  listId: string,
+  fieldId: string,
+  optionId: string,
+  includeClosed = true
+): Promise<{ tasks: ClickUpTask[] }> {
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 50;
+  const customFields = JSON.stringify([
+    { field_id: fieldId, operator: "=", value: optionId },
+  ]);
+
+  const all: ClickUpTask[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      include_closed: String(includeClosed),
+      subtasks: "true",
+      page: String(page),
+      custom_fields: customFields,
     });
     const res = await clickupFetch<{ tasks: ClickUpTask[] }>(
       `/list/${listId}/task?${params}`
