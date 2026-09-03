@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { after } from "next/server";
 import { resolveAccess, loadPortal } from "@/lib/portal-data";
 import { recordView } from "@/lib/portal-views";
 import { PortalHeader } from "@/components/portal/portal-header";
@@ -13,7 +15,8 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ t
   const access = await resolveAccess(token);
   if (!access) notFound();
   const data = await loadPortal(access);
-  await recordView(access.id, null);
+  const userAgent = (await headers()).get("user-agent");
+  after(() => recordView(access.id, null, userAgent));
 
   return (
     <>

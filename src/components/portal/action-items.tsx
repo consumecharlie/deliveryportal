@@ -1,4 +1,5 @@
 import type { PortalActionItem } from "@/lib/portal-data";
+import { pickReviewLink } from "@/lib/portal-view-model";
 import { FeedbackBadge } from "./feedback-badge";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 
@@ -11,7 +12,7 @@ export function ActionItems({ token, items }: { token: string; items: PortalActi
       ) : (
         <ul className="mt-2 divide-y divide-neutral-200">
           {items.map(({ entry, projectName, status }) => {
-            const first = entry.links[0];
+            const review = pickReviewLink(entry.links);
             return (
               <li
                 key={entry.id}
@@ -25,9 +26,9 @@ export function ActionItems({ token, items }: { token: string; items: PortalActi
                   <p className="mt-0.5 text-sm text-neutral-500">{projectName}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  {first && (
+                  {review && (
                     <a
-                      href={first.url}
+                      href={review.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="portal-btn portal-btn-secondary"

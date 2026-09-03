@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { after } from "next/server";
 import { resolveAccess, loadPortal } from "@/lib/portal-data";
 import { recordView } from "@/lib/portal-views";
 import { PortalHeader } from "@/components/portal/portal-header";
@@ -21,7 +23,8 @@ export default async function ProjectPortalPage({
   const data = await loadPortal(access, listId);
   const project = data.timeline.projects.find((p) => p.listId === listId);
   if (!project) notFound();
-  await recordView(access.id, null);
+  const userAgent = (await headers()).get("user-agent");
+  after(() => recordView(access.id, null, userAgent));
 
   return (
     <>

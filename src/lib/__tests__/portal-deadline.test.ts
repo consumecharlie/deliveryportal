@@ -40,6 +40,13 @@ describe("resolveDeadline", () => {
 });
 
 describe("deadlineState", () => {
+  it("a 10 AM ET due date checked at 6 PM ET the same day is still due-today, not overdue", () => {
+    // 2026-09-09: 10:00 EDT = 14:00Z, 18:00 EDT = 22:00Z
+    const due = Date.parse("2026-09-09T14:00:00Z");
+    const now = Date.parse("2026-09-09T22:00:00Z");
+    expect(deadlineState(due, now)).toBe("due-today");
+  });
+
   const due = Date.parse("2026-06-09T08:00:00Z");
   it("open before, due-today on the day, overdue after (Eastern days)", () => {
     expect(deadlineState(due, Date.parse("2026-06-08T12:00:00Z"))).toBe("open");

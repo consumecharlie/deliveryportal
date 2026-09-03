@@ -52,3 +52,29 @@ export function toCardStatus(s: FeedbackStatus | undefined): PortalCardStatus | 
     confirmedByName: s.confirmedByName,
   };
 }
+
+/** The link "Open review" should go to: Frame.io first, then Loom, then whatever was sent first. */
+export function pickReviewLink(links: TimelineLink[]): TimelineLink | null {
+  return (
+    links.find((l) => l.variableName === "frameReviewLink") ??
+    links.find((l) => l.variableName === "loomReviewLink") ??
+    links[0] ??
+    null
+  );
+}
+
+export type BadgeTone = "green" | "amber" | "orange" | "red";
+
+/**
+ * Pill wording and colour. An estimated date (our default window, not a
+ * deadline anyone set) is a suggestion, so it never escalates to orange
+ * or red; a real deadline does.
+ */
+export function badgePresentation(status: PortalCardStatus): { label: string; tone: BadgeTone } | null {
+  if (status.kind === "none") return null;
+  if (status.kind === "confirmed") return { label: "Confirmed", tone: "green" };
+  if (status.dueIsEstimate) return { label: `Suggested by ${status.dueLabel}`, tone: "amber" };
+  if (status.state === "overdue") return { label: "Overdue", tone: "red" };
+  if (status.state === "due-today") return { label: "Due today", tone: "orange" };
+  return { label: `Feedback due ${status.dueLabel}`, tone: "amber" };
+}
