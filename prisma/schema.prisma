@@ -42,6 +42,8 @@ model Delivery {
   editedSnippet   String?        @db.Text
   editedSubject   String?
   links           DeliveryLink[]
+  confirmations   FeedbackConfirmation[]
+  feedbackWindows String?
   createdAt       DateTime       @default(now())
 
   @@index([taskId])
@@ -140,4 +142,63 @@ model AuditResult {
   projectName String
   data        Json
   scannedAt   DateTime @updatedAt
+}
+
+/** One bookmarkable client-portal link per ClickUp client folder. A project
+ *  view is a deep link under the same token (/portal/<token>/<listId>).
+ *  Rotate by revoking (set revokedAt) and creating a new row. */
+model PortalAccess {
+  id             String    @id @default(cuid())
+  clientFolderId String
+  clientName     String
+  token          String    @unique
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+  views          PortalView[]
+
+  @@index([clientFolderId])
+}
+
+/** Confirmed internal Slack channel (#client-project) for a project list.
+ *  Written once by a PM (or auto-matched when the crawl is confident). */
+model ProjectChannel {
+  projectListId String   @id
+  channelId     String
+  channelName   String
+  autoMatched   Boolean  @default(false)
+  confirmedBy   String
+  confirmedAt   DateTime @default(now())
+}
+
+/** A client pressing "All feedback is in" on a delivery. undoneAt != null
+ *  means the confirmation was reversed; the latest row per delivery wins. */
+model FeedbackConfirmation {
+  id                     String    @id @default(cuid())
+  deliveryId             String
+  delivery               Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  projectListId          String
+  deliverableType        String
+  feedbackDeadlineTaskId String?
+  confirmedAt            DateTime  @default(now())
+  confirmedByName        String?
+  undoneAt               DateTime?
+  slackChannelId         String?
+  slackMessageTs         String?
+
+  @@index([deliveryId])
+  @@index([projectListId])
+}
+
+/** Lightweight open tracking for the internal "has the client looked" view. */
+model PortalView {
+  id         String       @id @default(cuid())
+  accessId   String
+  access     PortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
+  deliveryId String?
+  viewedAt   DateTime     @default(now())
+  userAgent  String?
+
+  @@index([accessId, viewedAt])
+  @@index([deliveryId])
 }
