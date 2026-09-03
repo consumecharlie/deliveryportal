@@ -1,5 +1,15 @@
 import type { FeedbackStatus } from "@/lib/portal-data";
 
+/**
+ * Deadline wording. A default-window date is a suggestion, not a commitment
+ * anyone made, so the copy softens rather than demands.
+ */
+export function deadlineLabel(status: FeedbackStatus): string {
+  return status.dueIsEstimate
+    ? `Feedback by ${status.dueLabel} (suggested)`
+    : `Feedback due ${status.dueLabel}`;
+}
+
 /** Status pill. Pills are for status only; every clickable control is a button. */
 export function FeedbackBadge({ status }: { status: FeedbackStatus | undefined }) {
   if (!status || status.kind === "none") return null;
@@ -16,7 +26,7 @@ export function FeedbackBadge({ status }: { status: FeedbackStatus | undefined }
     label = "Due today";
     tone = "bg-orange-100 text-orange-800";
   } else {
-    label = `Due ${status.dueLabel}`;
+    label = deadlineLabel(status);
     tone = "bg-amber-100 text-amber-800";
   }
 

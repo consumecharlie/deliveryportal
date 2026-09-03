@@ -12,7 +12,12 @@ import {
   type MentionNames,
 } from "@/lib/portal-timeline";
 import { getLiveFeedback, type LiveFeedbackMap } from "@/lib/portal-live";
-import { resolveDeadline, deadlineState, type DeadlineState } from "@/lib/portal-deadline";
+import {
+  resolveDeadline,
+  deadlineState,
+  type DeadlineState,
+  type DeadlineSource,
+} from "@/lib/portal-deadline";
 import { formatFeedbackDeadline } from "@/lib/feedback-deadline";
 
 export interface PortalAccessInfo {
@@ -41,7 +46,9 @@ export interface FeedbackStatus {
   dueMs: number;
   /** "Tue, Sep 9" (+ ", 12:00 PM ET" when a real time is set). */
   dueLabel: string;
-  source: "clickup" | "computed";
+  source: DeadlineSource;
+  /** True when the date is our default window, not a deadline anyone set. */
+  dueIsEstimate: boolean;
   state: DeadlineState;
   feedbackDeadlineTaskId: string | null;
   confirmedAt: Date | null;
@@ -142,6 +149,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
         kind: confirmed ? "confirmed" : "awaiting",
         dueMs,
         source,
+        dueIsEstimate: source === "default",
         dueLabel: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
         state: deadlineState(dueMs, now),
         feedbackDeadlineTaskId: task?.taskId ?? null,

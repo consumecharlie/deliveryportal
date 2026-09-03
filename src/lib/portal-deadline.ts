@@ -28,7 +28,14 @@ export function dateOnlySentinelMs(date: string): number {
   return Date.parse(`${date}T08:00:00Z`);
 }
 
-export interface ResolvedDeadline { dueMs: number; source: "clickup" | "computed" }
+/**
+ * Where the date came from: a live ClickUp Feedback Deadline task, the send
+ * date plus the snapshotted feedback window, or the default window because
+ * the snapshot was blank, "Flexible", or unparseable (an estimate, not a promise).
+ */
+export type DeadlineSource = "clickup" | "computed" | "default";
+
+export interface ResolvedDeadline { dueMs: number; source: DeadlineSource }
 
 export function resolveDeadline(input: {
   liveDueMs: number | null;
@@ -36,11 +43,12 @@ export function resolveDeadline(input: {
   feedbackWindows: string;
 }): ResolvedDeadline {
   if (input.liveDueMs) return { dueMs: input.liveDueMs, source: "clickup" };
-  const days = windowBusinessDays(input.feedbackWindows) ?? DEFAULT_WINDOW_DAYS;
+  const windowDays = windowBusinessDays(input.feedbackWindows);
+  const days = windowDays ?? DEFAULT_WINDOW_DAYS;
   const start = easternDateString(input.sentAt.getTime());
   const year = Number(start.slice(0, 4));
   const due = addBusinessDays(start, days, holidaySet([year]));
-  return { dueMs: dateOnlySentinelMs(due), source: "computed" };
+  return { dueMs: dateOnlySentinelMs(due), source: windowDays === null ? "default" : "computed" };
 }
 
 export type DeadlineState = "open" | "due-today" | "overdue";

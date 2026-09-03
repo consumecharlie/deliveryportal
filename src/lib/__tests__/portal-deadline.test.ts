@@ -14,8 +14,15 @@ describe("resolveDeadline", () => {
     expect(new Date(r.dueMs).toISOString()).toBe("2026-06-09T08:00:00.000Z");
   });
 
-  it("falls back to 2 business days when the window is unknown", () => {
+  it("falls back to 2 business days, flagged as default, when the window is unknown", () => {
     const r = resolveDeadline({ liveDueMs: null, sentAt: new Date("2026-06-01T15:00:00Z"), feedbackWindows: "" });
+    expect(r.source).toBe("default");
+    expect(new Date(r.dueMs).toISOString()).toBe("2026-06-03T08:00:00.000Z");
+  });
+
+  it("treats Flexible as a default window, not a computed one", () => {
+    const r = resolveDeadline({ liveDueMs: null, sentAt: new Date("2026-06-01T15:00:00Z"), feedbackWindows: "Flexible" });
+    expect(r.source).toBe("default");
     expect(new Date(r.dueMs).toISOString()).toBe("2026-06-03T08:00:00.000Z");
   });
 });
