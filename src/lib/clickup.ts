@@ -59,7 +59,8 @@ export async function getTask(taskId: string): Promise<ClickUpTask> {
  */
 export async function getListTasks(
   listId: string,
-  includeSubtasks = true
+  includeSubtasks = true,
+  includeClosed = false
 ): Promise<{ tasks: ClickUpTask[] }> {
   // ClickUp's list-task endpoint returns up to ~100 tasks per page.
   const PAGE_SIZE = 100;
@@ -69,7 +70,7 @@ export async function getListTasks(
   const all: ClickUpTask[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const params = new URLSearchParams({
-      include_closed: "false",
+      include_closed: String(includeClosed),
       subtasks: String(includeSubtasks),
       page: String(page),
     });
