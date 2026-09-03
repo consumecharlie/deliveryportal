@@ -76,6 +76,8 @@ export interface VisibleChannel {
   name: string;
   isMember: boolean;
   isPrivate: boolean;
+  /** Slack Connect (shared with another workspace): the client-facing side. Never post internal notes here. */
+  isShared: boolean;
 }
 
 /** Channels the bot can see (public + shared, joined or not) for suggestion. */
@@ -92,7 +94,13 @@ export async function listVisibleChannels(): Promise<VisibleChannel[]> {
     const d = await (await fetch(`${SLACK}/conversations.list?${params}`, { headers: authHeader() })).json();
     if (!d.ok) break;
     for (const c of d.channels ?? []) {
-      out.push({ id: c.id, name: c.name, isMember: !!c.is_member, isPrivate: !!c.is_private });
+      out.push({
+        id: c.id,
+        name: c.name,
+        isMember: !!c.is_member,
+        isPrivate: !!c.is_private,
+        isShared: Boolean(c.is_ext_shared || c.is_shared),
+      });
     }
     cursor = d.response_metadata?.next_cursor || "";
     if (!cursor) break;
