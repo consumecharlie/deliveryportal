@@ -185,6 +185,28 @@ describe("getLiveFeedbackMany", () => {
     expect(afterMock).toHaveBeenCalledTimes(1);
   });
 
+  it("stale lists refresh through one scheduled pool, not one background call each", async () => {
+    const ids = ["s1", "s2", "s3", "s4", "s5", "s6"];
+    cache.findMany.mockResolvedValue(ids.map((id) => row(`portal:fd:${id}`, 10 * 60_000)) as never);
+    let active = 0;
+    let peak = 0;
+    fetchTasks.mockImplementation(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 5));
+      active--;
+      return { tasks: FRESH_TASKS };
+    });
+    const out = await getLiveFeedbackMany(ids);
+    expect(Object.keys(out)).toHaveLength(6);
+    expect(fetchTasks).not.toHaveBeenCalled();
+    expect(afterMock).toHaveBeenCalledTimes(1);
+    await (afterMock.mock.calls[0][0] as () => Promise<void>)();
+    expect(fetchTasks).toHaveBeenCalledTimes(6);
+    expect(peak).toBe(4);
+    expect(cache.upsert).toHaveBeenCalledTimes(6);
+  });
+
   it("a failing fetch for a miss yields an empty map for that list only", async () => {
     cache.findMany.mockResolvedValue([row("portal:fd:ok", 1000)] as never);
     fetchTasks.mockRejectedValue(new Error("down"));

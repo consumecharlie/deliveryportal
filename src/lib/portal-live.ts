@@ -165,10 +165,15 @@ async function refresh(listId: string, stale: LiveFeedbackMap | null): Promise<L
   }
 }
 
-/** Refresh after the response is sent; outside a request scope, fire and forget. */
-function scheduleRefresh(listId: string): void {
+/**
+ * Refresh after the response is sent, all lists through one bounded pool so
+ * a client whose projects expire together does not burst N ClickUp calls.
+ * Outside a request scope, fire and forget.
+ */
+function scheduleRefresh(listIds: string[]): void {
+  if (listIds.length === 0) return;
   const run = async () => {
-    await refresh(listId, null);
+    await runPool(listIds, FETCH_WIDTH, (id) => refresh(id, null));
   };
   try {
     after(run);
@@ -182,7 +187,7 @@ export async function getLiveFeedback(listId: string, force = false): Promise<Li
   const cached = row ? rowData(row) : null;
   if (row && !force) {
     if (isFresh(row)) return cached!;
-    scheduleRefresh(listId);
+    scheduleRefresh([listId]);
     return cached!;
   }
   return refresh(listId, cached);
@@ -199,6 +204,7 @@ export async function getLiveFeedbackMany(
   const rows = await readRows(ids);
   const out: Record<string, LiveFeedbackMap> = {};
   const misses: string[] = [];
+  const stale: string[] = [];
   for (const id of ids) {
     const row = rows.get(cacheKey(id));
     if (!row) {
@@ -206,8 +212,9 @@ export async function getLiveFeedbackMany(
       continue;
     }
     out[id] = rowData(row);
-    if (!isFresh(row)) scheduleRefresh(id);
+    if (!isFresh(row)) stale.push(id);
   }
+  scheduleRefresh(stale);
   const fetched = await runPool(misses, FETCH_WIDTH, (id) => refresh(id, null));
   misses.forEach((id, i) => {
     const r = fetched[i];
