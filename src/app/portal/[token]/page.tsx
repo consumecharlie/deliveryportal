@@ -1,59 +1,48 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { after } from "next/server";
-import { resolveAccess, loadPortal } from "@/lib/portal-data";
+import { resolveAccess, loadPortalPage } from "@/lib/portal-data";
+import { fixturePortalPage } from "@/lib/portal-page.fixture";
+import type { PortalPageModel } from "@/lib/portal-page-model";
 import { recordView } from "@/lib/portal-views";
-import { PortalHeader } from "@/components/portal/portal-header";
-import { ActionItems } from "@/components/portal/action-items";
-import { DeliverableCard } from "@/components/portal/deliverable-card";
-import { toCardGroup, toCardStatus } from "@/lib/portal-view-model";
-import { ReachOut } from "@/components/portal/reach-out";
+import { PortalShell } from "@/components/portal/portal-shell";
+import { AttentionList } from "@/components/portal/attention-list";
+import { ProjectSection, CompletedProjects } from "@/components/portal/project-section";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientPortalPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+async function load(token: string): Promise<PortalPageModel> {
+  if (process.env.PORTAL_FIXTURE === "1") return fixturePortalPage(token);
   const access = await resolveAccess(token);
   if (!access) notFound();
-  const data = await loadPortal(access);
+  const model = await loadPortalPage(access);
   const userAgent = (await headers()).get("user-agent");
   after(() => recordView(access.id, null, userAgent));
+  return model;
+}
+
+export default async function ClientPortalPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const model = await load(token);
+  const active = model.projects.filter((p) => p.phase === "in-progress");
+  const completed = model.projects.filter((p) => p.phase === "completed");
 
   return (
-    <>
-      <PortalHeader clientName={access.clientName} crumbs={[]} />
-      <ActionItems token={token} items={data.actionItems} />
-      <section className="mt-10 space-y-10">
-        {data.timeline.projects.map((p) => (
-          <div key={p.listId || `name:${p.name}`}>
-            <h2 className="mb-4 text-lg font-semibold">
-              {p.listId ? (
-                <a href={`/portal/${token}/${p.listId}`} className="hover:underline">
-                  {p.name}
-                </a>
-              ) : (
-                p.name
-              )}
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {p.deliverables.map((g) => (
-                <DeliverableCard
-                  key={g.latest.id}
-                  token={token}
-                  group={toCardGroup(g)}
-                  status={toCardStatus(data.status[g.latest.id])}
-                />
-              ))}
-            </div>
-          </div>
+    <PortalShell token={token} clientName={model.clientName} counts={model.counts}>
+      <AttentionList token={token} items={model.attention} />
+
+      <div className="portal-projects">
+        {active.map((p) => (
+          <ProjectSection key={p.listId} token={token} project={p} linkName />
         ))}
-        {data.timeline.projects.length === 0 && (
-          <p className="text-neutral-500">
+        {model.projects.length === 0 && (
+          <p className="portal-quiet">
             Nothing has been shared here yet. Deliverables will appear as soon as we send them.
           </p>
         )}
-      </section>
-      <ReachOut token={token} />
-    </>
+      </div>
+
+      <CompletedProjects token={token} projects={completed} focusListId={model.focusListId} />
+    </PortalShell>
   );
 }
