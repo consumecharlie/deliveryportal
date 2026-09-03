@@ -36,7 +36,9 @@ async function clickupFetch<T>(
     );
   }
 
-  return res.json() as Promise<T>;
+  // DELETE endpoints answer with an empty body.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 // ── Task Operations ──
@@ -351,4 +353,103 @@ export function resolveDropdownOptionId(
     (o) => o.name === optionName || o.label === optionName
   );
   return option ? String(option.orderindex) : null;
+}
+
+// ── Comments and user groups ──
+
+export interface ClickUpGroupMember {
+  id: number;
+  username: string;
+}
+
+/** Members of a workspace user group (empty when the group is not found). */
+export async function getUserGroupMembers(groupId: string): Promise<ClickUpGroupMember[]> {
+  const teamId = process.env.CLICKUP_WORKSPACE_ID ?? "9010023164";
+  const res = await clickupFetch<{
+    groups?: Array<{ id: string; members?: Array<{ id: number; username: string }> }>;
+  }>(`/group?team_id=${teamId}`);
+  const group = (res.groups ?? []).find((g) => g.id === groupId);
+  return (group?.members ?? []).map((m) => ({ id: m.id, username: m.username }));
+}
+
+export interface CreateTaskCommentOptions {
+  text: string;
+  /** Users to @mention at the start of the comment. */
+  mentions?: ClickUpGroupMember[];
+  /** Assign the comment to a user group as well. */
+  groupAssignee?: string;
+  notifyAll?: boolean;
+}
+
+/** Body for the structured-comment path: `{type:"tag"}` chunks render as mention chips. */
+export function buildStructuredCommentBody(opts: CreateTaskCommentOptions): Record<string, unknown> {
+  const chunks: Array<Record<string, unknown>> = [];
+  for (const m of opts.mentions ?? []) {
+    chunks.push({ type: "tag", user: { id: m.id } });
+    chunks.push({ text: " " });
+  }
+  chunks.push({ text: opts.text });
+  return {
+    comment: chunks,
+    ...(opts.groupAssignee ? { group_assignee: opts.groupAssignee } : {}),
+    notify_all: opts.notifyAll ?? true,
+  };
+}
+
+/** Body for the plain-text fallback: `@username` per member, first member assigned. */
+export function buildTextCommentBody(opts: CreateTaskCommentOptions): Record<string, unknown> {
+  const mentions = opts.mentions ?? [];
+  const prefix = mentions.map((m) => `@${m.username}`).join(" ");
+  return {
+    comment_text: prefix ? `${prefix} ${opts.text}` : opts.text,
+    ...(mentions[0] ? { assignee: mentions[0].id } : {}),
+    ...(opts.groupAssignee ? { group_assignee: opts.groupAssignee } : {}),
+    notify_all: opts.notifyAll ?? true,
+  };
+}
+
+function isClickUp4xx(err: unknown): boolean {
+  const m = /ClickUp API error (\d{3})/.exec(String(err));
+  return Boolean(m && m[1].startsWith("4"));
+}
+
+/**
+ * Post a task comment that @mentions users.
+ *
+ * Tries the structured `comment` array first (live-validated 2026-09-03:
+ * the tag chunks come back as `type: "tag"` with the user object, so they
+ * render as mention chips). If ClickUp rejects that body with a 4xx, retries
+ * with `comment_text` built as `@<username>` per member and `assignee` set to
+ * the first member. Logs which path succeeded.
+ */
+export async function createTaskComment(
+  taskId: string,
+  opts: CreateTaskCommentOptions
+): Promise<{ id: string }> {
+  try {
+    const r = await clickupFetch<{ id: string }>(`/task/${taskId}/comment`, {
+      method: "POST",
+      body: JSON.stringify(buildStructuredCommentBody(opts)),
+    });
+    console.log("createTaskComment: structured comment accepted", taskId, r.id);
+    return r;
+  } catch (err) {
+    if (!isClickUp4xx(err)) throw err;
+    console.warn("createTaskComment: structured comment rejected, retrying as comment_text", taskId, err);
+  }
+  const r = await clickupFetch<{ id: string }>(`/task/${taskId}/comment`, {
+    method: "POST",
+    body: JSON.stringify(buildTextCommentBody(opts)),
+  });
+  console.log("createTaskComment: comment_text fallback accepted", taskId, r.id);
+  return r;
+}
+
+/** Comments on a task, oldest first as returned by ClickUp. */
+export async function getTaskComments(taskId: string): Promise<{ comments: Array<Record<string, unknown>> }> {
+  return clickupFetch<{ comments: Array<Record<string, unknown>> }>(`/task/${taskId}/comment`);
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await clickupFetch(`/task/${taskId}`, { method: "DELETE" });
 }

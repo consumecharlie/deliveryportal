@@ -104,3 +104,15 @@ export const LINK_VARIABLE_MAP: Record<
 
 // ClickUp workspace
 export const WORKSPACE_ID = "9010023164";
+
+// ClickUp user group used for "tag the PM team" on portal confirmations.
+export const USER_GROUPS = {
+  PROJECT_MANAGEMENT: "a69e7430-c3bd-45d7-95da-4ca97ebe1015",
+} as const;
+
+// Fallback mentions if the group lookup fails (Michael, Sadjr). Usernames are
+// needed for the comment_text mention fallback in createTaskComment.
+export const PM_FALLBACK_USERS: ReadonlyArray<{ id: number; username: string }> = [
+  { id: 50799924, username: "Michael Rosenberg" },
+  { id: 106025619, username: "Sadjr Williams" },
+];
