@@ -1,0 +1,137 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const tx = {
+  $queryRaw: vi.fn(),
+  feedbackConfirmation: { findFirst: vi.fn(), create: vi.fn() },
+};
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    delivery: { findFirst: vi.fn() },
+    feedbackConfirmation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+  },
+}));
+vi.mock("@/lib/clickup", () => ({
+  updateTaskStatus: vi.fn(),
+  createTaskComment: vi.fn(),
+  getUserGroupMembers: vi.fn(),
+}));
+vi.mock("@/lib/slack-dm", () => ({ postChannelMessage: vi.fn(), sendSlackDM: vi.fn() }));
+vi.mock("@/lib/project-channel", () => ({ resolveProjectChannel: vi.fn() }));
+vi.mock("@/lib/portal-live", () => ({ invalidateLiveFeedback: vi.fn() }));
+
+import { prisma } from "@/lib/db";
+import { updateTaskStatus, createTaskComment, getUserGroupMembers } from "@/lib/clickup";
+import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
+import { resolveProjectChannel } from "@/lib/project-channel";
+import { confirmFeedback, PortalConfirmError } from "@/lib/portal-confirm";
+
+const delivery = {
+  id: "d1",
+  projectListId: "list-1",
+  projectName: "Acme Launch Video",
+  deliverableType: "Edit V1",
+  clientFolderId: "folder-1",
+  senderEmail: "pm@consume-media.com",
+};
+
+const input = {
+  accessId: "a1",
+  clientName: "Acme",
+  clientFolderId: "folder-1",
+  deliveryId: "d1",
+  confirmedByName: null,
+  feedbackDeadlineTaskId: "task-1",
+  deadlineLabel: "Tue, Sep 9",
+  portalUrl: "https://portal.example.com/portal/abc",
+};
+
+function order(fn: unknown): number {
+  return (fn as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0];
+}
+
+describe("confirmFeedback", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(prisma.delivery.findFirst).mockResolvedValue(delivery as never);
+    tx.$queryRaw.mockResolvedValue([{ id: "d1" }]);
+    tx.feedbackConfirmation.findFirst.mockResolvedValue(null);
+    tx.feedbackConfirmation.create.mockResolvedValue({ id: "conf-1" });
+    vi.mocked(prisma.feedbackConfirmation.update).mockResolvedValue({ id: "conf-1" } as never);
+    vi.mocked(getUserGroupMembers).mockResolvedValue([{ id: 1, username: "PM" }]);
+    vi.mocked(updateTaskStatus).mockResolvedValue(undefined);
+    vi.mocked(createTaskComment).mockResolvedValue({ id: "c1" });
+    vi.mocked(resolveProjectChannel).mockResolvedValue({
+      channelId: "C1",
+      channelName: "acme-launch",
+      source: "confirmed",
+      autoMatched: false,
+      suggestions: [],
+    });
+    vi.mocked(postChannelMessage).mockResolvedValue("171.1");
+    vi.mocked(sendSlackDM).mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it("records the confirmation inside a locked transaction before any side effect", async () => {
+    await confirmFeedback(input);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.feedbackConfirmation.create).toHaveBeenCalledTimes(1);
+    const data = tx.feedbackConfirmation.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      deliveryId: "d1",
+      projectListId: "list-1",
+      deliverableType: "Edit V1",
+      feedbackDeadlineTaskId: "task-1",
+      slackChannelId: null,
+      slackMessageTs: null,
+    });
+    expect(order(tx.feedbackConfirmation.create)).toBeLessThan(order(updateTaskStatus));
+    expect(order(tx.feedbackConfirmation.create)).toBeLessThan(order(postChannelMessage));
+  });
+
+  it("rejects with 409 when an active confirmation already exists, with no side effects", async () => {
+    tx.feedbackConfirmation.findFirst.mockResolvedValue({ id: "conf-old" });
+    await expect(confirmFeedback(input)).rejects.toMatchObject({ status: 409 });
+    expect(tx.feedbackConfirmation.create).not.toHaveBeenCalled();
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    expect(postChannelMessage).not.toHaveBeenCalled();
+  });
+
+  it("closes the task, posts to the channel, then stores the Slack pointer on the row", async () => {
+    const r = await confirmFeedback(input);
+    expect(updateTaskStatus).toHaveBeenCalledWith("task-1", "complete");
+    expect(createTaskComment).toHaveBeenCalledTimes(1);
+    expect(postChannelMessage).toHaveBeenCalledWith("C1", expect.stringContaining("*Acme* confirmed"));
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledWith({
+      where: { id: "conf-1" },
+      data: { slackChannelId: "C1", slackMessageTs: "171.1" },
+    });
+    expect(r).toEqual({ id: "conf-1", clickupOk: true, slackOk: true });
+  });
+
+  it("logs one structured info line", async () => {
+    await confirmFeedback(input);
+    const lines = vi.mocked(console.info).mock.calls.filter((c) => c[0] === "[portal-confirm]");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0][1] as string)).toMatchObject({
+      deliveryId: "d1",
+      projectListId: "list-1",
+      clickupOk: true,
+      slackOk: true,
+      channel: "C1",
+    });
+  });
+
+  it("404s when the delivery is not in this client's folder", async () => {
+    vi.mocked(prisma.delivery.findFirst).mockResolvedValue(null);
+    await expect(confirmFeedback(input)).rejects.toBeInstanceOf(PortalConfirmError);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});

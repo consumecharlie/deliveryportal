@@ -87,7 +87,31 @@ export async function confirmFeedback(input: {
     deadlineLabel: input.deadlineLabel,
   };
 
-  // 1. ClickUp (best effort, before the DB row so a hard failure is visible in logs).
+  // 1. Record first, under a row lock, so two presses (or two tabs) cannot
+  //    both pass the "nothing active" check. The row is the source of truth
+  //    the portal reads back; side effects below are best effort.
+  const created = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Delivery" WHERE id = ${delivery.id} FOR UPDATE`;
+    const active = await tx.feedbackConfirmation.findFirst({
+      where: { deliveryId: delivery.id, undoneAt: null },
+      select: { id: true },
+    });
+    if (active) throw new PortalConfirmError("Nothing awaiting feedback", 409);
+    return tx.feedbackConfirmation.create({
+      data: {
+        deliveryId: delivery.id,
+        projectListId: delivery.projectListId,
+        deliverableType: delivery.deliverableType,
+        feedbackDeadlineTaskId: input.feedbackDeadlineTaskId,
+        confirmedByName: input.confirmedByName,
+        slackChannelId: null,
+        slackMessageTs: null,
+      },
+      select: { id: true },
+    });
+  });
+
+  // 2. ClickUp (best effort).
   let clickupOk = false;
   if (input.feedbackDeadlineTaskId) {
     try {
@@ -104,7 +128,7 @@ export async function confirmFeedback(input: {
     if (delivery.projectListId) await invalidateLiveFeedback(delivery.projectListId);
   }
 
-  // 2. Slack (best effort).
+  // 3. Slack (best effort).
   let slackChannelId: string | null = null;
   let slackMessageTs: string | null = null;
   if (delivery.projectListId) {
@@ -126,19 +150,27 @@ export async function confirmFeedback(input: {
     }
   }
 
-  // 3. Record.
-  const row = await prisma.feedbackConfirmation.create({
-    data: {
+  // 4. Attach the Slack pointer so undo can reply in the thread.
+  if (slackChannelId) {
+    await prisma.feedbackConfirmation.update({
+      where: { id: created.id },
+      data: { slackChannelId, slackMessageTs },
+    });
+  }
+
+  const slackOk = Boolean(slackMessageTs);
+  console.info(
+    "[portal-confirm]",
+    JSON.stringify({
+      action: "confirm",
       deliveryId: delivery.id,
       projectListId: delivery.projectListId,
-      deliverableType: delivery.deliverableType,
-      feedbackDeadlineTaskId: input.feedbackDeadlineTaskId,
-      confirmedByName: input.confirmedByName,
-      slackChannelId,
-      slackMessageTs,
-    },
-  });
-  return { id: row.id, clickupOk, slackOk: Boolean(slackMessageTs) };
+      clickupOk,
+      slackOk,
+      channel: slackChannelId,
+    })
+  );
+  return { id: created.id, clickupOk, slackOk };
 }
 
 export async function undoFeedback(input: {
@@ -187,5 +219,16 @@ export async function undoFeedback(input: {
   }
 
   await prisma.feedbackConfirmation.update({ where: { id: conf.id }, data: { undoneAt: new Date() } });
+  console.info(
+    "[portal-confirm]",
+    JSON.stringify({
+      action: "undo",
+      deliveryId: conf.deliveryId,
+      projectListId: conf.projectListId,
+      clickupOk,
+      slackOk,
+      channel: conf.slackChannelId,
+    })
+  );
   return { id: conf.id, clickupOk, slackOk };
 }
