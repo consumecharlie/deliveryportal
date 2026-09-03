@@ -9,13 +9,24 @@ export interface ConfirmContext {
   deadlineLabel: string;
 }
 
+/**
+ * Slack mrkdwn treats &, < and > as control characters (links, mentions,
+ * `<!channel>`), so every client-supplied value must be escaped before it is
+ * interpolated into a message.
+ */
+export function escapeMrkdwn(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export function slackConfirmText(c: ConfirmContext): string {
-  const who = c.confirmedByName ? ` (${c.confirmedByName})` : "";
-  return `:white_check_mark: *${c.clientName}* confirmed all feedback is in on *${c.deliverableType}* for *${c.projectName}*${who}. Deadline was ${c.deadlineLabel}. <${c.portalUrl}|Open client portal>`;
+  const e = escapeMrkdwn;
+  const who = c.confirmedByName ? ` (${e(c.confirmedByName)})` : "";
+  return `:white_check_mark: *${e(c.clientName)}* confirmed all feedback is in on *${e(c.deliverableType)}* for *${e(c.projectName)}*${who}. Deadline was ${e(c.deadlineLabel)}. <${c.portalUrl}|Open client portal>`;
 }
 
 export function slackUndoText(c: ConfirmContext): string {
-  return `:leftwards_arrow_with_hook: *${c.clientName}* reopened feedback on *${c.deliverableType}* for *${c.projectName}*. The feedback window is extended. <${c.portalUrl}|Open client portal>`;
+  const e = escapeMrkdwn;
+  return `:leftwards_arrow_with_hook: *${e(c.clientName)}* reopened feedback on *${e(c.deliverableType)}* for *${e(c.projectName)}*. The feedback window is extended. <${c.portalUrl}|Open client portal>`;
 }
 
 export function clickupConfirmComment(c: ConfirmContext): string {

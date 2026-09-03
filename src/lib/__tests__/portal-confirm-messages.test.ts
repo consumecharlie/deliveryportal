@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  escapeMrkdwn,
   slackConfirmText,
   slackUndoText,
   clickupConfirmComment,
@@ -50,6 +51,52 @@ describe("portal confirm message builders", () => {
 
   it("clickupUndoComment is the fixed reopen note", () => {
     expect(clickupUndoComment()).toContain("Reopening this feedback deadline.");
+  });
+});
+
+describe("Slack mrkdwn escaping", () => {
+  it("escapeMrkdwn neutralises &, < and >", () => {
+    expect(escapeMrkdwn("a & b <c> d")).toBe("a &amp; b &lt;c&gt; d");
+  });
+
+  it("a name of <!channel> cannot page the channel", () => {
+    const t = slackConfirmText({ ...ctx, confirmedByName: "<!channel>" });
+    expect(t).not.toContain("<!channel>");
+    expect(t).toContain("(&lt;!channel&gt;)");
+  });
+
+  it("a name containing a fake link does not inject a link", () => {
+    const name = "<https://x|Open client portal>";
+    const t = slackConfirmText({ ...ctx, confirmedByName: name });
+    expect(t).not.toContain(name);
+    expect(t).toContain("&lt;https://x|Open client portal&gt;");
+    // The real link is still the last (and only) angle-bracket token.
+    expect(t.match(/</g)?.length).toBe(1);
+  });
+
+  it("escapes every interpolated field in both builders", () => {
+    const hostile: ConfirmContext = {
+      clientName: "A&B <Co>",
+      projectName: "P <x>",
+      deliverableType: "V1 & V2",
+      confirmedByName: "N&N",
+      portalUrl: "https://portal.example.com/portal/abc",
+      deadlineLabel: "Tue <soon>",
+    };
+    const c = slackConfirmText(hostile);
+    expect(c).toContain("*A&amp;B &lt;Co&gt;*");
+    expect(c).toContain("*P &lt;x&gt;*");
+    expect(c).toContain("*V1 &amp; V2*");
+    expect(c).toContain("(N&amp;N)");
+    expect(c).toContain("Deadline was Tue &lt;soon&gt;.");
+    const u = slackUndoText(hostile);
+    expect(u).toContain("*A&amp;B &lt;Co&gt;*");
+    expect(u).toContain("*V1 &amp; V2*");
+    expect(u).toContain("*P &lt;x&gt;*");
+  });
+
+  it("ClickUp comments stay plain text", () => {
+    expect(clickupConfirmComment({ ...ctx, confirmedByName: "A & B" })).toContain("by A & B.");
   });
 });
 
