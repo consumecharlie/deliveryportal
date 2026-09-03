@@ -7,19 +7,12 @@ interface Props {
   clientName: string;
   /** Project page: the project shown, with a breadcrumb back to the client. */
   project?: { listId: string; name: string; summary: string };
-  /** Client page: the counts line under the name. */
-  counts?: { inProgress: number; completed: number };
+  /** Client page: the counts line under the name, built by the data layer; "" or undefined hides it. */
+  countsLabel?: string;
   children: React.ReactNode;
 }
 
-function countsLine({ inProgress, completed }: { inProgress: number; completed: number }): string {
-  const parts: string[] = [];
-  if (inProgress > 0) parts.push(`${inProgress} ${inProgress === 1 ? "project" : "projects"} in progress`);
-  if (completed > 0) parts.push(`${completed} completed`);
-  return parts.join(", ");
-}
-
-export function PortalShell({ token, clientName, project, counts, children }: Props) {
+export function PortalShell({ token, clientName, project, countsLabel, children }: Props) {
   return (
     <div className="portal">
       <header className="portal-top">
@@ -42,7 +35,7 @@ export function PortalShell({ token, clientName, project, counts, children }: Pr
         ) : (
           <>
             <h1 className="portal-h1">{clientName}</h1>
-            {counts && countsLine(counts) !== "" && <p className="portal-lede">{countsLine(counts)}</p>}
+            {countsLabel && <p className="portal-lede">{countsLabel}</p>}
           </>
         )}
       </div>

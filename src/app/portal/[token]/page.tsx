@@ -28,7 +28,7 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ t
   const completed = model.projects.filter((p) => p.phase === "completed");
 
   return (
-    <PortalShell token={token} clientName={model.clientName} counts={model.counts}>
+    <PortalShell token={token} clientName={model.clientName} countsLabel={model.countsLabel}>
       <AttentionList token={token} items={model.attention} />
 
       {active.length > 0 && (

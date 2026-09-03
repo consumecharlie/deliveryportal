@@ -302,13 +302,13 @@ export function fixturePortalPage(token: string, focusListId?: string): PortalPa
     }
   }
   attention.sort((a, b) => (a.review.dueMs ?? 0) - (b.review.dueMs ?? 0));
+  const inProgress = PROJECTS.filter((p) => p.phase === "in-progress").length;
+  const completed = PROJECTS.filter((p) => p.phase === "completed").length;
   return {
     token,
     clientName: "Stack Overflow",
-    counts: {
-      inProgress: PROJECTS.filter((p) => p.phase === "in-progress").length,
-      completed: PROJECTS.filter((p) => p.phase === "completed").length,
-    },
+    counts: { inProgress, completed },
+    countsLabel: `${inProgress} projects in progress, ${completed} completed`,
     attention,
     projects,
     focusListId: focusListId ?? null,
