@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface Props {
@@ -30,13 +30,25 @@ const UNDO_WARNING =
  * Local state seeds from props once, so call sites key this component on the
  * delivery id plus its status so a confirm made from one instance (the action
  * list) is reflected by the other (the card) after router.refresh().
+ *
+ * The undo prompt is a native <dialog> opened with showModal(): focus moves
+ * into it, stays trapped, and Escape closes it.
  */
 export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: Props) {
   const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirmed, setConfirmed] = useState(initialConfirmed);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [askUndo, setAskUndo] = useState(false);
+
+  function openUndo() {
+    setError(null);
+    dialogRef.current?.showModal();
+  }
+
+  function closeUndo() {
+    dialogRef.current?.close();
+  }
 
   async function post(action: "confirm" | "undo") {
     setBusy(true);
@@ -49,7 +61,7 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setConfirmed(action === "confirm");
-      setAskUndo(false);
+      if (action === "undo") closeUndo();
       router.refresh();
     } catch {
       setError("Could not save, please try again");
@@ -66,7 +78,7 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
           {(canUndo || confirmed !== initialConfirmed) && (
             <button
               type="button"
-              onClick={() => setAskUndo(true)}
+              onClick={openUndo}
               disabled={busy}
               className="text-neutral-500 underline underline-offset-2 hover:text-neutral-800 disabled:opacity-60"
             >
@@ -79,35 +91,25 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
           {busy ? "Saving" : "All feedback is in"}
         </button>
       )}
-      {error && <span className="whitespace-nowrap text-xs text-red-700">{error}</span>}
+      {error && <span className="text-xs text-red-700">{error}</span>}
 
-      {askUndo && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={`undo-${deliveryId}`}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 px-4"
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <p id={`undo-${deliveryId}`} className="text-base text-neutral-800">
-              {UNDO_WARNING}
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAskUndo(false)}
-                disabled={busy}
-                className="portal-btn portal-btn-secondary"
-              >
-                Keep it confirmed
-              </button>
-              <button type="button" onClick={() => post("undo")} disabled={busy} className="portal-btn portal-btn-primary">
-                {busy ? "Saving" : "Yes, undo"}
-              </button>
-            </div>
-          </div>
+      <dialog
+        ref={dialogRef}
+        aria-labelledby={`undo-${deliveryId}`}
+        className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-6 text-neutral-900 shadow-xl backdrop:bg-neutral-900/40"
+      >
+        <p id={`undo-${deliveryId}`} className="text-base text-neutral-800">
+          {UNDO_WARNING}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={closeUndo} disabled={busy} className="portal-btn portal-btn-secondary">
+            Keep it confirmed
+          </button>
+          <button type="button" onClick={() => post("undo")} disabled={busy} className="portal-btn portal-btn-primary">
+            {busy ? "Saving" : "Yes, undo"}
+          </button>
         </div>
-      )}
+      </dialog>
     </div>
   );
 }
