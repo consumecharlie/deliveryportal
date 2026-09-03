@@ -11,7 +11,7 @@ import {
   type ClickUpGroupMember,
 } from "@/lib/clickup";
 import { USER_GROUPS, PM_FALLBACK_USERS } from "@/lib/custom-field-ids";
-import { postChannelMessage } from "@/lib/slack-dm";
+import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { invalidateLiveFeedback } from "@/lib/portal-live";
 import {
@@ -33,6 +33,16 @@ export class PortalConfirmError extends Error {
   ) {
     super(message);
   }
+}
+
+const AUTO_SUFFIX = " (auto-matched channel; change it in Project Setup)";
+
+/** When the channel post did not happen, tell the delivery's sender directly. */
+async function dmFallback(senderEmail: string, text: string): Promise<boolean> {
+  if (!senderEmail) return false;
+  const ok = await sendSlackDM(senderEmail, text);
+  if (!ok) console.warn("portal Slack DM fallback failed for", senderEmail);
+  return ok;
 }
 
 async function pmMentions(): Promise<ClickUpGroupMember[]> {
@@ -128,15 +138,18 @@ export async function confirmFeedback(input: {
     if (delivery.projectListId) await invalidateLiveFeedback(delivery.projectListId);
   }
 
-  // 3. Slack (best effort).
+  // 3. Slack (best effort). Channel post first; if that is impossible or
+  //    fails, DM the person who sent the delivery so someone still hears.
   let slackChannelId: string | null = null;
   let slackMessageTs: string | null = null;
+  let slackOk = false;
+  const text = slackConfirmText(ctx);
   if (delivery.projectListId) {
     try {
       const ch = await resolveProjectChannel(delivery.projectListId, delivery.projectName, input.clientName);
       if (ch.channelId) {
         slackChannelId = ch.channelId;
-        slackMessageTs = await postChannelMessage(ch.channelId, slackConfirmText(ctx));
+        slackMessageTs = await postChannelMessage(ch.channelId, ch.source === "auto" ? `${text}${AUTO_SUFFIX}` : text);
       } else {
         console.warn(
           "No internal channel mapped for",
@@ -149,6 +162,7 @@ export async function confirmFeedback(input: {
       console.error("Slack confirm side-effect failed", delivery.projectListId, err);
     }
   }
+  slackOk = Boolean(slackMessageTs) || (await dmFallback(delivery.senderEmail, text));
 
   // 4. Attach the Slack pointer so undo can reply in the thread.
   if (slackChannelId) {
@@ -158,7 +172,6 @@ export async function confirmFeedback(input: {
     });
   }
 
-  const slackOk = Boolean(slackMessageTs);
   console.info(
     "[portal-confirm]",
     JSON.stringify({
@@ -219,12 +232,14 @@ export async function undoFeedback(input: {
   }
 
   let slackOk = false;
+  const text = slackUndoText(ctx);
   if (conf.slackChannelId) {
-    const ts = await postChannelMessage(conf.slackChannelId, slackUndoText(ctx), {
+    const ts = await postChannelMessage(conf.slackChannelId, text, {
       threadTs: conf.slackMessageTs ?? undefined,
     });
     slackOk = Boolean(ts);
   }
+  if (!slackOk) slackOk = await dmFallback(conf.delivery.senderEmail, text);
 
   await prisma.feedbackConfirmation.update({ where: { id: conf.id }, data: { undoneAt: new Date() } });
   console.info(

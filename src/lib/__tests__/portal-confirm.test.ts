@@ -129,6 +129,50 @@ describe("confirmFeedback", () => {
     });
   });
 
+  it("DMs the sender when the channel post fails", async () => {
+    vi.mocked(postChannelMessage).mockResolvedValue(null);
+    const r = await confirmFeedback(input);
+    expect(sendSlackDM).toHaveBeenCalledWith("pm@consume-media.com", expect.stringContaining("*Acme* confirmed"));
+    expect(r.slackOk).toBe(true);
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledWith({
+      where: { id: "conf-1" },
+      data: { slackChannelId: "C1", slackMessageTs: null },
+    });
+  });
+
+  it("DMs the sender when no internal channel is mapped", async () => {
+    vi.mocked(resolveProjectChannel).mockResolvedValue({
+      channelId: null,
+      channelName: null,
+      source: "none",
+      autoMatched: false,
+      suggestions: [],
+    });
+    vi.mocked(sendSlackDM).mockResolvedValue(false);
+    const r = await confirmFeedback(input);
+    expect(postChannelMessage).not.toHaveBeenCalled();
+    expect(sendSlackDM).toHaveBeenCalledTimes(1);
+    expect(r.slackOk).toBe(false);
+  });
+
+  it("flags an auto-matched channel in the first post", async () => {
+    vi.mocked(resolveProjectChannel).mockResolvedValue({
+      channelId: "C9",
+      channelName: "acme-launch-video",
+      source: "auto",
+      autoMatched: true,
+      suggestions: [],
+    });
+    await confirmFeedback(input);
+    const text = vi.mocked(postChannelMessage).mock.calls[0][1];
+    expect(text.endsWith(" (auto-matched channel; change it in Project Setup)")).toBe(true);
+  });
+
+  it("does not add the auto suffix for a confirmed mapping", async () => {
+    await confirmFeedback(input);
+    expect(vi.mocked(postChannelMessage).mock.calls[0][1]).not.toContain("auto-matched");
+  });
+
   it("404s when the delivery is not in this client's folder", async () => {
     vi.mocked(prisma.delivery.findFirst).mockResolvedValue(null);
     await expect(confirmFeedback(input)).rejects.toBeInstanceOf(PortalConfirmError);
@@ -199,9 +243,28 @@ describe("undoFeedback", () => {
     expect(postChannelMessage).not.toHaveBeenCalled();
   });
 
+  it("DMs the sender when the thread reply fails", async () => {
+    vi.mocked(postChannelMessage).mockResolvedValue(null);
+    const r = await undoFeedback(undoInput);
+    expect(sendSlackDM).toHaveBeenCalledWith("pm@consume-media.com", expect.stringContaining("reopened feedback"));
+    expect(r.slackOk).toBe(true);
+  });
+
+  it("DMs the sender when the confirmation had no channel", async () => {
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({
+      ...conf,
+      slackChannelId: null,
+      slackMessageTs: null,
+    } as never);
+    await undoFeedback(undoInput);
+    expect(postChannelMessage).not.toHaveBeenCalled();
+    expect(sendSlackDM).toHaveBeenCalledTimes(1);
+  });
+
   it("a failed comment or Slack reply stays best effort", async () => {
     vi.mocked(createTaskComment).mockRejectedValue(new Error("boom"));
     vi.mocked(postChannelMessage).mockResolvedValue(null);
+    vi.mocked(sendSlackDM).mockResolvedValue(false);
     const r = await undoFeedback(undoInput);
     expect(prisma.feedbackConfirmation.update).toHaveBeenCalledTimes(1);
     expect(r.clickupOk).toBe(false);
