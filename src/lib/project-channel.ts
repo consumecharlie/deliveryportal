@@ -1,8 +1,9 @@
 /**
  * Which internal Slack channel gets the "client confirmed feedback" note for a
- * project. A PM-confirmed mapping wins; otherwise crawl Slack, rank by project
- * name, and auto-select only a confident top match (persisted as autoMatched
- * so a PM can see and override it in Project Setup).
+ * project. An existing mapping (PM-confirmed or earlier auto-match) wins;
+ * otherwise crawl Slack, rank by project name, and auto-select only a
+ * confident top match. The confirm flow persists that match as autoMatched so
+ * a PM can see and override it in Project Setup.
  */
 import { prisma } from "@/lib/db";
 import { listVisibleChannels } from "@/lib/slack-audit";
@@ -24,31 +25,43 @@ export interface ProjectChannelResolution {
 
 const MAX_SUGGESTIONS = 5;
 
+/** Crawl Slack and rank internal (non-shared) channels for a project. Never writes. */
+export async function rankProjectChannels(
+  projectName: string,
+  clientName: string
+): Promise<RankedInternalChannel[]> {
+  const channels = await listVisibleChannels();
+  return rankInternalChannels(
+    projectName,
+    clientName,
+    channels.map((c) => ({ id: c.id, name: c.name, isShared: c.isShared, isMember: c.isMember }))
+  ).slice(0, MAX_SUGGESTIONS);
+}
+
+/**
+ * @param opts.persist Save a confident auto-match as a ProjectChannel row.
+ *   Only the confirm flow does this; admin reads must stay side-effect free.
+ */
 export async function resolveProjectChannel(
   projectListId: string,
   projectName: string,
   clientName: string,
-  opts: { dryRun?: boolean } = {}
+  opts: { persist?: boolean } = {}
 ): Promise<ProjectChannelResolution> {
   const existing = await prisma.projectChannel.findUnique({ where: { projectListId } });
   if (existing) {
     return {
       channelId: existing.channelId,
       channelName: existing.channelName,
-      source: "confirmed",
+      source: existing.autoMatched ? "auto" : "confirmed",
       autoMatched: existing.autoMatched,
       suggestions: [],
     };
   }
-  const channels = await listVisibleChannels();
-  const ranked = rankInternalChannels(
-    projectName,
-    clientName,
-    channels.map((c) => ({ id: c.id, name: c.name, isShared: c.isShared, isMember: c.isMember }))
-  ).slice(0, MAX_SUGGESTIONS);
+  const ranked = await rankProjectChannels(projectName, clientName);
   const top = pickConfident(ranked);
   if (top) {
-    if (!opts.dryRun) {
+    if (opts.persist) {
       await prisma.projectChannel.create({
         data: {
           projectListId,

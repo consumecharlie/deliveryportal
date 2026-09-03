@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserEmail } from "@/lib/get-session-user";
-import { resolveProjectChannel } from "@/lib/project-channel";
+import { resolveProjectChannel, rankProjectChannels } from "@/lib/project-channel";
 import { getChannelMembership, joinChannel } from "@/lib/slack-audit";
 
 /**
@@ -9,7 +9,7 @@ import { getChannelMembership, joinChannel } from "@/lib/slack-audit";
  *
  * GET  /api/settings/project-channel                       all mappings
  * GET  /api/settings/project-channel?listId=&projectName=&clientName=
- *                                                          resolution + suggestions
+ *                                                          resolution + suggestions (no writes)
  * PUT  /api/settings/project-channel { listId, channelId, channelName }
  * DELETE /api/settings/project-channel?listId=
  */
@@ -25,8 +25,14 @@ export async function GET(req: Request) {
     }
     const projectName = url.searchParams.get("projectName")?.trim() ?? "";
     const clientName = url.searchParams.get("clientName")?.trim() ?? "";
+    // Read-only: never persists an auto-match, and always offers ranked
+    // alternatives even when a mapping exists (resolve skips the crawl then).
     const resolution = await resolveProjectChannel(listId, projectName, clientName);
-    return NextResponse.json(resolution);
+    const suggestions =
+      resolution.suggestions.length > 0
+        ? resolution.suggestions
+        : await rankProjectChannels(projectName, clientName);
+    return NextResponse.json({ ...resolution, suggestions });
   } catch (error) {
     console.error("Failed to load project channel:", error);
     return NextResponse.json({ error: "Failed to load project channel" }, { status: 500 });

@@ -146,7 +146,9 @@ export async function confirmFeedback(input: {
   const text = slackConfirmText(ctx);
   if (delivery.projectListId) {
     try {
-      const ch = await resolveProjectChannel(delivery.projectListId, delivery.projectName, input.clientName);
+      const ch = await resolveProjectChannel(delivery.projectListId, delivery.projectName, input.clientName, {
+        persist: true,
+      });
       if (ch.channelId) {
         slackChannelId = ch.channelId;
         slackMessageTs = await postChannelMessage(ch.channelId, ch.source === "auto" ? `${text}${AUTO_SUFFIX}` : text);

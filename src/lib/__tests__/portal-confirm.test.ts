@@ -106,6 +106,7 @@ describe("confirmFeedback", () => {
 
   it("closes the task, posts to the channel, then stores the Slack pointer on the row", async () => {
     const r = await confirmFeedback(input);
+    expect(resolveProjectChannel).toHaveBeenCalledWith("list-1", "Acme Launch Video", "Acme", { persist: true });
     expect(updateTaskStatus).toHaveBeenCalledWith("task-1", "complete");
     expect(createTaskComment).toHaveBeenCalledTimes(1);
     expect(postChannelMessage).toHaveBeenCalledWith("C1", expect.stringContaining("*Acme* confirmed"));
