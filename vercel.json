@@ -1,6 +1,16 @@
 {
   "crons": [
-    { "path": "/api/cron/scheduled-sends", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/keep-warm", "schedule": "*/4 * * * *" }
+    {
+      "path": "/api/cron/scheduled-sends",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/keep-warm",
+      "schedule": "*/4 * * * *"
+    },
+    {
+      "path": "/api/cron/portal-reminders",
+      "schedule": "0 13 * * 1-5"
+    }
   ]
 }

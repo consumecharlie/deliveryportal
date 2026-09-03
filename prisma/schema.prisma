@@ -208,3 +208,27 @@ model PortalView {
   @@index([accessId, viewedAt])
   @@index([deliveryId, viewedAt])
 }
+
+/** Idempotency log for client reminders and internal overdue nudges. */
+model PortalReminder {
+  id         String   @id @default(cuid())
+  deliveryId String
+  kind       String   // "tomorrow" | "today" | "overdue"
+  sentOn     String   // Eastern calendar date "YYYY-MM-DD"
+  sentAt     DateTime @default(now())
+
+  @@unique([deliveryId, kind, sentOn])
+}
+
+/** Messages clients send through the portal reach-out form. Persisted first so nothing is lost if Slack fails. */
+model PortalMessage {
+  id            String   @id @default(cuid())
+  accessId      String
+  projectListId String?
+  name          String
+  message       String   @db.Text
+  createdAt     DateTime @default(now())
+  slackOk       Boolean  @default(false)
+
+  @@index([accessId, createdAt])
+}

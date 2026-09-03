@@ -43,6 +43,8 @@ Create a `.env.local` file in the project root:
 | `SLACK_BOT_TOKEN` | Slack bot OAuth token (`xoxb-...`) — needs `channels:read`, `users:read`, `chat:write` scopes | Yes |
 | `N8N_API_URL` | n8n cloud instance URL | Yes |
 | `N8N_API_KEY` | n8n API key for workflow triggers | Yes |
+| `N8N_PORTAL_REMINDER_WEBHOOK_URL` | n8n webhook that emails client feedback reminders (`/api/cron/portal-reminders`); reminders are skipped until set | For portal reminders |
+| `CRON_SECRET` | Bearer secret Vercel cron sends to `/api/cron/*` routes | For crons |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | For auth |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | For auth |
 | `NEXTAUTH_SECRET` | Random secret for NextAuth session encryption | For auth |
