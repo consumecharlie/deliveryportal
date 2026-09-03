@@ -13,12 +13,13 @@ import {
 } from "@/lib/portal-timeline";
 import { getLiveFeedback, type LiveFeedbackMap } from "@/lib/portal-live";
 import {
-  resolveDeadline,
-  deadlineState,
-  type DeadlineState,
-  type DeadlineSource,
-} from "@/lib/portal-deadline";
-import { formatFeedbackDeadline } from "@/lib/feedback-deadline";
+  decideFeedbackStatus,
+  newestConfirmation,
+  type FeedbackStatus,
+  type ConfirmationRow,
+} from "@/lib/portal-status";
+
+export type { FeedbackStatus } from "@/lib/portal-status";
 
 export interface PortalAccessInfo {
   id: string;
@@ -39,26 +40,6 @@ export async function resolveAccess(token: string): Promise<PortalAccessInfo | n
   };
 }
 
-export interface FeedbackStatus {
-  /** "awaiting" = client owes feedback; "confirmed" = client pressed the button
-   *  (or the live feedback task is complete); "none" = nothing to do (older version). */
-  kind: "awaiting" | "confirmed" | "none";
-  dueMs: number;
-  /** "Tue, Sep 9" (+ ", 12:00 PM ET" when a real time is set). */
-  dueLabel: string;
-  source: DeadlineSource;
-  /** True when the date is our default window, not a deadline anyone set. */
-  dueIsEstimate: boolean;
-  state: DeadlineState;
-  feedbackDeadlineTaskId: string | null;
-  confirmedAt: Date | null;
-  confirmedByName: string | null;
-}
-
-export interface PortalEntry extends TimelineEntry {
-  feedback: FeedbackStatus | null;
-}
-
 export interface PortalActionItem {
   entry: TimelineEntry;
   projectName: string;
@@ -73,18 +54,24 @@ export interface PortalData {
   actionItems: PortalActionItem[];
 }
 
-/** Without a live feedback task, stop asking for feedback this long after send. */
-const STALE_AFTER_MS = 30 * 86_400_000;
-
 /** Newest confirmation per delivery (undone ones included, so undo wins). */
 async function latestConfirmations(deliveryIds: string[]) {
-  if (deliveryIds.length === 0) return new Map<string, never>();
+  const out = new Map<string, ConfirmationRow>();
+  if (deliveryIds.length === 0) return out;
   const rows = await prisma.feedbackConfirmation.findMany({
     where: { deliveryId: { in: deliveryIds } },
-    orderBy: { confirmedAt: "desc" },
+    select: { deliveryId: true, confirmedAt: true, undoneAt: true, confirmedByName: true },
   });
-  const out = new Map<string, (typeof rows)[number]>();
-  for (const r of rows) if (!out.has(r.deliveryId)) out.set(r.deliveryId, r);
+  const byDelivery = new Map<string, ConfirmationRow[]>();
+  for (const r of rows) {
+    const arr = byDelivery.get(r.deliveryId) ?? [];
+    arr.push(r);
+    byDelivery.set(r.deliveryId, arr);
+  }
+  for (const [id, list] of byDelivery) {
+    const newest = newestConfirmation(list);
+    if (newest) out.set(id, newest);
+  }
   return out;
 }
 
@@ -138,29 +125,13 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
 
     for (const group of project.deliverables) {
       const e = group.latest;
-      const task = live[e.deliverableType] ?? null;
-      const conf = confirmations.get(e.id);
-      const activeConf = conf && !conf.undoneAt ? conf : null;
-      const confirmed = Boolean(activeConf) || Boolean(task && !task.isOpen);
-      const { dueMs, source } = resolveDeadline({
-        liveDueMs: task?.dueMs ?? null,
+      const s = decideFeedbackStatus({
+        task: live[e.deliverableType] ?? null,
+        confirmation: confirmations.get(e.id) ?? null,
         sentAt: e.sentAt,
         feedbackWindows: e.feedbackWindows,
+        nowMs: now,
       });
-      const fmt = formatFeedbackDeadline(dueMs);
-      const s: FeedbackStatus = {
-        kind: confirmed ? "confirmed" : "awaiting",
-        dueMs,
-        source,
-        dueIsEstimate: source === "default",
-        dueLabel: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
-        state: deadlineState(dueMs, now),
-        feedbackDeadlineTaskId: task?.taskId ?? null,
-        confirmedAt: activeConf?.confirmedAt ?? null,
-        confirmedByName: activeConf?.confirmedByName ?? null,
-      };
-      // Without a live feedback task, stop asking 30 days after send.
-      if (!task && !confirmed && now - e.sentAt.getTime() > STALE_AFTER_MS) s.kind = "none";
       status[e.id] = s;
       if (s.kind === "awaiting") actionItems.push({ entry: e, projectName: project.name, status: s });
     }
