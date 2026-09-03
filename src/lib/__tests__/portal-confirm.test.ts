@@ -24,7 +24,7 @@ import { prisma } from "@/lib/db";
 import { updateTaskStatus, createTaskComment, getUserGroupMembers } from "@/lib/clickup";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
 import { resolveProjectChannel } from "@/lib/project-channel";
-import { confirmFeedback, undoFeedback, PortalConfirmError } from "@/lib/portal-confirm";
+import { confirmFeedback, undoFeedback, lastFeedbackActivity, PortalConfirmError } from "@/lib/portal-confirm";
 
 const delivery = {
   id: "d1",
@@ -269,5 +269,29 @@ describe("undoFeedback", () => {
     const r = await undoFeedback(undoInput);
     expect(prisma.feedbackConfirmation.update).toHaveBeenCalledTimes(1);
     expect(r.clickupOk).toBe(false);
+  });
+});
+
+describe("lastFeedbackActivity", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("is null with no rows", async () => {
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(null);
+    await expect(lastFeedbackActivity("d1", "folder-1")).resolves.toBeNull();
+    const where = vi.mocked(prisma.feedbackConfirmation.findFirst).mock.calls[0][0]?.where;
+    expect(where).toEqual({ deliveryId: "d1", delivery: { clientFolderId: "folder-1" } });
+  });
+
+  it("picks undoneAt when it is newer than confirmedAt", async () => {
+    const confirmedAt = new Date("2026-09-03T12:00:00Z");
+    const undoneAt = new Date("2026-09-03T12:05:00Z");
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({ confirmedAt, undoneAt } as never);
+    await expect(lastFeedbackActivity("d1", "folder-1")).resolves.toEqual(undoneAt);
+  });
+
+  it("picks confirmedAt when the row is still active", async () => {
+    const confirmedAt = new Date("2026-09-03T12:00:00Z");
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({ confirmedAt, undoneAt: null } as never);
+    await expect(lastFeedbackActivity("d1", "folder-1")).resolves.toEqual(confirmedAt);
   });
 });
