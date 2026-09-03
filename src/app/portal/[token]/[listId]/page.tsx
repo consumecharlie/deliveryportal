@@ -7,6 +7,7 @@ import { PortalHeader } from "@/components/portal/portal-header";
 import { ActionItems } from "@/components/portal/action-items";
 import { DeliverableCard } from "@/components/portal/deliverable-card";
 import { toCardGroup, toCardStatus } from "@/lib/portal-view-model";
+import { ReachOut } from "@/components/portal/reach-out";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function ProjectPortalPage({
           ))}
         </div>
       </section>
+      <ReachOut token={token} listId={listId} />
     </>
   );
 }
