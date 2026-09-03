@@ -7,11 +7,14 @@ import { prisma } from "@/lib/db";
 import { isValidPortalToken } from "@/lib/portal-token";
 import {
   buildTimeline,
+  dropReplaced,
   type Timeline,
   type TimelineEntry,
   type MentionNames,
 } from "@/lib/portal-timeline";
 import { getLiveFeedbackMany } from "@/lib/portal-live";
+import { buildPortalPage, type PortalPageRow } from "@/lib/portal-page";
+import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
   decideFeedbackStatus,
   newestConfirmation,
@@ -73,7 +76,11 @@ async function latestConfirmations(deliveryIds: string[]) {
   return out;
 }
 
-export async function loadPortal(access: PortalAccessInfo, onlyListId?: string): Promise<PortalData> {
+/**
+ * The token's deliveries (always scoped by clientFolderId), newest first,
+ * shaped for the pure builders. `onlyListId` is a filter inside the folder.
+ */
+async function selectDeliveries(access: PortalAccessInfo, onlyListId?: string): Promise<PortalPageRow[]> {
   const rows = await prisma.delivery.findMany({
     where: {
       clientFolderId: access.clientFolderId,
@@ -82,27 +89,60 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
     orderBy: { sentAt: "desc" },
     include: { links: true },
   });
+  return rows.map((r) => ({
+    id: r.id,
+    taskId: r.taskId,
+    projectListId: r.projectListId,
+    projectName: r.projectName,
+    deliverableType: r.deliverableType,
+    department: r.department,
+    sentAt: r.sentAt,
+    emailContent: r.emailContent,
+    slackContent: r.slackContent,
+    replacesDeliveryId: r.replacesDeliveryId,
+    links: r.links.map((l) => ({ url: l.url, label: l.label, variableName: l.variableName })),
+    feedbackWindows: r.feedbackWindows ?? "",
+    parentTaskId: r.parentTaskId,
+    parentTaskName: r.parentTaskName,
+    shareTaskName: r.shareTaskName,
+  }));
+}
 
-  // Names for mention stripping: we do not store Slack ids and names on the
-  // delivery, so v1 maps nothing and every mention renders as "you".
-  const names: MentionNames = {};
+// Names for mention stripping: we do not store Slack ids and names on the
+// delivery, so v1 maps nothing and every mention renders as "you".
+const MENTION_NAMES: MentionNames = {};
 
-  const timeline = buildTimeline(
-    rows.map((r) => ({
-      id: r.id,
-      projectListId: r.projectListId,
-      projectName: r.projectName,
-      deliverableType: r.deliverableType,
-      department: r.department,
-      sentAt: r.sentAt,
-      emailContent: r.emailContent,
-      slackContent: r.slackContent,
-      replacesDeliveryId: r.replacesDeliveryId,
-      links: r.links.map((l) => ({ url: l.url, label: l.label, variableName: l.variableName })),
-      feedbackWindows: r.feedbackWindows ?? "",
-    })),
-    names
-  );
+/**
+ * The redesigned portal page: every project for the client (so the header
+ * counts are client-wide), narrowed to one project's section when
+ * `focusListId` is given. Live ClickUp state comes from the per-list cache.
+ */
+export async function loadPortalPage(
+  access: PortalAccessInfo,
+  focusListId?: string
+): Promise<PortalPageModel> {
+  const rows = await selectDeliveries(access);
+  const current = dropReplaced(rows);
+  const [confirmations, live] = await Promise.all([
+    latestConfirmations(current.map((r) => r.id)),
+    getLiveFeedbackMany(current.map((r) => r.projectListId ?? "")),
+  ]);
+  return buildPortalPage({
+    token: access.token,
+    clientName: access.clientName,
+    focusListId: focusListId ?? null,
+    nowMs: Date.now(),
+    rows,
+    live,
+    confirmations,
+    names: MENTION_NAMES,
+  });
+}
+
+export async function loadPortal(access: PortalAccessInfo, onlyListId?: string): Promise<PortalData> {
+  const rows = await selectDeliveries(access, onlyListId);
+  const names = MENTION_NAMES;
+  const timeline = buildTimeline(rows, names);
 
   const latestIds = timeline.projects.flatMap((p) => p.deliverables.map((g) => g.latest.id));
   const confirmations = await latestConfirmations(latestIds);
