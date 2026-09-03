@@ -83,16 +83,16 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="portal-confirm">
       {confirmed ? (
-        <div className="flex items-center gap-3 text-sm">
-          <span className="font-medium text-emerald-700">Feedback confirmed, thank you</span>
+        <div className="portal-confirmed">
+          <span className="portal-confirmed-text">Feedback confirmed, thank you</span>
           {(canUndo || confirmed !== initialConfirmed) && (
             <button
               type="button"
               onClick={openUndo}
               disabled={busy}
-              className="text-neutral-500 underline underline-offset-2 hover:text-neutral-800 disabled:opacity-60"
+              className="portal-link-btn"
             >
               Undo
             </button>
@@ -103,17 +103,21 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
           {busy ? "Saving" : "All feedback is in"}
         </button>
       )}
-      {error && <span className="text-xs text-red-700">{error}</span>}
+      {error && (
+        <span className="portal-error" role="alert">
+          {error}
+        </span>
+      )}
 
       <dialog
         ref={dialogRef}
         aria-labelledby={`undo-${deliveryId}`}
-        className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-6 text-neutral-900 shadow-xl backdrop:bg-neutral-900/40"
+        className="portal-modal"
       >
-        <p id={`undo-${deliveryId}`} className="text-base text-neutral-800">
+        <p id={`undo-${deliveryId}`}>
           {UNDO_WARNING}
         </p>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="portal-modal-actions">
           <button type="button" onClick={closeUndo} disabled={busy} className="portal-btn portal-btn-secondary">
             Keep it confirmed
           </button>
