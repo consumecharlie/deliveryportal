@@ -24,13 +24,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       return json({ error: "Please wait a moment before trying again" }, 429);
     }
     const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
-    const result = await undoFeedback({
+    await undoFeedback({
       clientFolderId: access.clientFolderId,
       clientName: access.clientName,
       deliveryId,
       portalUrl: `${base}/portal/${token}`,
     });
-    return json({ ok: true, ...result });
+    return json({ ok: true });
   } catch (err) {
     if (err instanceof PortalConfirmError) return json({ error: err.message }, err.status);
     console.error("portal undo failed", deliveryId, err);

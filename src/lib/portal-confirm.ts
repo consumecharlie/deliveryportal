@@ -20,6 +20,7 @@ import {
   clickupConfirmComment,
   clickupUndoComment,
   type ConfirmContext,
+  type UndoContext,
 } from "@/lib/portal-confirm-messages";
 
 /** Live-verified 2026-09-03 on Feedback Deadline tasks: open is "waiting on client", closed is "complete". */
@@ -201,13 +202,12 @@ export async function undoFeedback(input: {
   });
   if (!conf) throw new PortalConfirmError("Nothing to undo", 409);
 
-  const ctx: ConfirmContext = {
+  const ctx: UndoContext = {
     clientName: input.clientName,
     projectName: conf.delivery.projectName,
     deliverableType: conf.deliverableType,
     confirmedByName: conf.confirmedByName,
     portalUrl: input.portalUrl,
-    deadlineLabel: "",
   };
 
   let clickupOk = false;

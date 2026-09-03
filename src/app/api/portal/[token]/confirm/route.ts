@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const status = data.status[deliveryId];
     if (!status || status.kind !== "awaiting") return json({ error: "Nothing awaiting feedback" }, 409);
 
-    const result = await confirmFeedback({
+    await confirmFeedback({
       accessId: access.id,
       clientName: access.clientName,
       clientFolderId: access.clientFolderId,
@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       deadlineLabel: status.dueLabel,
       portalUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin}/portal/${token}`,
     });
-    return json({ ok: true, ...result });
+    return json({ ok: true });
   } catch (err) {
     if (err instanceof PortalConfirmError) return json({ error: err.message }, err.status);
     console.error("portal confirm failed", deliveryId, err);

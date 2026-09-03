@@ -1,11 +1,14 @@
 /** Pure message builders for the portal confirm / undo side effects. */
 
-export interface ConfirmContext {
+export interface UndoContext {
   clientName: string;
   projectName: string;
   deliverableType: string;
   confirmedByName: string | null;
   portalUrl: string;
+}
+
+export interface ConfirmContext extends UndoContext {
   deadlineLabel: string;
 }
 
@@ -24,7 +27,7 @@ export function slackConfirmText(c: ConfirmContext): string {
   return `:white_check_mark: *${e(c.clientName)}* confirmed all feedback is in on *${e(c.deliverableType)}* for *${e(c.projectName)}*${who}. Deadline was ${e(c.deadlineLabel)}. <${c.portalUrl}|Open client portal>`;
 }
 
-export function slackUndoText(c: ConfirmContext): string {
+export function slackUndoText(c: UndoContext): string {
   const e = escapeMrkdwn;
   return `:leftwards_arrow_with_hook: *${e(c.clientName)}* reopened feedback on *${e(c.deliverableType)}* for *${e(c.projectName)}*. The feedback window is extended. <${c.portalUrl}|Open client portal>`;
 }

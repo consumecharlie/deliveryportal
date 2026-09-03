@@ -6,6 +6,7 @@
  */
 
 import type { ClickUpTask, ClickUpCustomField } from "./types";
+import { WORKSPACE_ID } from "./custom-field-ids";
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
@@ -406,7 +407,7 @@ export interface ClickUpGroupMember {
 
 /** Members of a workspace user group (empty when the group is not found). */
 export async function getUserGroupMembers(groupId: string): Promise<ClickUpGroupMember[]> {
-  const teamId = process.env.CLICKUP_WORKSPACE_ID ?? "9010023164";
+  const teamId = process.env.CLICKUP_WORKSPACE_ID ?? WORKSPACE_ID;
   const res = await clickupFetch<{
     groups?: Array<{ id: string; members?: Array<{ id: number; username: string }> }>;
   }>(`/group?team_id=${teamId}`);
@@ -458,9 +459,10 @@ function isClickUp4xx(err: unknown): boolean {
 /**
  * Post a task comment that @mentions users.
  *
- * Tries the structured `comment` array first (live-validated 2026-09-03:
- * the tag chunks come back as `type: "tag"` with the user object, so they
- * render as mention chips). If ClickUp rejects that body with a 4xx, retries
+ * Tries the structured `comment` array first (live-validated 2026-09-03 by
+ * scripts/clickup-comment-probe.ts: the tag chunks come back as `type: "tag"`
+ * with the user object, so they render as mention chips). If ClickUp rejects
+ * that body with a 4xx, retries
  * with `comment_text` built as `@<username>` per member and `assignee` set to
  * the first member. Logs which path succeeded.
  */
@@ -485,13 +487,4 @@ export async function createTaskComment(
   });
   console.log("createTaskComment: comment_text fallback accepted", taskId, r.id);
   return r;
-}
-
-/** Comments on a task, oldest first as returned by ClickUp. */
-export async function getTaskComments(taskId: string): Promise<{ comments: Array<Record<string, unknown>> }> {
-  return clickupFetch<{ comments: Array<Record<string, unknown>> }>(`/task/${taskId}/comment`);
-}
-
-export async function deleteTask(taskId: string): Promise<void> {
-  await clickupFetch(`/task/${taskId}`, { method: "DELETE" });
 }
