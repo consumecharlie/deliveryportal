@@ -24,7 +24,7 @@ import { prisma } from "@/lib/db";
 import { updateTaskStatus, createTaskComment, getUserGroupMembers } from "@/lib/clickup";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
 import { resolveProjectChannel } from "@/lib/project-channel";
-import { confirmFeedback, PortalConfirmError } from "@/lib/portal-confirm";
+import { confirmFeedback, undoFeedback, PortalConfirmError } from "@/lib/portal-confirm";
 
 const delivery = {
   id: "d1",
@@ -133,5 +133,77 @@ describe("confirmFeedback", () => {
     vi.mocked(prisma.delivery.findFirst).mockResolvedValue(null);
     await expect(confirmFeedback(input)).rejects.toBeInstanceOf(PortalConfirmError);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("undoFeedback", () => {
+  const conf = {
+    id: "conf-1",
+    deliveryId: "d1",
+    projectListId: "list-1",
+    deliverableType: "Edit V1",
+    feedbackDeadlineTaskId: "task-1",
+    confirmedByName: null,
+    slackChannelId: "C1",
+    slackMessageTs: "171.1",
+    delivery,
+  };
+  const undoInput = {
+    clientFolderId: "folder-1",
+    clientName: "Acme",
+    deliveryId: "d1",
+    portalUrl: "https://portal.example.com/portal/abc",
+  };
+
+  beforeEach(() => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(conf as never);
+    vi.mocked(prisma.feedbackConfirmation.update).mockResolvedValue(conf as never);
+    vi.mocked(getUserGroupMembers).mockResolvedValue([{ id: 1, username: "PM" }]);
+    vi.mocked(updateTaskStatus).mockResolvedValue(undefined);
+    vi.mocked(createTaskComment).mockResolvedValue({ id: "c1" });
+    vi.mocked(postChannelMessage).mockResolvedValue("171.2");
+    vi.mocked(sendSlackDM).mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it("reopens the task, replies in the thread and marks the row undone", async () => {
+    const r = await undoFeedback(undoInput);
+    expect(updateTaskStatus).toHaveBeenCalledWith("task-1", "waiting on client");
+    expect(postChannelMessage).toHaveBeenCalledWith("C1", expect.stringContaining("reopened feedback"), {
+      threadTs: "171.1",
+    });
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledWith({
+      where: { id: "conf-1" },
+      data: { undoneAt: expect.any(Date) },
+    });
+    expect(r).toEqual({ id: "conf-1", clickupOk: true, slackOk: true });
+  });
+
+  it("409s when there is no active confirmation", async () => {
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(null);
+    await expect(undoFeedback(undoInput)).rejects.toMatchObject({ status: 409, message: "Nothing to undo" });
+  });
+
+  it("does not strand the client: a failed status reopen throws 502 and leaves the row active", async () => {
+    vi.mocked(updateTaskStatus).mockRejectedValue(new Error("ClickUp API error 500"));
+    await expect(undoFeedback(undoInput)).rejects.toMatchObject({ status: 502 });
+    expect(prisma.feedbackConfirmation.update).not.toHaveBeenCalled();
+    expect(createTaskComment).not.toHaveBeenCalled();
+    expect(postChannelMessage).not.toHaveBeenCalled();
+  });
+
+  it("a failed comment or Slack reply stays best effort", async () => {
+    vi.mocked(createTaskComment).mockRejectedValue(new Error("boom"));
+    vi.mocked(postChannelMessage).mockResolvedValue(null);
+    const r = await undoFeedback(undoInput);
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledTimes(1);
+    expect(r.clickupOk).toBe(false);
   });
 });

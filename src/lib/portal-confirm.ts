@@ -197,15 +197,23 @@ export async function undoFeedback(input: {
 
   let clickupOk = false;
   if (conf.feedbackDeadlineTaskId) {
+    // Reopening the task is the one side effect undo cannot skip: if the
+    // portal says "awaiting" while ClickUp still says complete, nobody is
+    // waiting for the client's feedback. Keep the row active and let them retry.
     try {
       await updateTaskStatus(conf.feedbackDeadlineTaskId, FD_OPEN_STATUS);
+    } catch (err) {
+      console.error("ClickUp undo status reopen failed", conf.feedbackDeadlineTaskId, err);
+      throw new PortalConfirmError("Could not reopen the feedback window, please try again", 502);
+    }
+    try {
       await createTaskComment(conf.feedbackDeadlineTaskId, {
         text: clickupUndoComment(),
         mentions: await pmMentions(),
       });
       clickupOk = true;
     } catch (err) {
-      console.error("ClickUp undo side-effect failed", conf.feedbackDeadlineTaskId, err);
+      console.error("ClickUp undo comment failed", conf.feedbackDeadlineTaskId, err);
     }
     if (conf.projectListId) await invalidateLiveFeedback(conf.projectListId);
   }
