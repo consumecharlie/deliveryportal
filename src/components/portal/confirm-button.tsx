@@ -59,6 +59,18 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deliveryId }),
       });
+      if (res.status === 409) {
+        // The state moved on (someone else confirmed, the team closed it,
+        // or it was already undone): pick up the server's view.
+        if (action === "undo") closeUndo();
+        setError("Already updated");
+        router.refresh();
+        return;
+      }
+      if (res.status === 429) {
+        setError("Please wait a moment");
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setConfirmed(action === "confirm");
       if (action === "undo") closeUndo();
