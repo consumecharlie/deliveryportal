@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deliverableTitle, variantLabel, milestoneLabel, linkLabel } from "@/lib/portal-labels";
+import { deliverableTitle, variantLabel, variantStem, deliverableKey, milestoneLabel, linkLabel } from "@/lib/portal-labels";
 
 describe("deliverableTitle", () => {
   it("keeps a parent name with no department prefix", () => {
@@ -60,6 +60,32 @@ describe("variantLabel", () => {
   it("leaves names without the Share wrapper as they are", () => {
     expect(variantLabel("Production Schedule", "Production Schedule")).toBeNull();
     expect(variantLabel("Phase 3 Final Deliverables", "Final Delivery")).toBe("Phase 3 Final Deliverables");
+  });
+});
+
+describe("variantStem / deliverableKey", () => {
+  it("separates distinct deliverables under one parent and merges versions of one deliverable", () => {
+    expect(variantStem("Share Video Edit01 with Client", "Edit V1")).toBe("video");
+    expect(variantStem("Share Snippets Edit01 with Client", "Edit V1")).toBe("snippets");
+    expect(variantStem("Share Edit V1 with Client", "Edit V1")).toBe("");
+    expect(variantStem("Share Edit V2 with Client", "Edit V2")).toBe("");
+    expect(variantStem("Share Potential Master with Client", "Potential Master")).toBe("");
+    expect(variantStem("Share Final Deliverables with Client", "Final Delivery")).toBe("");
+    expect(variantStem("Share Spinoff Edit V1 with Client", "Edit V1")).toBe("spinoff");
+    expect(variantStem("Share Final Spinoff Deliverables with Client", "Final Delivery")).toBe("spinoff");
+    expect(variantStem("Share Graphics V2 with Client", "Storyboards V2")).toBe("graphics");
+    expect(variantStem("Share Animatic + Graphics V1 with Client", "Storyboards V1 + Loom & Animatic")).toBe("graphics");
+    expect(variantStem("Share Final AV Script with Client", "AV Script Final")).toBe("");
+    expect(variantStem(null, "Edit V1")).toBe("");
+  });
+
+  it("keys by parent (plus stem) or by family without a parent", () => {
+    expect(deliverableKey({ parentTaskId: "P19", shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:video");
+    expect(deliverableKey({ parentTaskId: "P19", shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:snippets");
+    expect(deliverableKey({ parentTaskId: "P1", shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("P1");
+    expect(deliverableKey({ parentTaskId: "P1", shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery" })).toBe("P1");
+    expect(deliverableKey({ parentTaskId: null, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("family:Edit");
+    expect(deliverableKey({ parentTaskId: null, shareTaskName: null, deliverableType: "Potential Master" })).toBe("family:Edit");
   });
 });
 

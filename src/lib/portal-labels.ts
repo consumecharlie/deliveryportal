@@ -43,6 +43,43 @@ export function variantLabel(shareTaskName: string | null, deliverableType: stri
   return stripped;
 }
 
+const VERSION_TOKEN =
+  /^(?:v\d+|\d+|edit\d*|final|finals|deliverable|deliverables|delivery|potential|master|masters|&|\+|and|with|of|-|\/)$/i;
+
+function words(s: string): string[] {
+  return collapse(s).toLowerCase().split(" ").filter(Boolean);
+}
+
+/**
+ * What is left of the variant once the deliverable type's own words and
+ * version markers are removed: "Video Edit01" -> "video", "Snippets Edit01"
+ * -> "snippets", "Final Deliverables" -> "". Two share tasks under the same
+ * parent are versions of one deliverable when their stems match, and
+ * different deliverables when they differ.
+ */
+export function variantStem(shareTaskName: string | null, deliverableType: string): string {
+  const variant = variantLabel(shareTaskName, deliverableType);
+  if (!variant) return "";
+  const typeWords = new Set([...words(deliverableType), ...words(extractFamilyName(deliverableType))]);
+  return words(variant)
+    .filter((w) => !typeWords.has(w) && !VERSION_TOKEN.test(w))
+    .join(" ");
+}
+
+/**
+ * Grouping key for a delivery: the parent task, refined by the variant stem
+ * when the share task name carries one; a family key when no parent is known.
+ */
+export function deliverableKey(row: {
+  parentTaskId: string | null;
+  shareTaskName: string | null;
+  deliverableType: string;
+}): string {
+  if (!row.parentTaskId) return `family:${extractFamilyName(row.deliverableType)}`;
+  const stem = variantStem(row.shareTaskName, row.deliverableType);
+  return stem ? `${row.parentTaskId}:${stem}` : row.parentTaskId;
+}
+
 /** Label under a roadmap pellet: the variant when it exists, else the type. */
 export function milestoneLabel(shareTaskName: string | null, deliverableType: string): string {
   return variantLabel(shareTaskName, deliverableType) ?? deliverableType;

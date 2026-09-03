@@ -52,17 +52,34 @@ export function stripMentions(md: string, names: MentionNames): string {
     .replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_, id) => names[id] ?? "you");
 }
 
+/** Resends replace their originals: drop every row another row points at. */
+export function dropReplaced<T extends { id: string; replacesDeliveryId: string | null }>(rows: T[]): T[] {
+  const replaced = new Set(rows.map((r) => r.replacesDeliveryId).filter(Boolean) as string[]);
+  return rows.filter((r) => !replaced.has(r.id));
+}
+
+/**
+ * Client-safe body for a row. The send route stores the merged email body
+ * even for Slack sends, so slackContent is only a fallback.
+ */
+export function clientBody(
+  row: { emailContent: string; slackContent: string | null },
+  names: MentionNames
+): string {
+  return stripMentions(row.emailContent || row.slackContent || "", names);
+}
+
+/** Newest first; ties broken by id so the order is stable. */
+export function bySentAtDesc<T extends { id: string; sentAt: Date }>(a: T, b: T): number {
+  return b.sentAt.getTime() - a.sentAt.getTime() || a.id.localeCompare(b.id);
+}
+
 export function buildTimeline(rows: TimelineDelivery[], names: MentionNames): Timeline {
   // 1. Resends replace originals.
-  const replaced = new Set(rows.map((r) => r.replacesDeliveryId).filter(Boolean) as string[]);
-  const live = rows.filter((r) => !replaced.has(r.id));
+  const live = dropReplaced(rows);
 
-  // 2. Client-safe body. The send route stores the merged email body even for
-  // Slack sends, so slackContent is only a fallback.
-  const entries: TimelineEntry[] = live.map((r) => ({
-    ...r,
-    body: stripMentions(r.emailContent || r.slackContent || "", names),
-  }));
+  // 2. Client-safe body.
+  const entries: TimelineEntry[] = live.map((r) => ({ ...r, body: clientBody(r, names) }));
 
   // 3. Group by project, then by deliverable family. Deliveries without a
   // list id group by project name so ad-hoc sends do not all pile into one.
@@ -85,9 +102,7 @@ export function buildTimeline(rows: TimelineDelivery[], names: MentionNames): Ti
     }
     const deliverables: DeliverableGroup[] = [];
     for (const [family, versions] of byFamily) {
-      versions.sort(
-        (a, b) => b.sentAt.getTime() - a.sentAt.getTime() || a.id.localeCompare(b.id)
-      );
+      versions.sort(bySentAtDesc);
       deliverables.push({ family, latest: versions[0], history: versions.slice(1) });
     }
     deliverables.sort(
