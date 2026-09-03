@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import PacmanLoader from "@/components/ui/pacman-loader";
@@ -23,9 +23,11 @@ import { SLACK_EMOJI_MAP } from "@/lib/template-merge";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
-import { ExternalLink, AlertCircle, Mail, MessageSquare, Bookmark, Send } from "lucide-react";
+import { ExternalLink, AlertCircle, Mail, MessageSquare, Bookmark, Send, Eye, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { toast } from "sonner";
+import type { ClientFeedback } from "@/lib/client-feedback-state";
 
 interface DeliveryLink {
   id: string;
@@ -57,6 +59,15 @@ interface Delivery {
   /** When this delivery is a resend, points to the original Delivery it corrected. */
   replacesDeliveryId: string | null;
   links: DeliveryLink[];
+  /** Newest client confirmation state, or null when never confirmed. */
+  clientFeedback: ClientFeedback | null;
+  /** Number of times this delivery was opened in the client portal. */
+  portalViews: number;
+}
+
+/** Detail endpoint adds the client's portal deep link for this delivery. */
+interface DeliveryDetail extends Delivery {
+  portalUrl: string | null;
 }
 
 interface ClickUpMember {
@@ -84,6 +95,76 @@ function formatDate(dateStr: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatDay(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const pillBase =
+  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap";
+
+/**
+ * Client feedback status pill (Confirmed / Reopened) plus an eye icon with
+ * the portal view count when the delivery has been opened at least once.
+ */
+function ClientFeedbackCell({
+  feedback,
+  views,
+}: {
+  feedback: ClientFeedback | null;
+  views: number;
+}) {
+  let pill: ReactNode;
+  if (feedback?.state === "confirmed") {
+    pill = (
+      <span
+        className={`${pillBase} bg-emerald-500/15 text-emerald-700 dark:text-emerald-400`}
+        title={`Confirmed ${formatDate(feedback.confirmedAt)}`}
+      >
+        Confirmed {formatDay(feedback.confirmedAt)}
+        {feedback.confirmedByName ? ` by ${feedback.confirmedByName}` : ""}
+      </span>
+    );
+  } else if (feedback?.state === "reopened") {
+    pill = (
+      <span
+        className={`${pillBase} bg-amber-500/15 text-amber-700 dark:text-amber-400`}
+        title="The client reopened feedback after confirming"
+      >
+        Reopened
+      </span>
+    );
+  } else {
+    pill = <span className="text-xs text-muted-foreground">-</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      {pill}
+      {views > 0 && (
+        <span
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+          title={`Opened ${views} ${views === 1 ? "time" : "times"} in the client portal`}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          {views}
+        </span>
+      )}
+    </span>
+  );
+}
+
+async function copyPortalUrl(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Portal link copied");
+  } catch {
+    toast.error("Could not copy to clipboard");
+  }
 }
 
 /** Pull Slack user IDs out of `<@UXXXX>` tokens in a slack-mrkdwn body. */
@@ -177,6 +258,23 @@ export function SentTable() {
     if (!selectedDeliveryId || !data?.deliveries) return null;
     return data.deliveries.find((d) => d.id === selectedDeliveryId) ?? null;
   }, [selectedDeliveryId, data]);
+
+  // Detail fetch for the open dialog: the list payload has everything except
+  // the client's portal deep link, which needs a PortalAccess lookup.
+  const { data: detailData } = useQuery<{ delivery: DeliveryDetail }>({
+    queryKey: ["deliveries", selectedDeliveryId],
+    queryFn: async () => {
+      const res = await fetch(`/api/deliveries/${selectedDeliveryId}`);
+      if (!res.ok) throw new Error("Failed to fetch delivery");
+      return res.json();
+    },
+    enabled: !!selectedDeliveryId,
+    staleTime: 60_000,
+  });
+  const portalUrl =
+    detailData?.delivery.id === selectedDeliveryId
+      ? detailData.delivery.portalUrl
+      : null;
 
   // ClickUp workspace members — used to resolve Sent By / Sent As emails
   // to real names and profile pictures.
@@ -407,6 +505,9 @@ export function SentTable() {
               <TableHead className={headerClass} style={headerStyle}>
                 SLACK
               </TableHead>
+              <TableHead className={headerClass} style={headerStyle}>
+                CLIENT FEEDBACK
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -468,6 +569,12 @@ export function SentTable() {
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>
                     )}
+                  </TableCell>
+                  <TableCell className={cellClass}>
+                    <ClientFeedbackCell
+                      feedback={delivery.clientFeedback ?? null}
+                      views={delivery.portalViews ?? 0}
+                    />
                   </TableCell>
                 </TableRow>
               );
@@ -653,6 +760,46 @@ export function SentTable() {
                         <p className="font-medium">
                           {selectedDelivery.emailSubject || "-"}
                         </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          CLIENT FEEDBACK
+                        </p>
+                        <ClientFeedbackCell
+                          feedback={selectedDelivery.clientFeedback ?? null}
+                          views={selectedDelivery.portalViews ?? 0}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-pixel tracking-[0.18em] mb-1" style={{ color: "#6AC387" }}>
+                          PORTAL LINK
+                        </p>
+                        {portalUrl ? (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <a
+                              href={portalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary truncate hover:underline text-xs"
+                              title={portalUrl}
+                            >
+                              {portalUrl.replace(/^https?:\/\//, "")}
+                            </a>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 shrink-0"
+                              onClick={() => void copyPortalUrl(portalUrl)}
+                            >
+                              <Copy className="h-3.5 w-3.5 mr-1" />
+                              Copy
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No active portal link for this client. Create one in Settings.
+                          </p>
+                        )}
                       </div>
                       {selectedDelivery.wasEdited && (
                         <div>

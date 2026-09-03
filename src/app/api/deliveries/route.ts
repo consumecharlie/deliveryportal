@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { deriveClientFeedback } from "@/lib/client-feedback-state";
 
 /**
  * GET /api/deliveries
  *
  * List sent deliveries with optional search/filter/pagination.
  * Query params: search, department, limit, offset
+ *
+ * Each delivery also carries `clientFeedback` (newest FeedbackConfirmation,
+ * or null when the client has never confirmed) and `portalViews` (count of
+ * portal views of that delivery). Two extra queries per page, not per row.
  */
 export async function GET(req: Request) {
   try {
@@ -31,7 +36,7 @@ export async function GET(req: Request) {
       ];
     }
 
-    const [deliveries, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.delivery.findMany({
         where,
         orderBy: { sentAt: "desc" },
@@ -43,6 +48,39 @@ export async function GET(req: Request) {
       }),
       prisma.delivery.count({ where }),
     ]);
+
+    const ids = rows.map((d) => d.id);
+    const [confirmations, views] = ids.length
+      ? await Promise.all([
+          prisma.feedbackConfirmation.findMany({
+            where: { deliveryId: { in: ids } },
+            orderBy: { confirmedAt: "desc" },
+            select: {
+              deliveryId: true,
+              confirmedAt: true,
+              confirmedByName: true,
+              undoneAt: true,
+            },
+          }),
+          prisma.portalView.groupBy({
+            by: ["deliveryId"],
+            where: { deliveryId: { in: ids } },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
+
+    const feedbackById = deriveClientFeedback(confirmations);
+    const viewsById = new Map<string, number>();
+    for (const v of views) {
+      if (v.deliveryId) viewsById.set(v.deliveryId, v._count._all);
+    }
+
+    const deliveries = rows.map((d) => ({
+      ...d,
+      clientFeedback: feedbackById.get(d.id) ?? null,
+      portalViews: viewsById.get(d.id) ?? 0,
+    }));
 
     return NextResponse.json({ deliveries, total });
   } catch (error) {
