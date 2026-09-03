@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   createTask,
+  getList,
   getListFields,
   updateTaskCustomField,
   updateTaskStatus,
@@ -268,6 +269,14 @@ export async function POST(req: Request) {
 
     let deliveryId: string | undefined;
     if (!testMode) {
+      // Client folder for portal grouping. One cheap ClickUp call; non-fatal.
+      let clientFolderId: string | null = null;
+      try {
+        clientFolderId = (await getList(listId)).folder?.id ?? null;
+      } catch (err) {
+        console.warn("Could not resolve client folder for", listId, err);
+      }
+
       try {
         const delivery = await prisma.delivery.create({
           data: {
@@ -289,7 +298,8 @@ export async function POST(req: Request) {
             ),
             sentBy: userEmail,
             projectListId: listId || null,
-            clientFolderId: null,
+            clientFolderId,
+            feedbackWindows: formState.feedbackWindows || null,
           },
         });
         deliveryId = delivery.id;
@@ -304,7 +314,7 @@ export async function POST(req: Request) {
             linkType: "standard",
             variableName: varName,
             projectListId: listId || "",
-            clientFolderId: "",
+            clientFolderId: clientFolderId ?? "",
           }));
 
         // Add extra links
@@ -317,7 +327,7 @@ export async function POST(req: Request) {
               linkType: "extra",
               variableName: null as unknown as string,
               projectListId: listId || "",
-              clientFolderId: "",
+              clientFolderId: clientFolderId ?? "",
             });
           }
         }

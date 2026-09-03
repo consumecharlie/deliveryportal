@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getListTasks,
+  getList,
   createTask,
   getListFields,
   updateTaskCustomField,
@@ -345,6 +346,16 @@ export async function POST(
 
     let deliveryId: string | undefined;
     if (!testMode) {
+      // Client folder for portal grouping. One cheap ClickUp call; non-fatal.
+      let clientFolderId: string | null = null;
+      if (listId) {
+        try {
+          clientFolderId = (await getList(listId)).folder?.id ?? null;
+        } catch (err) {
+          console.warn("Could not resolve client folder for", listId, err);
+        }
+      }
+
       try {
         const delivery = await prisma.delivery.create({
           data: {
@@ -364,7 +375,8 @@ export async function POST(
             wasEdited: !!(formState.editedSnippet || formState.editedSubject || formState.editedEmailContent || formState.editedSlackContent),
             sentBy: userEmail,
             projectListId: listId || null,
-            clientFolderId: null,
+            clientFolderId,
+            feedbackWindows: formState.feedbackWindows || null,
             // Per-delivery template edits — captured so a resend can carry
             // forward "what they meant to send" while re-merging with the
             // (possibly corrected) current field values.
@@ -386,7 +398,7 @@ export async function POST(
             linkType: "standard",
             variableName: varName,
             projectListId: listId || "",
-            clientFolderId: "",
+            clientFolderId: clientFolderId ?? "",
           }));
 
         // Add extra links
@@ -399,7 +411,7 @@ export async function POST(
               linkType: "extra",
               variableName: null as unknown as string,
               projectListId: listId || "",
-              clientFolderId: "",
+              clientFolderId: clientFolderId ?? "",
             });
           }
         }
@@ -423,6 +435,13 @@ export async function POST(
     if (!testMode && !body.resendOf && body.addonListId) {
       try {
         const addonListId = body.addonListId;
+        // Add-on may belong to a different client than the primary task.
+        let addonFolderId: string | null = null;
+        try {
+          addonFolderId = (await getList(addonListId)).folder?.id ?? null;
+        } catch (err) {
+          console.warn("Could not resolve client folder for", addonListId, err);
+        }
         const addonDeliverableType = body.addonDeliverableType ?? "";
         const addonDepartment = body.addonDepartment ?? "";
 
@@ -511,7 +530,8 @@ export async function POST(
               wasEdited: !!(formState.editedSnippet || formState.editedSubject || formState.editedEmailContent || formState.editedSlackContent),
               sentBy: userEmail,
               projectListId: body.addonListId || null,
-              clientFolderId: null,
+              clientFolderId: addonFolderId,
+              feedbackWindows: formState.feedbackWindows || null,
             },
           });
 
@@ -525,7 +545,7 @@ export async function POST(
               linkType: "standard",
               variableName: varName,
               projectListId: body.addonListId || "",
-              clientFolderId: "",
+              clientFolderId: addonFolderId ?? "",
             }));
 
           if (addonLinkRecords.length > 0) {
