@@ -65,6 +65,24 @@ Two patterns in delivery snippet templates:
 
 **Merged (add-on) deliveries:** `buildCombinedTemplate()` assembles primary + transition + add-on into one editable template, namespacing the add-on's per-project tokens with an `addon:` prefix (e.g. `[Final Cut | addon:googleDeliverableLink]`) so the two projects' same-named variables don't collide. Contact tokens are shared and **not** namespaced. `mergeCombinedTemplate()` resolves primary tokens from primary fields and `addon:` tokens from add-on fields. Same-project merges name the deliverable type in the transition (not the project name) and dedupe the shared project-plan link. The older `mergeAddonDelivery()` (merge-then-stitch) is `@deprecated` — retained for reference/tests only.
 
+### Client Portal
+
+One bookmarkable link per client: `/portal/<token>`. A project view is a deep link under the same token: `/portal/<token>/<listId>`. Tokens are 24 random bytes as base64url (32 chars, `src/lib/portal-token.ts`), stored in `PortalAccess` with one active row per `clientFolderId`; "Rotate" in Settings revokes the old row and creates a new one in a single transaction (`createOrRotateAccess`). Revoked tokens 404 immediately.
+
+**Public carve-out and the scoping rule.** `src/middleware.ts` and `AppShell` skip auth for exactly `/portal`, `/portal/*`, `/api/portal`, `/api/portal/*` (and `/api/cron/*`, which verify `CRON_SECRET` themselves). Every handler under those paths MUST start with `resolveAccess(token)` and MUST scope every query by that row's `clientFolderId` (`loadPortal` does this). A list id or delivery id in a URL or body is only ever a filter inside the token's folder, never authority. Nothing under `/api/settings/*` is public.
+
+**Tables.** `PortalAccess` (token per client folder, `revokedAt`), `ProjectChannel` (internal Slack channel per project list, `autoMatched`, `confirmedBy`), `FeedbackConfirmation` (one row per "All feedback is in" press, `undoneAt` set on undo; newest row per delivery wins), `PortalView` (append-only open log per access and per delivery), `PortalReminder` (idempotency log keyed `deliveryId + kind + sentOn` Eastern date), `PortalMessage` (reach-out form notes, persisted before Slack). `Delivery.feedbackWindows` is snapshotted at send time for the fallback deadline.
+
+**Live deadlines.** `src/lib/portal-live.ts` reads the Feedback Deadline tasks (Project Task Type 12) per list through `getListTasksByDropdownField` and caches them in `DashboardCache` under `portal:fd:<listId>` for 5 minutes, stale-while-revalidate (a stale row is served and refreshed after the response via `after()`), misses fetched 4 at a time. Confirm and undo call `invalidateLiveFeedback(listId)`. When no task exists the deadline is send date plus the feedback window in Eastern business days (`src/lib/portal-deadline.ts`), labelled as an estimate when the window was blank or Flexible; 30 days after send with no task the card stops asking.
+
+**Confirmation side effects, in order** (`src/lib/portal-confirm.ts`): 1. write the `FeedbackConfirmation` row under `SELECT ... FOR UPDATE` on the delivery (409 if one is already active); 2. ClickUp: set the Feedback Deadline task to `complete`, comment mentioning the Project Management user group members (`USER_GROUPS.PROJECT_MANAGEMENT`, fallback `PM_FALLBACK_USERS`); 3. Slack: post to the project's internal channel, else DM the delivery's sender; 4. store `slackChannelId`/`slackMessageTs` so undo replies in-thread. Steps 2 and 3 are best effort; the row is the source of truth. Undo reopens the task (`waiting on client`) and fails with 502 if that call fails, so the portal never shows "awaiting" while ClickUp says complete.
+
+**Channel resolution** (`src/lib/project-channel.ts`): a `ProjectChannel` row wins; otherwise crawl `listVisibleChannels()`, rank non-shared channels by project-name token coverage (`project-channel-rank.ts`), and use the top match only when it is confident. Only the confirm flow persists an auto-match (`persist: true`); admin reads never write. Never post internal notes to the Slack Weekly Status Channel ID field or to any Slack Connect (`is_shared`/`is_ext_shared`) channel; the settings PUT rejects shared channels. The bot needs `channels:join` to self-join public channels; private ones need a manual invite.
+
+**Reminders.** `/api/cron/portal-reminders` runs weekdays 13:00 UTC (`vercel.json`), emails clients whose feedback is due tomorrow or today through `N8N_PORTAL_REMINDER_WEBHOOK_URL` (skipped with a log line until set), and nudges the internal channel on business days 1, 3 and 5 after an unconfirmed deadline. `?dryRun=1` reports without sending. Idempotent per Eastern date via `PortalReminder`.
+
+**Rendering.** Portal bodies go through `renderPortalBody` (`src/lib/portal-render.ts`): mention tokens replaced, HTML escaped, then `markdownToHtml`, then links limited to http/https/mailto. That is the only path into `dangerouslySetInnerHTML` on portal pages. The portal layout sets `noindex` and `referrer: no-referrer` so tokens do not leak to review tools.
+
 ## Common Tasks
 
 ### Adding a new ClickUp custom field
@@ -103,6 +121,13 @@ Two patterns in delivery snippet templates:
 | `src/lib/custom-field-ids.ts` | All ClickUp field/space/list ID constants |
 | `src/lib/markdown-to-quill.ts` | Quill Delta ↔ Markdown (for ClickUp rich text) |
 | `src/app/globals.css` | TipTap styles, mention chip styles, theme variables |
+| `src/lib/portal-data.ts` | Portal read path: token -> timeline, live status, action items (all scoped by clientFolderId) |
+| `src/lib/portal-confirm.ts` | Confirm / undo orchestration (row lock, ClickUp, Slack, thread reply) |
+| `src/lib/portal-live.ts` | Cached live Feedback Deadline state per list (`portal:fd:<listId>`) |
+| `src/lib/portal-timeline.ts`, `portal-status.ts`, `portal-deadline.ts`, `portal-view-model.ts` | Pure grouping, status, deadline and view-model logic |
+| `src/lib/project-channel.ts`, `project-channel-rank.ts` | Internal Slack channel resolution and ranking |
+| `src/lib/portal-reminders.ts`, `src/app/api/cron/portal-reminders/route.ts` | Reminder classification and cron |
+| `src/app/api/portal/[token]/*` | Public portal API (confirm, undo, message, view) |
 
 ## Known Issues / Pending Items
 
@@ -110,3 +135,4 @@ Two patterns in delivery snippet templates:
 - `N8N_PORTAL_WEBHOOK_URL` needs to be configured for the send flow to work end-to-end
 - Verify Slack bot has all required scopes after token configuration
 - Production deployment to Vercel not yet done
+- `N8N_PORTAL_REMINDER_WEBHOOK_URL` is not yet configured; reminder emails are skipped until the n8n workflow exists. The Slack bot needs the `channels:join` scope (or a manual invite) before confirmations reach internal project channels.

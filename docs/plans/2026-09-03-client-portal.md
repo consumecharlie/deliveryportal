@@ -24,6 +24,35 @@
 
 **Access model decision (refines the design doc):** one token per client folder. A project link is a deep link under the same token: `/portal/<token>/<listId>`. This gives "share a project link" and "climb up to the client view" with a single credential to manage. `PortalAccess.scope` is therefore dropped from the design.
 
+## As shipped (2026-09-03)
+
+The task bodies below are the plan as written. Where the code landed
+differently:
+
+- The header says four new tables; six shipped (`PortalAccess`,
+  `ProjectChannel`, `FeedbackConfirmation`, `PortalView`, `PortalReminder`,
+  `PortalMessage`) plus one column, `Delivery.feedbackWindows`.
+- `npx tsc --noEmit` must be filtered for two pre-existing failing test
+  files (`feedback-deadline-time.test.ts`, `flexible-feedback.test.ts`).
+- A5: the prefix match is exact-or-slash, not a loose `startsWith`.
+- B2: the fixture uses Storyboard V1 and Final Delivery; the leading-Final
+  rule was dropped; `projectListId` is nullable with name-based grouping.
+- B3: gained a `DeadlineSource` of `"default"` and a `dueIsEstimate` flag.
+- C1: uses `getListTasksByDropdownField`, stale-while-revalidate caching,
+  and `getLiveFeedbackMany` for the multi-list read.
+- C2: the status logic lives in `portal-status.ts`.
+- C3: adds `portal-render.ts` and `portal-view-model.ts`.
+- D3: gained a `persist` option and `rankProjectChannels`.
+- D5: confirm writes the row first under `SELECT ... FOR UPDATE`; undo throws
+  502 when the ClickUp reopen fails; `escapeMrkdwn` is applied everywhere;
+  409 (nothing awaiting / already confirmed) and 429 (double click) semantics.
+- E2: shows Confirmed / Reopened / hyphen, and view counts come from the new
+  per-delivery view beacon (`POST /api/portal/[token]/view`).
+- F1: the overdue cadence is business days 1, 3 and 5; `PortalReminder` is
+  keyed by `sentOn` (Eastern date).
+- F2: the Slack fallback is a DM to the latest delivery's sender only.
+- Access model: one token per client, with project deep links under it.
+
 ---
 
 ## Phase A: Foundations

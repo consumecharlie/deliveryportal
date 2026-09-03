@@ -1,7 +1,7 @@
 # Client Portal: Design
 
 Date: 2026-09-03
-Status: requirements gathered, design drafted, open questions pending Michael
+Status: implemented on branch client-portal (PR pending), awaiting live verification
 
 ## Goal
 
@@ -204,3 +204,46 @@ canonical home of the body.
 1. Naming, to confirm with Michael: client-facing product name (default
    "Client Portal"), URL path (default `/portal/<token>`), and the
    confirmation button label (default "All feedback is in").
+
+## Shipped 2026-09-03
+
+What landed on branch `client-portal`, where it differs from the text above:
+
+- **Access:** one token per client folder, not one per client and per
+  project. A project view is a deep link under the same token, so there is
+  no scope column on `PortalAccess`. Routes: `/portal/<token>` and
+  `/portal/<token>/<listId>`.
+- **Tables:** six shipped (`PortalAccess`, `ProjectChannel`,
+  `FeedbackConfirmation`, `PortalView`, `PortalReminder`, `PortalMessage`)
+  plus one column, `Delivery.feedbackWindows`, snapshotted at send time for
+  the fallback deadline.
+- **Confirmation order:** the `FeedbackConfirmation` row is written first
+  (under a row lock on the delivery), then ClickUp (task to complete, PM
+  group mention comment), then Slack (internal project channel, else a DM to
+  the delivery's sender). The row is the source of truth; ClickUp and Slack
+  are best effort.
+- **Channel resolution:** a `ProjectChannel` row wins; otherwise rank
+  non-shared channels by project-name token coverage and use the top match
+  only when it is confident. Only the confirm flow persists an auto-match;
+  admin reads never write. Slack Connect channels are never used.
+- **Reminders:** client email one business day before and the morning of
+  the deadline (through the n8n webhook), plus an internal channel nudge on
+  business days 1, 3 and 5 after an unconfirmed deadline. Idempotent per
+  Eastern date.
+
+Deferred, in rough priority order:
+
+- The n8n reminder-email workflow (`N8N_PORTAL_REMINDER_WEBHOOK_URL`); the
+  cron skips emails with a log line until it exists.
+- The Slack `channels:join` scope so the bot can self-join public project
+  channels; until then a manual invite is needed.
+- Phase 2 notification: shrinking the delivery email to "we added X to your
+  portal".
+- `PortalView` retention (the table is append-only with no pruning yet).
+- Mention-name resolution inside portal bodies (tokens are replaced with a
+  neutral label today).
+- A row lock on undo (confirm has one; undo relies on the 502-on-reopen
+  guard).
+- A hidden-folder guard on the eligible add-ons lookup.
+- The dropdown filter used for Feedback Deadline tasks has been validated
+  against one list only.
