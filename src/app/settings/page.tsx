@@ -1,5 +1,6 @@
 import { AllowedSendersSection } from "@/components/settings/allowed-senders-section";
 import { ClientPreferencesSection } from "@/components/settings/client-preferences-section";
+import { ClientPortalSection } from "@/components/settings/client-portal-section";
 
 export default function SettingsPage() {
   return (
@@ -12,6 +13,7 @@ export default function SettingsPage() {
       </div>
       <AllowedSendersSection />
       <ClientPreferencesSection />
+      <ClientPortalSection />
     </div>
   );
 }
