@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 
-/** 24 random bytes -> 32 base64url chars. ~144 bits of entropy. */
+/** 24 random bytes -> 32 base64url chars. 192 bits of entropy. */
 export function generatePortalToken(): string {
   return randomBytes(24).toString("base64url");
 }
