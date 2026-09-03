@@ -20,6 +20,7 @@ import {
   extractCustomFieldValue,
 } from "@/lib/clickup";
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
+import { stripVersionTokens } from "@/lib/portal-labels";
 import type { Prisma } from "@prisma/client";
 import type { ClickUpTask } from "@/lib/types";
 
@@ -29,9 +30,14 @@ export interface LiveFeedbackTask {
   dueMs: number | null;
   /** true while the client still owes feedback (status is not complete/closed) */
   isOpen: boolean;
+  /** The deliverable this feedback task belongs to (same parent as its share task). */
+  parentTaskId: string | null;
+  deliverableType: string;
 }
 
 export type LiveFeedbackMap = Record<string /* deliverableType */, LiveFeedbackTask>;
+/** Every Feedback Deadline task with a parent, grouped by that parent. */
+export type LiveFeedbackByParent = Record<string /* parentTaskId */, LiveFeedbackTask[]>;
 
 /** One "Share X with Client" task: a planned or delivered milestone. */
 export interface LiveMilestone {
@@ -49,6 +55,7 @@ export interface LivePayload {
   /** Bumped when the shape changes; older rows are treated as cache misses. */
   version: number;
   feedback: LiveFeedbackMap;
+  feedbackByParent: LiveFeedbackByParent;
   /** Ordered by due date, undated last. */
   milestones: LiveMilestone[];
   /** The list's due date (project wrap date). */
@@ -56,11 +63,12 @@ export interface LivePayload {
   archived: boolean;
 }
 
-export const LIVE_PAYLOAD_VERSION = 2;
+export const LIVE_PAYLOAD_VERSION = 3;
 
 export const EMPTY_LIVE_PAYLOAD: LivePayload = Object.freeze({
   version: LIVE_PAYLOAD_VERSION,
   feedback: {},
+  feedbackByParent: {},
   milestones: [],
   wrapsUpMs: null,
   archived: false,
@@ -95,32 +103,86 @@ function msOrNull(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** True when `entry` should win over `prev`: an open task beats a closed one; among equals the soonest due date. */
+function preferred(entry: LiveFeedbackTask, prev: LiveFeedbackTask | undefined): boolean {
+  return (
+    !prev ||
+    (entry.isOpen && !prev.isOpen) ||
+    (entry.isOpen === prev.isOpen && (entry.dueMs ?? Infinity) < (prev.dueMs ?? Infinity))
+  );
+}
+
+function feedbackTasks(tasks: ClickUpTask[]): LiveFeedbackTask[] {
+  const out: LiveFeedbackTask[] = [];
+  for (const t of tasks) {
+    if (!taskTypeIs(t, "Feedback Deadline", PROJECT_TASK_TYPES.FEEDBACK_DEADLINE)) continue;
+    const type = extractCustomFieldValue(t.custom_fields ?? [], CUSTOM_FIELDS.DELIVERABLE_TYPE);
+    if (!type) continue;
+    out.push({
+      taskId: t.id,
+      name: t.name,
+      dueMs: msOrNull(t.due_date),
+      isOpen: !isClosedTask(t),
+      parentTaskId: t.parent || null,
+      deliverableType: type,
+    });
+  }
+  return out;
+}
+
 /**
  * Pure: pick one Feedback Deadline task per deliverable type from a list's
  * tasks. An open task beats a closed one; among equals the soonest due date wins.
  */
 export function selectFeedbackTasks(tasks: ClickUpTask[]): LiveFeedbackMap {
   const map: LiveFeedbackMap = {};
-  for (const t of tasks) {
-    if (!taskTypeIs(t, "Feedback Deadline", PROJECT_TASK_TYPES.FEEDBACK_DEADLINE)) continue;
-    const type = extractCustomFieldValue(t.custom_fields ?? [], CUSTOM_FIELDS.DELIVERABLE_TYPE);
-    if (!type) continue;
-    const entry: LiveFeedbackTask = {
-      taskId: t.id,
-      name: t.name,
-      dueMs: msOrNull(t.due_date),
-      isOpen: !isClosedTask(t),
-    };
-    const prev = map[type];
-    if (
-      !prev ||
-      (entry.isOpen && !prev.isOpen) ||
-      (entry.isOpen === prev.isOpen && (entry.dueMs ?? Infinity) < (prev.dueMs ?? Infinity))
-    ) {
-      map[type] = entry;
-    }
+  for (const entry of feedbackTasks(tasks)) {
+    if (preferred(entry, map[entry.deliverableType])) map[entry.deliverableType] = entry;
   }
   return map;
+}
+
+/** Pure: every Feedback Deadline task that has a parent, grouped by parent id. */
+export function selectFeedbackByParent(tasks: ClickUpTask[]): LiveFeedbackByParent {
+  const out: LiveFeedbackByParent = {};
+  for (const entry of feedbackTasks(tasks)) {
+    if (!entry.parentTaskId) continue;
+    (out[entry.parentTaskId] ??= []).push(entry);
+  }
+  return out;
+}
+
+function pickPreferred(candidates: LiveFeedbackTask[]): LiveFeedbackTask | null {
+  let best: LiveFeedbackTask | undefined;
+  for (const c of candidates) if (preferred(c, best)) best = c;
+  return best ?? null;
+}
+
+function sameType(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * Pure: the Feedback Deadline task that goes with one delivery. Several
+ * share tasks in a list can carry the same deliverable type ("Edit V1" for
+ * every episode), so the delivery's parent decides first: same parent and
+ * same type, then same parent and the type minus version markers, then the
+ * list-wide type lookup.
+ */
+export function pairFeedbackTask(
+  live: Pick<LivePayload, "feedback" | "feedbackByParent"> | undefined,
+  delivery: { parentTaskId: string | null; deliverableType: string }
+): LiveFeedbackTask | null {
+  if (!live) return null;
+  const siblings = delivery.parentTaskId ? live.feedbackByParent[delivery.parentTaskId] ?? [] : [];
+  if (siblings.length > 0) {
+    const exact = pickPreferred(siblings.filter((t) => sameType(t.deliverableType, delivery.deliverableType)));
+    if (exact) return exact;
+    const stem = stripVersionTokens(delivery.deliverableType);
+    const loose = pickPreferred(siblings.filter((t) => stripVersionTokens(t.deliverableType) === stem));
+    if (loose) return loose;
+  }
+  return live.feedback[delivery.deliverableType] ?? null;
 }
 
 /**
@@ -192,6 +254,7 @@ function rowData(row: CacheRow): LivePayload | null {
   return {
     version: LIVE_PAYLOAD_VERSION,
     feedback: d.feedback ?? {},
+    feedbackByParent: d.feedbackByParent ?? {},
     milestones: d.milestones ?? [],
     wrapsUpMs: d.wrapsUpMs ?? null,
     archived: Boolean(d.archived),
@@ -264,6 +327,7 @@ async function fetchAndStore(listId: string): Promise<LivePayload> {
   const payload: LivePayload = {
     version: LIVE_PAYLOAD_VERSION,
     feedback: selectFeedbackTasks(fd.tasks),
+    feedbackByParent: selectFeedbackByParent(fd.tasks),
     milestones,
     wrapsUpMs: msOrNull(list.due_date),
     archived: Boolean(list.archived),

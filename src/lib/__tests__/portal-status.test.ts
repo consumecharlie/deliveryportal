@@ -6,7 +6,15 @@ const SENT = new Date("2026-06-01T15:00:00Z");
 const NOW = new Date("2026-06-02T15:00:00Z").getTime();
 
 function task(over: Partial<LiveFeedbackTask> = {}): LiveFeedbackTask {
-  return { taskId: "T1", name: "Feedback Deadline: AV Script V1", dueMs: Date.parse("2026-06-04T08:00:00Z"), isOpen: true, ...over };
+  return {
+    taskId: "T1",
+    name: "Feedback Deadline: AV Script V1",
+    dueMs: Date.parse("2026-06-04T08:00:00Z"),
+    isOpen: true,
+    parentTaskId: null,
+    deliverableType: "AV Script V1",
+    ...over,
+  };
 }
 
 function conf(over: { confirmedAt?: string; undoneAt?: string | null; confirmedByName?: string | null } = {}) {

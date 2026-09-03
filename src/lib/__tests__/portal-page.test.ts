@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPortalPage, toReview, type PortalPageRow, type BuildPortalPageInput } from "@/lib/portal-page";
 import { decideFeedbackStatus, type ConfirmationRow } from "@/lib/portal-status";
-import type { LivePayload, LiveMilestone } from "@/lib/portal-live";
+import type { LivePayload, LiveMilestone, LiveFeedbackTask } from "@/lib/portal-live";
 import { LIVE_PAYLOAD_VERSION } from "@/lib/portal-live";
 
 /** Thu Sep 3 2026, 11:00 ET. */
@@ -46,7 +46,11 @@ function ms(over: Partial<LiveMilestone> & { taskId: string; name: string }): Li
 }
 
 function live(over: Partial<LivePayload>): LivePayload {
-  return { version: LIVE_PAYLOAD_VERSION, feedback: {}, milestones: [], wrapsUpMs: null, archived: false, ...over };
+  return { version: LIVE_PAYLOAD_VERSION, feedback: {}, feedbackByParent: {}, milestones: [], wrapsUpMs: null, archived: false, ...over };
+}
+
+function fd(over: Partial<LiveFeedbackTask> & { taskId: string }): LiveFeedbackTask {
+  return { name: over.taskId, dueMs: null, isOpen: true, parentTaskId: null, deliverableType: "Edit V1", ...over };
 }
 
 const P19 = { parentTaskId: "P19", parentTaskName: "LOC19: Intuit" };
@@ -72,8 +76,15 @@ const ROWS: PortalPageRow[] = [
 const LIVE: Record<string, LivePayload> = {
   L1: live({
     feedback: {
-      "Edit V1": { taskId: "F1", name: "Confirm Edit V1 Feedback Received", dueMs: day("2026-09-08"), isOpen: true },
-      "Edit V2": { taskId: "F2", name: "Confirm Edit V2 Feedback Received", dueMs: day("2026-05-29"), isOpen: false },
+      "Edit V1": fd({ taskId: "F1", name: "Confirm Edit V1 Feedback Received", dueMs: day("2026-09-08"), parentTaskId: "P21" }),
+      "Edit V2": fd({ taskId: "F2", name: "Confirm Edit V2 Feedback Received", dueMs: day("2026-05-29"), isOpen: false, parentTaskId: "P19", deliverableType: "Edit V2" }),
+    },
+    feedbackByParent: {
+      P19: [
+        fd({ taskId: "F19v", dueMs: day("2026-05-22"), isOpen: false, parentTaskId: "P19" }),
+        fd({ taskId: "F2", dueMs: day("2026-05-29"), isOpen: false, parentTaskId: "P19", deliverableType: "Edit V2" }),
+      ],
+      P21: [fd({ taskId: "F1", dueMs: day("2026-09-08"), parentTaskId: "P21" })],
     },
     milestones: [
       ms({ taskId: "S19v", name: "Share Video Edit01 with Client", ...P19, dueMs: day("2026-05-20"), isClosed: true, closedMs: Date.parse("2026-05-20T16:05:00Z") }),
@@ -94,7 +105,7 @@ const LIVE: Record<string, LivePayload> = {
   }),
   L3: live({
     archived: true,
-    feedback: { "Final Delivery": { taskId: "F3", name: "Confirm Final Feedback Received", dueMs: day("2026-08-12"), isOpen: false } },
+    feedback: { "Final Delivery": fd({ taskId: "F3", dueMs: day("2026-08-12"), isOpen: false, deliverableType: "Final Delivery" }) },
     milestones: [
       ms({ taskId: "SL1", name: "Share Potential Master with Client", parentTaskId: "PL", parentTaskName: "Post-Production", deliverableType: "Potential Master", dueMs: day("2026-08-01"), isClosed: true }),
       ms({ taskId: "SL2", name: "Share Final Deliverables with Client", parentTaskId: "PL", parentTaskName: "Post-Production", deliverableType: "Final Delivery", dueMs: day("2026-08-10"), isClosed: true }),
@@ -223,8 +234,8 @@ describe("buildPortalPage: review state", () => {
 
   it("confirmed through ClickUp only (no row): no date, no undo", () => {
     expect(loc.deliverables[2].review).toMatchObject({ state: "confirmed", label: "Confirmed", confirmedAtMs: null, canUndo: false });
-    const done = page.projects.find((p) => p.listId === "L3")!;
-    expect(done.deliverables[0].review.state).toBe("confirmed");
+    const p = build({ live: { ...LIVE, L3: { ...LIVE.L3, archived: false } } });
+    expect(p.projects.find((x) => x.listId === "L3")!.deliverables[0].review.state).toBe("confirmed");
   });
 
   it("an estimated deadline is a suggestion and never escalates", () => {
@@ -242,19 +253,56 @@ describe("buildPortalPage: review state", () => {
     expect(adhoc.deliverables[0].review).toMatchObject({ state: "none", label: "", canUndo: false });
   });
 
+  it("pairs feedback by parent first, so sibling episodes with the same type do not share one task", () => {
+    // Episode 21's "Edit V1" task is open list-wide; episode 22's own task is closed.
+    const rows = [
+      ...ROWS,
+      row({ id: "e22", taskId: "S22v", parentTaskId: "P22", parentTaskName: "Post-Production - Leaders of Code - Ep #22", shareTaskName: "Share Video Edit01 with Client", sentAt: new Date("2026-08-20T14:00:00Z") }),
+      // Episode 23 sent as Edit V2 but its parent only has an Edit V1 feedback task (open): version-stripped match.
+      row({ id: "e23", taskId: "S23v", parentTaskId: "P23", parentTaskName: "Post-Production - Leaders of Code - Ep #23", shareTaskName: "Share Video Edit02 with Client", deliverableType: "Edit V2", sentAt: new Date("2026-08-25T14:00:00Z") }),
+      // Episode 24 has no feedback task of its own: falls back to the list-wide type lookup.
+      row({ id: "e24", taskId: "S24v", parentTaskId: "P24", parentTaskName: "Post-Production - Leaders of Code - Ep #24", shareTaskName: "Share Video Edit01 with Client", sentAt: new Date("2026-08-27T14:00:00Z") }),
+    ];
+    const l1 = live({
+      ...LIVE.L1,
+      feedbackByParent: {
+        ...LIVE.L1.feedbackByParent,
+        P22: [fd({ taskId: "F22", dueMs: day("2026-08-24"), isOpen: false, parentTaskId: "P22" })],
+        P23: [fd({ taskId: "F23", dueMs: day("2026-09-16"), parentTaskId: "P23", deliverableType: "Edit V1" })],
+      },
+    });
+    const p = build({ rows, live: { ...LIVE, L1: l1 } });
+    const byId = Object.fromEntries(p.projects.find((x) => x.listId === "L1")!.deliverables.map((d) => [d.latest.deliveryId, d.review]));
+    expect(byId.e21).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
+    expect(byId.e22).toMatchObject({ state: "confirmed" });
+    expect(byId.e23).toMatchObject({ state: "awaiting", label: "Due Wed, Sep 16" });
+    expect(byId.e24).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
+    // The LOC19 video (Edit V2) pairs with its parent's closed Edit V2 task.
+    expect(byId.v2).toMatchObject({ state: "confirmed" });
+  });
+
+  it("an archived project never needs review and never reaches the attention list", () => {
+    const p = build({ live: { ...LIVE, L2: { ...LIVE.L2, archived: true } } });
+    const callrail = p.projects.find((x) => x.listId === "L2")!;
+    expect(callrail.phase).toBe("completed");
+    expect(callrail.deliverables[0].review).toEqual({ state: "none", label: "", dueMs: null, dueIsEstimate: false, confirmedAtMs: null, canUndo: false });
+    expect(p.attention.map((a) => a.deliveryId)).toEqual(["e21"]);
+    expect(callrail.milestones.map((m) => m.state)).toEqual(["delivered", "up-next"]);
+  });
+
   it("an undone confirmation goes back to awaiting", () => {
     const p = build({
-      confirmations: new Map([["s1", { confirmedAt: new Date("2026-06-06T18:00:00Z"), undoneAt: new Date("2026-06-07T18:00:00Z"), confirmedByName: "Dana" }]]),
+      confirmations: new Map([["e21", { confirmedAt: new Date("2026-08-06T18:00:00Z"), undoneAt: new Date("2026-08-07T18:00:00Z"), confirmedByName: "Dana" }]]),
     });
-    const snippets = p.projects.find((x) => x.listId === "L1")!.deliverables[1];
-    expect(snippets.review.state).toBe("awaiting");
-    expect(snippets.review.canUndo).toBe(false);
+    const ep21 = p.projects.find((x) => x.listId === "L1")!.deliverables[0];
+    expect(ep21.review.state).toBe("awaiting");
+    expect(ep21.review.canUndo).toBe(false);
   });
 });
 
 describe("toReview labels", () => {
   const base = { confirmation: null, sentAt: new Date("2026-08-20T14:00:00Z"), feedbackWindows: "2 Business Days" };
-  const task = (dueMs: number) => ({ taskId: "F", name: "n", dueMs, isOpen: true });
+  const task = (dueMs: number) => fd({ taskId: "F", dueMs });
 
   it("overdue: 'Past due, was ...'", () => {
     const r = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-01")), nowMs: NOW }));
@@ -327,7 +375,7 @@ describe("buildPortalPage: milestones, phase and summary", () => {
   it("a closed share task without a delivery row is delivered, or in-review while its feedback task is open", () => {
     const done = page.projects.find((p) => p.listId === "L3")!;
     expect(done.milestones.map((m) => m.state)).toEqual(["delivered", "delivered"]);
-    const p = build({ live: { ...LIVE, L3: live({ ...LIVE.L3, feedback: { "Potential Master": { taskId: "Fx", name: "n", dueMs: null, isOpen: true } } }) } });
+    const p = build({ live: { ...LIVE, L3: live({ ...LIVE.L3, archived: false, feedback: { "Potential Master": fd({ taskId: "Fx", deliverableType: "Potential Master" }) } }) } });
     expect(p.projects.find((x) => x.listId === "L3")!.milestones[0].state).toBe("in-review");
   });
 
@@ -350,6 +398,7 @@ describe("buildPortalPage: milestones, phase and summary", () => {
       ...LIVE.L1,
       milestones: LIVE.L1.milestones.slice(0, 4),
       feedback: {},
+      feedbackByParent: {},
     });
     const p = build({ live: { ...LIVE, L1: allClosed } });
     const l1 = p.projects.find((x) => x.listId === "L1")!;
@@ -412,7 +461,7 @@ describe("buildPortalPage: attention and focus", () => {
     const page = build({
       rows,
       confirmations: new Map(),
-      live: { L8: live({ feedback: { "Edit V1": { taskId: "F", name: "n", dueMs: day("2026-09-10"), isOpen: true } } }) },
+      live: { L8: live({ feedback: { "Edit V1": fd({ taskId: "F", dueMs: day("2026-09-10") }) } }) },
     });
     expect(page.attention.map((a) => a.deliveryId)).toEqual(["real-soon", "real-late", "est-old", "est-new"]);
     expect(page.attention.map((a) => a.review.dueIsEstimate)).toEqual([false, false, true, true]);

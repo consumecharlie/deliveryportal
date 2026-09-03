@@ -12,7 +12,7 @@ import {
   type TimelineEntry,
   type MentionNames,
 } from "@/lib/portal-timeline";
-import { getLiveFeedbackMany } from "@/lib/portal-live";
+import { getLiveFeedbackMany, pairFeedbackTask } from "@/lib/portal-live";
 import { buildPortalPage, type PortalPageRow } from "@/lib/portal-page";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
@@ -143,6 +143,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   const rows = await selectDeliveries(access, onlyListId);
   const names = MENTION_NAMES;
   const timeline = buildTimeline(rows, names);
+  const rowsById = new Map(rows.map((r) => [r.id, r]));
 
   const latestIds = timeline.projects.flatMap((p) => p.deliverables.map((g) => g.latest.id));
   const confirmations = await latestConfirmations(latestIds);
@@ -155,12 +156,15 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   const liveByList = await getLiveFeedbackMany(timeline.projects.map((p) => p.listId));
 
   for (const project of timeline.projects) {
-    const live = liveByList[project.listId]?.feedback ?? {};
+    const live = liveByList[project.listId];
 
     for (const group of project.deliverables) {
       const e = group.latest;
       const s = decideFeedbackStatus({
-        task: live[e.deliverableType] ?? null,
+        task: pairFeedbackTask(live, {
+          parentTaskId: rowsById.get(e.id)?.parentTaskId ?? null,
+          deliverableType: e.deliverableType,
+        }),
         confirmation: confirmations.get(e.id) ?? null,
         sentAt: e.sentAt,
         feedbackWindows: e.feedbackWindows,

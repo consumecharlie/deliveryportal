@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   selectFeedbackTasks,
+  selectFeedbackByParent,
+  pairFeedbackTask,
   selectMilestones,
   runPool,
   getLiveFeedback,
@@ -72,7 +74,7 @@ describe("selectFeedbackTasks", () => {
   it("keeps only Feedback Deadline tasks, keyed by deliverable type label", () => {
     const map = selectFeedbackTasks([t({ id: "a", due: "1000" }), t({ id: "b", taskType: 4 }), t({ id: "c", deliverableType: 1, due: "2000" })]);
     expect(Object.keys(map).sort()).toEqual(["AV Script V1", "AV Script V2"]);
-    expect(map["AV Script V1"]).toEqual({ taskId: "a", name: "Task a", dueMs: 1000, isOpen: true });
+    expect(map["AV Script V1"]).toEqual({ taskId: "a", name: "Task a", dueMs: 1000, isOpen: true, parentTaskId: null, deliverableType: "AV Script V1" });
     expect(map["AV Script V2"].taskId).toBe("c");
   });
 
@@ -103,6 +105,60 @@ describe("selectFeedbackTasks", () => {
 
   it("skips tasks with no deliverable type", () => {
     expect(selectFeedbackTasks([t({ id: "a", deliverableType: null })])).toEqual({});
+  });
+});
+
+describe("selectFeedbackByParent", () => {
+  it("groups every feedback task by its parent, keeping parentless ones out", () => {
+    const by = selectFeedbackByParent([
+      t({ id: "a", parent: "P1", due: "1000" }),
+      t({ id: "b", parent: "P1", deliverableType: 1 }),
+      t({ id: "c", parent: "P2" }),
+      t({ id: "d" }),
+      t({ id: "share", taskType: 4, parent: "P1" }),
+    ]);
+    expect(Object.keys(by).sort()).toEqual(["P1", "P2"]);
+    expect(by.P1.map((x) => x.taskId)).toEqual(["a", "b"]);
+    expect(by.P1[0]).toMatchObject({ parentTaskId: "P1", deliverableType: "AV Script V1", dueMs: 1000 });
+    expect(by.P2.map((x) => x.taskId)).toEqual(["c"]);
+  });
+});
+
+describe("pairFeedbackTask", () => {
+  const fd = (over: Partial<import("@/lib/portal-live").LiveFeedbackTask> & { taskId: string }) => ({
+    name: over.taskId,
+    dueMs: null,
+    isOpen: true,
+    parentTaskId: null,
+    deliverableType: "Edit V1",
+    ...over,
+  });
+  // Two episodes, each with its own "Edit V1" feedback task.
+  const live = {
+    feedback: { "Edit V1": fd({ taskId: "F21", parentTaskId: "P21", dueMs: 5000 }) },
+    feedbackByParent: {
+      P21: [fd({ taskId: "F21", parentTaskId: "P21", dueMs: 5000 })],
+      P22: [fd({ taskId: "F22", parentTaskId: "P22", dueMs: 9000, isOpen: false })],
+      P23: [fd({ taskId: "F23v1", parentTaskId: "P23", deliverableType: "Edit V1", isOpen: false }), fd({ taskId: "F23v2", parentTaskId: "P23", deliverableType: "Edit V2" })],
+    },
+  };
+
+  it("same parent and same type wins over the type-only map", () => {
+    expect(pairFeedbackTask(live, { parentTaskId: "P22", deliverableType: "Edit V1" })?.taskId).toBe("F22");
+    expect(pairFeedbackTask(live, { parentTaskId: "P21", deliverableType: "Edit V1" })?.taskId).toBe("F21");
+    expect(pairFeedbackTask(live, { parentTaskId: "P23", deliverableType: "edit v2" })?.taskId).toBe("F23v2");
+  });
+
+  it("falls back to the same parent with the type minus version markers, preferring open tasks", () => {
+    expect(pairFeedbackTask(live, { parentTaskId: "P22", deliverableType: "Edit V2" })?.taskId).toBe("F22");
+    expect(pairFeedbackTask(live, { parentTaskId: "P23", deliverableType: "Edit V3" })?.taskId).toBe("F23v2");
+  });
+
+  it("falls back to the list-wide type lookup when the parent has nothing matching, or no parent", () => {
+    expect(pairFeedbackTask(live, { parentTaskId: "P22", deliverableType: "Storyboards V1" })).toBeNull();
+    expect(pairFeedbackTask(live, { parentTaskId: "P99", deliverableType: "Edit V1" })?.taskId).toBe("F21");
+    expect(pairFeedbackTask(live, { parentTaskId: null, deliverableType: "Edit V1" })?.taskId).toBe("F21");
+    expect(pairFeedbackTask(undefined, { parentTaskId: "P21", deliverableType: "Edit V1" })).toBeNull();
   });
 });
 
@@ -165,14 +221,15 @@ describe("runPool", () => {
 
 const STALE_DATA: LivePayload = {
   version: LIVE_PAYLOAD_VERSION,
-  feedback: { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } },
+  feedback: { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true, parentTaskId: null, deliverableType: "AV Script V1" } },
+  feedbackByParent: {},
   milestones: [],
   wrapsUpMs: null,
   archived: false,
 };
 /** A row written by the previous payload shape (a bare feedback map). */
 const OLD_SHAPE_DATA = { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } };
-const FRESH_FD = [t({ id: "new", due: "2000" })];
+const FRESH_FD = [t({ id: "new", due: "2000", parent: "P1" })];
 const FRESH_DD = [
   t({ id: "share1", taskType: 4, due: "3000", name: "Share Video Edit01 with Client", parent: "P1", status: "complete" }),
   t({ id: "share2", taskType: 4, due: "4000", name: "Share Snippets Edit01 with Client", parent: "P1" }),
@@ -243,6 +300,7 @@ describe("getLiveFeedback (cache + outage behaviour)", () => {
     mockClickUpHealthy();
     const p = await getLiveFeedback("L1");
     expect(p.feedback["AV Script V1"].taskId).toBe("new");
+    expect(p.feedbackByParent.P1.map((x) => x.taskId)).toEqual(["new"]);
     expect(p.milestones.map((m) => m.taskId)).toEqual(["share1", "share2", "share3"]);
     expect(p.milestones[0]).toMatchObject({ parentTaskId: "P1", parentTaskName: "Post-Production - Ep #21", isClosed: true });
     expect(p.milestones[2]).toMatchObject({ parentTaskName: "LOC19: Intuit", deliverableType: "AV Script V2", isClosed: false });

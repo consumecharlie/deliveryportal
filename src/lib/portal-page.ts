@@ -24,7 +24,7 @@ import {
 } from "@/lib/portal-labels";
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
 import { pickReviewLink } from "@/lib/portal-view-model";
-import type { LivePayload, LiveMilestone } from "@/lib/portal-live";
+import { pairFeedbackTask, type LivePayload, type LiveMilestone } from "@/lib/portal-live";
 import type {
   PortalPageModel,
   PortalProject,
@@ -97,6 +97,15 @@ function toVersion(row: PortalPageRow, names: MentionNames): PortalVersion {
   };
 }
 
+const NO_REVIEW: PortalDeliverable["review"] = Object.freeze({
+  state: "none",
+  label: "",
+  dueMs: null,
+  dueIsEstimate: false,
+  confirmedAtMs: null,
+  canUndo: false,
+}) as PortalDeliverable["review"];
+
 /**
  * Map a feedback status onto the portal's review block. An estimated date
  * (our default window, not a deadline anyone set) is a suggestion, so it
@@ -114,9 +123,7 @@ export function toReview(s: FeedbackStatus): PortalDeliverable["review"] {
       canUndo,
     };
   }
-  if (s.kind === "none") {
-    return { state: "none", label: "", dueMs: null, dueIsEstimate: false, confirmedAtMs: null, canUndo: false };
-  }
+  if (s.kind === "none") return NO_REVIEW;
   let state: ReviewState = "awaiting";
   let label = `Due ${s.dueLabel}`;
   if (s.dueIsEstimate) {
@@ -185,13 +192,18 @@ function buildDeliverable(
     variant = null;
   }
 
-  const status = decideFeedbackStatus({
-    task: live?.feedback[latest.deliverableType] ?? null,
-    confirmation: input.confirmations.get(latest.id) ?? null,
-    sentAt: latest.sentAt,
-    feedbackWindows: latest.feedbackWindows,
-    nowMs: input.nowMs,
-  });
+  // An archived project never needs review.
+  const review = live?.archived
+    ? NO_REVIEW
+    : toReview(
+        decideFeedbackStatus({
+          task: pairFeedbackTask(live, latest),
+          confirmation: input.confirmations.get(latest.id) ?? null,
+          sentAt: latest.sentAt,
+          feedbackWindows: latest.feedbackWindows,
+          nowMs: input.nowMs,
+        })
+      );
 
   return {
     key: draft.key,
@@ -199,7 +211,7 @@ function buildDeliverable(
     variant,
     latest: toVersion(latest, names),
     history: draft.versions.slice(1).map((v) => toVersion(v, names)),
-    review: toReview(status),
+    review,
   };
 }
 
