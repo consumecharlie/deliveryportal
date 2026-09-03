@@ -41,9 +41,11 @@ model Delivery {
   // still picking up corrected form-field values via re-merge.
   editedSnippet   String?        @db.Text
   editedSubject   String?
+  /** Feedback Windows value at send time. Used by the client portal to compute
+   *  a fallback deadline when no live Feedback Deadline task exists. */
+  feedbackWindows String?
   links           DeliveryLink[]
   confirmations   FeedbackConfirmation[]
-  feedbackWindows String?
   createdAt       DateTime       @default(now())
 
   @@index([taskId])
@@ -146,7 +148,9 @@ model AuditResult {
 
 /** One bookmarkable client-portal link per ClickUp client folder. A project
  *  view is a deep link under the same token (/portal/<token>/<listId>).
- *  Rotate by revoking (set revokedAt) and creating a new row. */
+ *  Rotate by revoking (set revokedAt) and creating a new row. Only one active
+ *  (revokedAt null) row per clientFolderId is allowed; the create handler must
+ *  revoke existing active rows in the same transaction. */
 model PortalAccess {
   id             String    @id @default(cuid())
   clientFolderId String
@@ -167,6 +171,7 @@ model ProjectChannel {
   channelId     String
   channelName   String
   autoMatched   Boolean  @default(false)
+  /** Session email of the PM who confirmed, or "auto-match" when autoMatched is true. */
   confirmedBy   String
   confirmedAt   DateTime @default(now())
 }
@@ -177,7 +182,7 @@ model FeedbackConfirmation {
   id                     String    @id @default(cuid())
   deliveryId             String
   delivery               Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
-  projectListId          String
+  projectListId          String?
   deliverableType        String
   feedbackDeadlineTaskId String?
   confirmedAt            DateTime  @default(now())
@@ -186,7 +191,7 @@ model FeedbackConfirmation {
   slackChannelId         String?
   slackMessageTs         String?
 
-  @@index([deliveryId])
+  @@index([deliveryId, confirmedAt(sort: Desc)])
   @@index([projectListId])
 }
 
@@ -195,10 +200,11 @@ model PortalView {
   id         String       @id @default(cuid())
   accessId   String
   access     PortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
+  /** No FK on purpose: view history must survive if a delivery row is ever removed. */
   deliveryId String?
   viewedAt   DateTime     @default(now())
   userAgent  String?
 
   @@index([accessId, viewedAt])
-  @@index([deliveryId])
+  @@index([deliveryId, viewedAt])
 }
