@@ -55,6 +55,21 @@ describe("buildTimeline", () => {
     expect(all.map((x) => x.id)).toEqual(["fix"]);
   });
 
+  it("a resend chain A -> B -> C keeps only C", () => {
+    const t = buildTimeline([
+      d({ id: "A", sentAt: new Date("2026-06-01") }),
+      d({ id: "B", replacesDeliveryId: "A", sentAt: new Date("2026-06-02") }),
+      d({ id: "C", replacesDeliveryId: "B", sentAt: new Date("2026-06-03") }),
+    ], {});
+    const all = t.projects[0].deliverables.flatMap((g) => [g.latest, ...g.history]);
+    expect(all.map((x) => x.id)).toEqual(["C"]);
+  });
+
+  it("a resend whose original is not in the set still appears", () => {
+    const t = buildTimeline([d({ id: "fix", replacesDeliveryId: "gone" })], {});
+    expect(t.projects[0].deliverables[0].latest.id).toBe("fix");
+  });
+
   it("stacks the same deliverable family as history", () => {
     const t = buildTimeline([
       d({ id: "v1", deliverableType: "Edit V1", sentAt: new Date("2026-06-01") }),
