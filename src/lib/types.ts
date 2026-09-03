@@ -217,6 +217,8 @@ export interface SlackChannel {
   isMember: boolean;
   numMembers: number;
   isExtShared: boolean;
+  /** is_ext_shared or is_shared: a Slack Connect channel, never an internal target. */
+  isShared: boolean;
 }
 
 export interface SlackMember {

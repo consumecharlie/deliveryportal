@@ -51,6 +51,7 @@ export async function GET() {
           isMember: ch.is_member ?? false,
           numMembers: ch.num_members ?? 0,
           isExtShared: ch.is_ext_shared ?? false,
+          isShared: Boolean(ch.is_ext_shared || ch.is_shared),
         });
       }
 

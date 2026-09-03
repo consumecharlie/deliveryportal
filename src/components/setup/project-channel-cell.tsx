@@ -50,6 +50,7 @@ export function ProjectChannelCell({ listId, projectName, clientName, mapping }:
   const suggestQuery = useQuery<Resolution>({
     queryKey: ["project-channel-suggest", listId],
     enabled: open,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const params = new URLSearchParams({ listId, projectName, clientName });
       const res = await fetch(`/api/settings/project-channel?${params}`);
@@ -117,7 +118,7 @@ export function ProjectChannelCell({ listId, projectName, clientName, mapping }:
   const term = search.trim().toLowerCase();
   const searchResults = term
     ? (channelsQuery.data?.channels ?? [])
-        .filter((c) => !c.isExtShared && c.name.toLowerCase().includes(term))
+        .filter((c) => !c.isShared && c.name.toLowerCase().includes(term))
         .slice(0, MAX_SEARCH_RESULTS)
     : [];
   const suggestions = (suggestQuery.data?.suggestions ?? []).filter((s) => s.id !== mapping?.channelId);

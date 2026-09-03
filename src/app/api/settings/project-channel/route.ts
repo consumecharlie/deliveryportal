@@ -55,8 +55,14 @@ export async function PUT(req: Request) {
         { status: 400 }
       );
     }
-    // Internal notes must never land in the client's Slack Connect channel.
     const info = await getChannelMembership(channelId);
+    if (info.notVisible) {
+      return NextResponse.json(
+        { error: "The bot cannot see that channel; invite it first" },
+        { status: 400 }
+      );
+    }
+    // Internal notes must never land in the client's Slack Connect channel.
     if (info.isShared) {
       return NextResponse.json(
         { error: "That channel is shared with the client. Pick an internal channel." },
