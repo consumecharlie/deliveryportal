@@ -18,6 +18,7 @@ import {
   dueWordFor,
   buildReminderEmail,
   buildOverdueNudgeText,
+  greetingNameFromBody,
   type ReminderKind,
 } from "@/lib/portal-reminders";
 import { resolveProjectChannel } from "@/lib/project-channel";
@@ -77,14 +78,6 @@ async function releaseClaim(deliveryId: string, kind: ReminderKind, sentOn: stri
   await prisma.portalReminder.deleteMany({ where: { deliveryId, kind, sentOn } }).catch(() => {});
 }
 
-function firstName(email: string): string | null {
-  // "dana.smith@acme.com" -> "Dana"; anything unreadable -> null (generic greeting).
-  const local = email.split("@")[0] ?? "";
-  const first = local.split(/[._-]/)[0] ?? "";
-  if (!/^[a-z]{2,}$/i.test(first)) return null;
-  return first[0].toUpperCase() + first.slice(1).toLowerCase();
-}
-
 async function postReminderEmail(webhook: string, payload: Record<string, unknown>): Promise<void> {
   const res = await fetch(webhook, {
     method: "POST",
@@ -117,7 +110,7 @@ async function processAccess(
 
   const rows = await prisma.delivery.findMany({
     where: { id: { in: ids } },
-    select: { id: true, primaryEmail: true, ccEmails: true, senderEmail: true },
+    select: { id: true, primaryEmail: true, ccEmails: true, senderEmail: true, emailContent: true },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
   const itemById = new Map(awaiting.map((a) => [a.entry.id, a]));
@@ -172,7 +165,7 @@ async function processAccess(
         dueLabel: item.status.dueLabel,
         portalUrl,
         dueWord: dueWordFor(kind, item.status.dueMs, ctx.now),
-        primaryFirstName: firstName(to),
+        primaryFirstName: greetingNameFromBody(row.emailContent),
       });
       try {
         await postReminderEmail(ctx.webhook, {

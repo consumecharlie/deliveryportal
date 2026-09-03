@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   classifyReminders,
   dueWordFor,
+  greetingNameFromBody,
   buildReminderEmail,
   buildOverdueNudgeText,
   type ReminderCandidate,
@@ -63,15 +64,15 @@ describe("classifyReminders", () => {
     expect(out).toEqual({ tomorrow: [], today: [], overdue: [] });
   });
 
-  it("nudges on the first business day after the due date, then every 2 business days", () => {
+  it("nudges on the first business day after the due date, then every 2 business days (1, 3, 5)", () => {
     const due = "2026-09-09"; // Wednesday
     const expectations: Array<[string, boolean]> = [
       ["2026-09-10", true], // 1 business day after
-      ["2026-09-11", true], // 2
-      ["2026-09-14", false], // 3
-      ["2026-09-15", true], // 4
-      ["2026-09-16", false], // 5
-      ["2026-09-17", true], // 6
+      ["2026-09-11", false], // 2
+      ["2026-09-14", true], // 3
+      ["2026-09-15", false], // 4
+      ["2026-09-16", true], // 5
+      ["2026-09-17", false], // 6
     ];
     for (const [day, expected] of expectations) {
       const now = at9amET(day);
@@ -119,6 +120,25 @@ describe("dueWordFor", () => {
   it("names the weekday when the next business day is not calendar tomorrow", () => {
     const now = at9amET("2026-09-11");
     expect(dueWordFor("tomorrow", dateOnlySentinelMs("2026-09-14"), now)).toBe("on Monday");
+  });
+});
+
+describe("greetingNameFromBody", () => {
+  it("reads the name from a merged greeting on the first line", () => {
+    expect(greetingNameFromBody("Hello, Klaudia!")).toBe("Klaudia");
+    expect(greetingNameFromBody("Hi Whitney and team,")).toBe("Whitney");
+    expect(greetingNameFromBody("Hey Dana.\n\nHere is the cut.")).toBe("Dana");
+  });
+
+  it("skips leading blank lines and light markdown", () => {
+    expect(greetingNameFromBody("\n\n**Hi Dana,**\nbody")).toBe("Dana");
+  });
+
+  it("returns null without a greeting, a capitalised name, or any body", () => {
+    expect(greetingNameFromBody("Quick update")).toBeNull();
+    expect(greetingNameFromBody("hi there,")).toBeNull();
+    expect(greetingNameFromBody("")).toBeNull();
+    expect(greetingNameFromBody("   \n  ")).toBeNull();
   });
 });
 

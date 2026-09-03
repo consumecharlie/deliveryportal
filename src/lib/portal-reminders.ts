@@ -45,7 +45,7 @@ function businessDaysAfter(from: string, to: string, closures: Set<string>): num
  * - tomorrow: due on the next business day after today
  * - today: due today
  * - overdue: state is overdue and today is the first business day after the
- *   due date, or an even number of business days after it
+ *   due date, then every 2 business days after that (1, 3, 5, ...)
  *
  * Nothing is selected on a weekend or office closure. Callers pass only
  * items whose feedback status is "awaiting".
@@ -69,7 +69,7 @@ export function classifyReminders(
       out.today.push(it.deliveryId);
     } else if (it.state === "overdue" && dueDay < today) {
       const n = businessDaysAfter(dueDay, today, closures);
-      if (n === 1 || (n > 0 && n % 2 === 0)) out.overdue.push(it.deliveryId);
+      if (n >= 1 && n % 2 === 1) out.overdue.push(it.deliveryId);
     }
   }
   return out;
@@ -85,6 +85,23 @@ export function dueWordFor(kind: "tomorrow" | "today", dueMs: number, nowMs: num
   if (kind === "today") return "today";
   if (easternDateString(dueMs) === easternDateString(nowMs + DAY_MS)) return "tomorrow";
   return `on ${WEEKDAY.format(new Date(dueMs))}`;
+}
+
+/**
+ * The name a delivery greeted the client by, read from the first non-empty
+ * line of the sent email body ("Hello, Klaudia!" -> "Klaudia"). Null when the
+ * body does not open with a greeting, so the reminder falls back to "Hi there,".
+ */
+export function greetingNameFromBody(body: string): string | null {
+  const line = body
+    .split(/\r?\n/)
+    .map((l) => l.replace(/<[^>]+>/g, "").replace(/^[\s*_>#]+/, "").trim())
+    .find((l) => l.length > 0);
+  if (!line) return null;
+  const m = /^(?:hi|hello|hey)[,\s]+([A-Za-z][\w'.-]*)/i.exec(line);
+  if (!m) return null;
+  const name = m[1].replace(/[.,!'-]+$/, "");
+  return /^[A-Z]/.test(name) ? name : null;
 }
 
 export interface ReminderEmailInput {
