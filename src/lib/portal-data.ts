@@ -164,6 +164,8 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
         task: pairFeedbackTask(live, {
           parentTaskId: rowsById.get(e.id)?.parentTaskId ?? null,
           deliverableType: e.deliverableType,
+          shareTaskName: rowsById.get(e.id)?.shareTaskName ?? null,
+          sentAtMs: e.sentAt.getTime(),
         }),
         confirmation: confirmations.get(e.id) ?? null,
         sentAt: e.sentAt,

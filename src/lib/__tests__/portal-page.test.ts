@@ -281,6 +281,33 @@ describe("buildPortalPage: review state", () => {
     expect(byId.v2).toMatchObject({ state: "confirmed" });
   });
 
+  it("Leaders of Code shape: 'Edit V1' deliveries pair with 'LoC ...' feedback tasks by variant name", () => {
+    const EP = (n: number) => ({ parentTaskId: `E${n}`, parentTaskName: `Post-Production - Leaders of Code - Ep #${n}`, projectListId: "L6", projectName: "Leaders of Code" });
+    const fdSet = (parent: string, closedVideo: boolean) => [
+      fd({ taskId: `${parent}-v1`, name: "Confirm Video Edit01 Feedback Received", deliverableType: "LoC Edit V1", parentTaskId: parent, dueMs: day("2026-09-08"), isOpen: !closedVideo }),
+      fd({ taskId: `${parent}-s1`, name: "Confirm Snippets Edit01 Feedback Received", deliverableType: "LoC Snippets Edit V1", parentTaskId: parent, dueMs: day("2026-09-10") }),
+      fd({ taskId: `${parent}-v2`, name: "Confirm Edit Feedback or Approval", deliverableType: "LoC Edit V2", parentTaskId: parent, dueMs: day("2026-09-20") }),
+      fd({ taskId: `${parent}-s2`, name: "Confirm Snippets Feedback or Approval", deliverableType: "LoC Snippets Edit V2", parentTaskId: parent, dueMs: day("2026-09-22") }),
+    ];
+    const rows = [
+      row({ id: "v25", taskId: "S25v", ...EP(25), shareTaskName: "Share Video Edit01 with Client", sentAt: new Date("2026-08-28T14:00:00Z") }),
+      row({ id: "s25", taskId: "S25s", ...EP(25), shareTaskName: "Share Snippets Edit01 with Client", sentAt: new Date("2026-08-29T14:00:00Z") }),
+      row({ id: "v26", taskId: "S26v", ...EP(26), shareTaskName: "Share Video Edit01 with Client", sentAt: new Date("2026-09-01T14:00:00Z") }),
+      row({ id: "s26", taskId: "S26s", ...EP(26), shareTaskName: "Share Snippets Edit01 with Client", sentAt: new Date("2026-09-02T14:00:00Z") }),
+    ];
+    const p = build({
+      rows,
+      confirmations: new Map(),
+      live: { L6: live({ feedbackByParent: { E25: fdSet("E25", true), E26: fdSet("E26", false) } }) },
+    });
+    const byId = Object.fromEntries(p.projects[0].deliverables.map((d) => [d.latest.deliveryId, d.review]));
+    expect(byId.v25).toMatchObject({ state: "confirmed" });
+    expect(byId.s25).toMatchObject({ state: "awaiting", label: "Due Thu, Sep 10" });
+    expect(byId.v26).toMatchObject({ state: "awaiting", label: "Due Tue, Sep 8" });
+    expect(byId.s26).toMatchObject({ state: "awaiting", label: "Due Thu, Sep 10" });
+    expect(p.attention.map((a) => a.deliveryId)).toEqual(["v26", "s25", "s26"]);
+  });
+
   it("an archived project never needs review and never reaches the attention list", () => {
     const p = build({ live: { ...LIVE, L2: { ...LIVE.L2, archived: true } } });
     const callrail = p.projects.find((x) => x.listId === "L2")!;

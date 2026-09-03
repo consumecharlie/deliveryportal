@@ -8,6 +8,9 @@ import {
   linkLabel,
   isPhaseOnlyParent,
   stripVersionTokens,
+  versionMarkers,
+  nameTokens,
+  deliverableIdentityTokens,
   countsLine,
   PHASE_ONLY_WORDS,
 } from "@/lib/portal-labels";
@@ -149,6 +152,25 @@ describe("stripVersionTokens", () => {
     expect(stripVersionTokens("Final Post Script")).toBe("post script");
     expect(stripVersionTokens("Video Edit01")).toBe("video");
     expect(stripVersionTokens("Edit V2")).toBe("edit");
+  });
+});
+
+describe("identity tokens", () => {
+  it("keeps what names the deliverable and drops boilerplate and version markers", () => {
+    expect(deliverableIdentityTokens("Share Video Edit01 with Client", "Edit V1")).toEqual(["video"]);
+    expect(deliverableIdentityTokens("Share Snippets Edit01 with Client", "Edit V1")).toEqual(["snippets"]);
+    expect(deliverableIdentityTokens("Share Edit V1 with Client", "Edit V1")).toEqual([]);
+    expect(deliverableIdentityTokens(null, "Post AV V1")).toEqual(["post", "av"]);
+    expect(nameTokens("Confirm Video Edit01 Feedback Received")).toEqual(["video"]);
+    expect(nameTokens("Confirm Snippets Feedback or Approval")).toEqual(["snippets"]);
+    expect(nameTokens("Confirm Edit Feedback or Approval")).toEqual([]);
+  });
+
+  it("versionMarkers picks the markers out of a type, client prefix or not", () => {
+    expect(versionMarkers("LoC Edit V2")).toEqual(["v2"]);
+    expect(versionMarkers("Edit V2")).toEqual(["v2"]);
+    expect(versionMarkers("Final Delivery")).toEqual(["final"]);
+    expect(versionMarkers("Storyboards")).toEqual([]);
   });
 });
 

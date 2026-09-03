@@ -154,8 +154,54 @@ describe("pairFeedbackTask", () => {
     expect(pairFeedbackTask(live, { parentTaskId: "P23", deliverableType: "Edit V3" })?.taskId).toBe("F23v2");
   });
 
+  // The real Leaders of Code shape: deliveries typed "Edit V1", feedback tasks
+  // typed "LoC ..." and named by variant.
+  const loc = (parent: string, closedVideo = false) => [
+    fd({ taskId: `${parent}-v1`, name: "Confirm Video Edit01 Feedback Received", deliverableType: "LoC Edit V1", parentTaskId: parent, dueMs: 5000, isOpen: !closedVideo }),
+    fd({ taskId: `${parent}-s1`, name: "Confirm Snippets Edit01 Feedback Received", deliverableType: "LoC Snippets Edit V1", parentTaskId: parent, dueMs: 6000 }),
+    fd({ taskId: `${parent}-v2`, name: "Confirm Edit Feedback or Approval", deliverableType: "LoC Edit V2", parentTaskId: parent, dueMs: 9000 }),
+    fd({ taskId: `${parent}-s2`, name: "Confirm Snippets Feedback or Approval", deliverableType: "LoC Snippets Edit V2", parentTaskId: parent, dueMs: 9500 }),
+  ];
+  const locLive = { feedback: {}, feedbackByParent: { P21: loc("P21"), P22: loc("P22", true), P5: [fd({ taskId: "only", parentTaskId: "P5", deliverableType: "LoC Edit V1", name: "Confirm Edit Feedback or Approval" })] } };
+
+  it("tier 3: matches the share task's variant against the feedback task names under the parent", () => {
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P21", deliverableType: "Edit V1", shareTaskName: "Share Video Edit01 with Client" })?.taskId).toBe("P21-v1");
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P21", deliverableType: "Edit V1", shareTaskName: "Share Snippets Edit01 with Client" })?.taskId).toBe("P21-s1");
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P22", deliverableType: "Edit V1", shareTaskName: "Share Snippets Edit01 with Client" })?.taskId).toBe("P22-s1");
+  });
+
+  it("tier 3 tie-break: open first, then the soonest due date on or after the send date", () => {
+    // Episode 22's video task is closed; snippets tasks are both open and both match "snippets".
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P22", deliverableType: "Edit V1", shareTaskName: "Share Video Edit01 with Client" })?.taskId).toBe("P22-v1");
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P22", deliverableType: "Edit V2", shareTaskName: "Share Snippets Edit02 with Client", sentAtMs: 7000 })?.taskId).toBe("P22-s2");
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P22", deliverableType: "Edit V2", shareTaskName: "Share Snippets Edit02 with Client", sentAtMs: 1000 })?.taskId).toBe("P22-s1");
+  });
+
+  it("tier 4: a parent with a single feedback task uses it whatever it is called", () => {
+    expect(pairFeedbackTask(locLive, { parentTaskId: "P5", deliverableType: "Storyboards V1", shareTaskName: "Share Graphics V1 with Client" })?.taskId).toBe("only");
+  });
+
+  it("tier 5: with nothing to compare by name, shared version markers decide, else an open task", () => {
+    const versions = {
+      feedback: {},
+      feedbackByParent: {
+        P9: [
+          fd({ taskId: "loc-v1", parentTaskId: "P9", deliverableType: "LoC Edit V1", name: "Confirm Edit Feedback or Approval" }),
+          fd({ taskId: "loc-v2", parentTaskId: "P9", deliverableType: "LoC Edit V2", name: "Confirm Edit Feedback or Approval" }),
+        ],
+        P10: [
+          fd({ taskId: "closed", parentTaskId: "P10", deliverableType: "LoC Edit V1", name: "Confirm Edit Feedback", isOpen: false }),
+          fd({ taskId: "open", parentTaskId: "P10", deliverableType: "LoC Edit V3", name: "Confirm Edit Feedback" }),
+        ],
+      },
+    };
+    expect(pairFeedbackTask(versions, { parentTaskId: "P9", deliverableType: "Edit V2", shareTaskName: "Share Edit V2 with Client" })?.taskId).toBe("loc-v2");
+    expect(pairFeedbackTask(versions, { parentTaskId: "P9", deliverableType: "Edit V1", shareTaskName: null })?.taskId).toBe("loc-v1");
+    expect(pairFeedbackTask(versions, { parentTaskId: "P10", deliverableType: "Edit V2", shareTaskName: "Share Edit V2 with Client" })?.taskId).toBe("open");
+  });
+
   it("falls back to the list-wide type lookup when the parent has nothing matching, or no parent", () => {
-    expect(pairFeedbackTask(live, { parentTaskId: "P22", deliverableType: "Storyboards V1" })).toBeNull();
+    expect(pairFeedbackTask(live, { parentTaskId: "P23", deliverableType: "Storyboards V1", shareTaskName: "Share Graphics V1 with Client" })).toBeNull();
     expect(pairFeedbackTask(live, { parentTaskId: "P99", deliverableType: "Edit V1" })?.taskId).toBe("F21");
     expect(pairFeedbackTask(live, { parentTaskId: null, deliverableType: "Edit V1" })?.taskId).toBe("F21");
     expect(pairFeedbackTask(undefined, { parentTaskId: "P21", deliverableType: "Edit V1" })).toBeNull();

@@ -20,7 +20,12 @@ import {
   extractCustomFieldValue,
 } from "@/lib/clickup";
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
-import { stripVersionTokens } from "@/lib/portal-labels";
+import {
+  stripVersionTokens,
+  versionMarkers,
+  nameTokens,
+  deliverableIdentityTokens,
+} from "@/lib/portal-labels";
 import type { Prisma } from "@prisma/client";
 import type { ClickUpTask } from "@/lib/types";
 
@@ -152,35 +157,102 @@ export function selectFeedbackByParent(tasks: ClickUpTask[]): LiveFeedbackByPare
   return out;
 }
 
-function pickPreferred(candidates: LiveFeedbackTask[]): LiveFeedbackTask | null {
-  let best: LiveFeedbackTask | undefined;
-  for (const c of candidates) if (preferred(c, best)) best = c;
-  return best ?? null;
+/**
+ * Rank candidates for one delivery: open first, then the soonest due date on
+ * or after the delivery's send date, then the soonest overall.
+ */
+function pickForDelivery(candidates: LiveFeedbackTask[], sentAtMs: number | null): LiveFeedbackTask | null {
+  const dueRank = (t: LiveFeedbackTask) => {
+    if (t.dueMs === null) return [2, Infinity];
+    if (sentAtMs !== null && t.dueMs < sentAtMs) return [1, t.dueMs];
+    return [0, t.dueMs];
+  };
+  let best: LiveFeedbackTask | null = null;
+  for (const c of candidates) {
+    if (!best) {
+      best = c;
+      continue;
+    }
+    if (c.isOpen !== best.isOpen) {
+      if (c.isOpen) best = c;
+      continue;
+    }
+    const [ca, cb] = dueRank(c);
+    const [ba, bb] = dueRank(best);
+    if (ca - ba || cb - bb) {
+      if (ca < ba || (ca === ba && cb < bb)) best = c;
+    }
+  }
+  return best;
 }
 
 function sameType(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+export interface PairingDelivery {
+  parentTaskId: string | null;
+  deliverableType: string;
+  shareTaskName?: string | null;
+  sentAtMs?: number | null;
+}
+
 /**
  * Pure: the Feedback Deadline task that goes with one delivery. Several
  * share tasks in a list can carry the same deliverable type ("Edit V1" for
- * every episode), so the delivery's parent decides first: same parent and
- * same type, then same parent and the type minus version markers, then the
+ * every episode), and a feedback task's type may not equal the delivery's
+ * ("LoC Edit V1"), so the delivery's parent decides first. Under the same
+ * parent: 1. same type; 2. same type minus version markers; 3. most identity
+ * tokens shared between the share task's variant and the feedback task name
+ * ("Video" vs "Snippets"); 4. the only feedback task there is; 5. shared
+ * version markers between the two types ("V2"), else an open task. Then the
  * list-wide type lookup.
  */
 export function pairFeedbackTask(
   live: Pick<LivePayload, "feedback" | "feedbackByParent"> | undefined,
-  delivery: { parentTaskId: string | null; deliverableType: string }
+  delivery: PairingDelivery
 ): LiveFeedbackTask | null {
   if (!live) return null;
+  const sentAtMs = delivery.sentAtMs ?? null;
   const siblings = delivery.parentTaskId ? live.feedbackByParent[delivery.parentTaskId] ?? [] : [];
   if (siblings.length > 0) {
-    const exact = pickPreferred(siblings.filter((t) => sameType(t.deliverableType, delivery.deliverableType)));
+    // 1. Same parent, same type.
+    const exact = pickForDelivery(siblings.filter((t) => sameType(t.deliverableType, delivery.deliverableType)), sentAtMs);
     if (exact) return exact;
+    // 2. Same parent, same type minus version markers.
     const stem = stripVersionTokens(delivery.deliverableType);
-    const loose = pickPreferred(siblings.filter((t) => stripVersionTokens(t.deliverableType) === stem));
+    const loose = pickForDelivery(siblings.filter((t) => stripVersionTokens(t.deliverableType) === stem), sentAtMs);
     if (loose) return loose;
+    // 3. Same parent, most identity tokens in common with the feedback task name.
+    const tokens = new Set(deliverableIdentityTokens(delivery.shareTaskName ?? null, delivery.deliverableType));
+    if (tokens.size > 0) {
+      let bestScore = 0;
+      let bestSet: LiveFeedbackTask[] = [];
+      for (const t of siblings) {
+        const score = nameTokens(t.name).filter((w) => tokens.has(w)).length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestSet = [t];
+        } else if (score === bestScore && score > 0) {
+          bestSet.push(t);
+        }
+      }
+      const byTokens = pickForDelivery(bestSet, sentAtMs);
+      if (byTokens) return byTokens;
+    }
+    // 4. Same parent, only one feedback task.
+    if (siblings.length === 1) return siblings[0];
+    // 5. Same parent, nothing to compare by name: shared version markers, else an open task.
+    if (tokens.size === 0) {
+      const markers = new Set(versionMarkers(delivery.deliverableType));
+      const byVersion = pickForDelivery(
+        siblings.filter((t) => versionMarkers(t.deliverableType).some((m) => markers.has(m))),
+        sentAtMs
+      );
+      if (byVersion) return byVersion;
+      const open = pickForDelivery(siblings.filter((t) => t.isOpen), sentAtMs);
+      if (open) return open;
+    }
   }
   return live.feedback[delivery.deliverableType] ?? null;
 }

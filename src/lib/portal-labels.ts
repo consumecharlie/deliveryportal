@@ -101,6 +101,38 @@ export function variantStem(shareTaskName: string | null, deliverableType: strin
 /** Pure version markers (unlike VERSION_TOKEN, "edit" alone is a word, not a version). */
 const VERSION_MARKER = /^(?:v\d+|\d+|edit\d+|final|finals|potential|master|masters)$/i;
 
+/** The version markers in a label, lowercased: "LoC Edit V1" -> ["v1"]. */
+export function versionMarkers(label: string): string[] {
+  return words(label).filter((w) => VERSION_MARKER.test(w));
+}
+
+/**
+ * Words that say nothing about which deliverable a name refers to: the
+ * share / feedback task boilerplate, generic deliverable words and version
+ * markers. What is left ("video", "snippets") identifies the deliverable.
+ */
+const GENERIC_WORDS: ReadonlySet<string> = new Set([
+  "edit", "edits", "final", "finals", "delivery", "deliverable", "deliverables",
+  "feedback", "approval", "received", "confirm", "or", "with", "client", "share",
+  "the", "and", "a", "an", "of", "for",
+]);
+
+/** Identity tokens of any task name: lowercased alphanumeric words minus generic words and version markers. */
+export function nameTokens(text: string | null | undefined): string[] {
+  return (text ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !GENERIC_WORDS.has(w) && !VERSION_MARKER.test(w));
+}
+
+/**
+ * Identity tokens of a delivery, from its share task's variant ("Share
+ * Video Edit01 with Client" -> ["video"]) or, without one, its type.
+ */
+export function deliverableIdentityTokens(shareTaskName: string | null, deliverableType: string): string[] {
+  return nameTokens(variantLabel(shareTaskName, deliverableType) ?? deliverableType);
+}
+
 /** The label minus version markers, lowercased: "Post Script AV V1" -> "post script av". */
 export function stripVersionTokens(label: string): string {
   return words(label)

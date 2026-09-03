@@ -197,7 +197,12 @@ function buildDeliverable(
     ? NO_REVIEW
     : toReview(
         decideFeedbackStatus({
-          task: pairFeedbackTask(live, latest),
+          task: pairFeedbackTask(live, {
+            parentTaskId: latest.parentTaskId,
+            deliverableType: latest.deliverableType,
+            shareTaskName: latest.shareTaskName,
+            sentAtMs: latest.sentAt.getTime(),
+          }),
           confirmation: input.confirmations.get(latest.id) ?? null,
           sentAt: latest.sentAt,
           feedbackWindows: latest.feedbackWindows,
