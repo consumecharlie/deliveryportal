@@ -406,6 +406,7 @@ function d(over: Partial<TimelineDelivery>): TimelineDelivery {
     slackContent: null,
     replacesDeliveryId: null,
     links: [],
+    feedbackWindows: "",
     ...over,
   };
 }
@@ -479,6 +480,8 @@ export interface TimelineDelivery {
   slackContent: string | null;
   replacesDeliveryId: string | null;
   links: TimelineLink[];
+  /** Feedback Windows value snapshotted at send time ("" if unknown). */
+  feedbackWindows: string;
 }
 
 export interface TimelineEntry extends TimelineDelivery {
@@ -931,6 +934,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
       slackContent: r.slackContent,
       replacesDeliveryId: r.replacesDeliveryId,
       links: r.links.map((l) => ({ url: l.url, label: l.label, variableName: l.variableName })),
+      feedbackWindows: r.feedbackWindows ?? "",
     })),
     names
   );
@@ -950,7 +954,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
       const task = live[e.deliverableType] ?? null;
       const conf = confirmations.get(e.id);
       const confirmed = Boolean(conf && !conf.undoneAt) || Boolean(task && !task.isOpen);
-      const { dueMs, source } = resolveDeadline({ liveDueMs: task?.dueMs ?? null, sentAt: e.sentAt, feedbackWindows: "" });
+      const { dueMs, source } = resolveDeadline({ liveDueMs: task?.dueMs ?? null, sentAt: e.sentAt, feedbackWindows: e.feedbackWindows });
       const fmt = formatFeedbackDeadline(dueMs);
       const s: FeedbackStatus = {
         kind: confirmed ? "confirmed" : "awaiting",
@@ -971,8 +975,6 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   return { access, timeline, status, actionItems };
 }
 ```
-
-`feedbackWindows` is passed as `""` here because it is not stored on `Delivery`. Follow-up (recorded in the design doc): persist `feedbackWindows` on `Delivery` at send time so the computed fallback uses the real window. Add that column now if trivial: `feedbackWindows String?` on `Delivery`, written in the send route from `formState.feedbackWindows`, and pass `r.feedbackWindows ?? ""` above. Do it; it is three lines and a `db push`.
 
 **Step 2: Type-check and commit**
 
@@ -1429,7 +1431,7 @@ export async function confirmFeedback(input: {
   // 3. Record
   const row = await prisma.feedbackConfirmation.create({
     data: {
-      deliveryId: delivery.id, projectListId: delivery.projectListId ?? "", deliverableType: delivery.deliverableType,
+      deliveryId: delivery.id, projectListId: delivery.projectListId, deliverableType: delivery.deliverableType,
       feedbackDeadlineTaskId: input.feedbackDeadlineTaskId, confirmedByName: input.confirmedByName,
       slackChannelId, slackMessageTs,
     },
@@ -1518,7 +1520,7 @@ git commit -m "feat(portal): confirm / undo feedback with ClickUp + Slack side e
 - Create: `src/components/settings/client-portal-section.tsx`
 - Modify: `src/app/settings/page.tsx` (add the section)
 
-Behaviour: a table of every client folder (source: `GET /api/projects`, which already groups lists by folder), with columns Client, Portal link (masked as `…/portal/abcd…` with Copy button), Created, Last viewed (from `PortalView`), and actions Create / Rotate (revoke + create, confirm dialog) / Copy project link (opens a small picker of that client's lists and copies `/portal/<token>/<listId>`). Auth: this is under `/api/settings`, already behind the middleware.
+Behaviour: a table of every client folder (source: `GET /api/projects`, which already groups lists by folder), with columns Client, Portal link (masked as `…/portal/abcd…` with Copy button), Created, Last viewed (from `PortalView`), and actions Create / Rotate (revoke + create, confirm dialog) / Copy project link (opens a small picker of that client's lists and copies `/portal/<token>/<listId>`). Creating or rotating must run in a `prisma.$transaction` that revokes every active row for that `clientFolderId` and inserts the new one, so there is never more than one active link per client. Auth: this is under `/api/settings`, already behind the middleware.
 
 Commit: `feat(portal): settings section to create, copy, rotate client portal links`.
 
@@ -1612,3 +1614,4 @@ Commit: `feat(portal): reach-out form posting to the internal project channel`.
 - Bulk audit of share tasks closed outside the portal.
 - Per-client branding (logo, colour).
 - Client-facing reminder copy editable from Templates.
+- PortalView retention: prune rows older than 90 days or collapse to last view per (accessId, deliveryId) via a cron; the table is append-only.
