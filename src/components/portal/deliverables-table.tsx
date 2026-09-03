@@ -57,10 +57,11 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
       <div className="portal-row">
         <div className="portal-td portal-td-title">
           <span className="portal-row-title">{d.title}</span>
-          {d.variant && (
+          {(d.variant || d.history.length > 0) && (
             <span className="portal-row-variant">
-              {d.variant}
-              {d.history.length > 0 && `, version ${d.history.length + 1} of ${d.history.length + 1}`}
+              {[d.variant, d.history.length > 0 ? `version ${d.history.length + 1} of ${d.history.length + 1}` : null]
+                .filter(Boolean)
+                .join(", ")}
             </span>
           )}
         </div>

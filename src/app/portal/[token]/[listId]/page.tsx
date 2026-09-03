@@ -41,7 +41,7 @@ export default async function ProjectPortalPage({
     >
       <AttentionList token={token} items={model.attention.filter((a) => a.projectListId === listId)} />
       <div className="portal-projects">
-        <ProjectSection token={token} project={project} linkName={false} expandRows hideHeading />
+        <ProjectSection token={token} project={project} linkName={false} hideHeading />
       </div>
     </PortalShell>
   );

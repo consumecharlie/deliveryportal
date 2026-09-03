@@ -16,7 +16,6 @@ function countsLine({ inProgress, completed }: { inProgress: number; completed: 
   const parts: string[] = [];
   if (inProgress > 0) parts.push(`${inProgress} ${inProgress === 1 ? "project" : "projects"} in progress`);
   if (completed > 0) parts.push(`${completed} completed`);
-  if (parts.length === 0) return "Nothing has been shared here yet";
   return parts.join(", ");
 }
 
@@ -43,7 +42,7 @@ export function PortalShell({ token, clientName, project, counts, children }: Pr
         ) : (
           <>
             <h1 className="portal-h1">{clientName}</h1>
-            {counts && <p className="portal-lede">{countsLine(counts)}</p>}
+            {counts && countsLine(counts) !== "" && <p className="portal-lede">{countsLine(counts)}</p>}
           </>
         )}
       </div>

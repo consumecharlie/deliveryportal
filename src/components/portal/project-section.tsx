@@ -9,13 +9,11 @@ interface SectionProps {
   project: PortalProject;
   /** Client page links the name to the project page; the project page does not. */
   linkName: boolean;
-  /** Project page: rows start expanded so every version is listed. */
-  expandRows?: boolean;
   /** Project page: the name and summary already sit in the page title, so the section has no heading. */
   hideHeading?: boolean;
 }
 
-export function ProjectSection({ token, project, linkName, expandRows = false, hideHeading = false }: SectionProps) {
+export function ProjectSection({ token, project, linkName, hideHeading = false }: SectionProps) {
   return (
     <section className="portal-project" aria-label={hideHeading ? project.name : undefined} aria-labelledby={hideHeading ? undefined : `p-${project.listId}`}>
       {!hideHeading && (
@@ -33,7 +31,7 @@ export function ProjectSection({ token, project, linkName, expandRows = false, h
         </div>
       )}
       <RoadmapRail milestones={project.milestones} />
-      <DeliverablesTable token={token} deliverables={project.deliverables} defaultOpen={expandRows} />
+      <DeliverablesTable token={token} deliverables={project.deliverables} />
     </section>
   );
 }
@@ -43,15 +41,17 @@ interface CompletedProps {
   projects: PortalProject[];
   /** Open the group when the focused project is inside it. */
   focusListId: string | null;
+  /** Nothing is in progress: the group is the whole page, so it opens by default with no rule above. */
+  standalone?: boolean;
 }
 
 /** Completed projects sit under one disclosure at the bottom, collapsed by default. */
-export function CompletedProjects({ token, projects, focusListId }: CompletedProps) {
+export function CompletedProjects({ token, projects, focusListId, standalone = false }: CompletedProps) {
   if (projects.length === 0) return null;
-  const open = focusListId !== null && projects.some((p) => p.listId === focusListId);
+  const open = standalone || (focusListId !== null && projects.some((p) => p.listId === focusListId));
   return (
     <Disclosure
-      className="portal-completed"
+      className={`portal-completed${standalone ? " portal-completed-standalone" : ""}`}
       defaultOpen={open}
       label={<span className="portal-h3">Completed projects ({projects.length})</span>}
     >

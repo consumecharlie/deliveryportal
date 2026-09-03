@@ -31,18 +31,25 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ t
     <PortalShell token={token} clientName={model.clientName} counts={model.counts}>
       <AttentionList token={token} items={model.attention} />
 
-      <div className="portal-projects">
-        {active.map((p) => (
-          <ProjectSection key={p.listId} token={token} project={p} linkName />
-        ))}
-        {model.projects.length === 0 && (
-          <p className="portal-quiet">
-            Nothing has been shared here yet. Deliverables will appear as soon as we send them.
-          </p>
-        )}
-      </div>
+      {active.length > 0 && (
+        <div className="portal-projects">
+          {active.map((p) => (
+            <ProjectSection key={p.listId} token={token} project={p} linkName />
+          ))}
+        </div>
+      )}
+      {model.projects.length === 0 && (
+        <p className="portal-quiet">
+          Nothing has been shared here yet. Deliverables will appear as soon as we send them.
+        </p>
+      )}
 
-      <CompletedProjects token={token} projects={completed} focusListId={model.focusListId} />
+      <CompletedProjects
+        token={token}
+        projects={completed}
+        focusListId={model.focusListId}
+        standalone={active.length === 0}
+      />
     </PortalShell>
   );
 }

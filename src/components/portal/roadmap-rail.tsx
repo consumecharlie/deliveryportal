@@ -1,6 +1,7 @@
 import type { PortalMilestone } from "@/lib/portal-page-model";
 import { PacMark } from "./pac-mark";
 import { shortDate } from "./format";
+import { RailScroller } from "./rail-scroller";
 
 const MAX_MILESTONES = 10;
 const KEEP_DELIVERED = 2;
@@ -43,7 +44,7 @@ export function RoadmapRail({ milestones }: Props) {
   const hasUpNext = shown.some((m) => m.state === "up-next");
 
   return (
-    <div className="portal-rail-wrap">
+    <RailScroller>
       <ol className={`portal-rail${hasUpNext ? " portal-rail-has-next" : ""}`} aria-label="Project roadmap">
         {earlier > 0 && (
           <li className="portal-rail-item portal-rail-earlier">
@@ -84,6 +85,6 @@ export function RoadmapRail({ milestones }: Props) {
           );
         })}
       </ol>
-    </div>
+    </RailScroller>
   );
 }
