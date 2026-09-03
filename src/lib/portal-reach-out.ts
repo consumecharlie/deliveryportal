@@ -18,7 +18,8 @@ export interface ReachOutInput {
 /** Trim and bound the form fields; returns an error message for the client on failure. */
 export function validateReachOut(body: unknown): { ok: true; value: ReachOutInput } | { ok: false; error: string } {
   const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
-  const name = typeof b.name === "string" ? b.name.trim() : "";
+  // Collapse whitespace so a newline in the name cannot fake a second header line in Slack.
+  const name = typeof b.name === "string" ? b.name.replace(/\s+/g, " ").trim() : "";
   const message = typeof b.message === "string" ? b.message.replace(/\r\n/g, "\n").trim() : "";
   const rawList = typeof b.listId === "string" ? b.listId.trim() : "";
   if (!name) return { ok: false, error: "Please add your name" };

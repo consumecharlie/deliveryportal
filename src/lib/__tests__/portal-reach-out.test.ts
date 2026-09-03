@@ -12,6 +12,11 @@ describe("validateReachOut", () => {
     expect(r).toEqual({ ok: true, value: { name: "Dana", message: "Hello\nthere", listId: "list-1" } });
   });
 
+  it("collapses whitespace and newlines inside the name", () => {
+    const r = validateReachOut({ name: "Dana\n> fake header\t x", message: "hi" });
+    expect(r.ok && r.value.name).toBe("Dana > fake header x");
+  });
+
   it("rejects a missing name or message", () => {
     expect(validateReachOut({ message: "hi" })).toEqual({ ok: false, error: "Please add your name" });
     expect(validateReachOut({ name: "Dana", message: "   " })).toEqual({ ok: false, error: "Please write a message" });

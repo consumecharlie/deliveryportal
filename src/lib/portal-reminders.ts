@@ -16,7 +16,6 @@ export interface ReminderCandidate {
   deliveryId: string;
   dueMs: number;
   state: DeadlineState;
-  sentAt: Date;
 }
 
 export interface ReminderBuckets {
@@ -92,6 +91,9 @@ export function dueWordFor(kind: "tomorrow" | "today", dueMs: number, nowMs: num
  * line of the sent email body ("Hello, Klaudia!" -> "Klaudia"). Null when the
  * body does not open with a greeting, so the reminder falls back to "Hi there,".
  */
+/** Salutation targets that are not a person's name ("Hi Team,"). */
+const GENERIC_GREETING_WORDS = new Set(["there", "team", "all", "everyone", "folks"]);
+
 export function greetingNameFromBody(body: string): string | null {
   const line = body
     .split(/\r?\n/)
@@ -101,12 +103,12 @@ export function greetingNameFromBody(body: string): string | null {
   const m = /^(?:hi|hello|hey)[,\s]+([A-Za-z][\w'.-]*)/i.exec(line);
   if (!m) return null;
   const name = m[1].replace(/[.,!'-]+$/, "");
-  return /^[A-Z]/.test(name) ? name : null;
+  if (!/^[A-Z]/.test(name) || GENERIC_GREETING_WORDS.has(name.toLowerCase())) return null;
+  return name;
 }
 
 export interface ReminderEmailInput {
   kind: "tomorrow" | "today";
-  clientName: string;
   projectName: string;
   deliverableType: string;
   dueLabel: string;

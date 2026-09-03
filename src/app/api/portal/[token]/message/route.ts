@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { resolveAccess, loadPortal, type PortalAccessInfo } from "@/lib/portal-data";
+import { resolveAccess, type PortalAccessInfo } from "@/lib/portal-data";
 import { buildPortalUrl } from "@/lib/portal-access";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
@@ -25,12 +25,17 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
 
-/** Post to the project's internal channel when the note came from a project the client can see. */
+/**
+ * Post to the project's internal channel when the note came from a project
+ * this client has deliveries for. Ownership is a DB check, not a live load.
+ */
 async function postToProjectChannel(access: PortalAccessInfo, listId: string, text: string): Promise<boolean> {
-  const data = await loadPortal(access, listId);
-  const project = data.timeline.projects.find((p) => p.listId === listId);
+  const project = await prisma.delivery.findFirst({
+    where: { clientFolderId: access.clientFolderId, projectListId: listId },
+    select: { id: true, projectName: true },
+  });
   if (!project) return false;
-  const ch = await resolveProjectChannel(listId, project.name, access.clientName);
+  const ch = await resolveProjectChannel(listId, project.projectName, access.clientName);
   if (!ch.channelId) return false;
   return Boolean(await postChannelMessage(ch.channelId, text));
 }

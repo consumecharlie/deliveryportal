@@ -87,154 +87,150 @@ async function postReminderEmail(webhook: string, payload: Record<string, unknow
   if (!res.ok) throw new Error(`reminder webhook returned ${res.status}`);
 }
 
+interface RunContext {
+  now: number;
+  sentOn: string;
+  closures: Set<string>;
+  baseUrl: string;
+  dryRun: boolean;
+  webhook: string;
+}
+
+type ItemResult = Omit<Summary["items"][number], "kind" | "client" | "project" | "deliverableType" | "due">;
+
+type AwaitingItem = Awaited<ReturnType<typeof loadPortal>>["actionItems"][number];
+
+async function loadDeliveryRow(id: string) {
+  return prisma.delivery.findUnique({
+    where: { id },
+    select: { id: true, primaryEmail: true, ccEmails: true, senderEmail: true, emailContent: true },
+  });
+}
+
+async function emailItem(
+  kind: "tomorrow" | "today",
+  item: AwaitingItem,
+  access: PortalAccessInfo,
+  ctx: RunContext,
+  warned: { webhook: boolean }
+): Promise<ItemResult> {
+  const row = await loadDeliveryRow(item.entry.id);
+  if (!row) return { channel: "none", result: "skipped", reason: "delivery row missing" };
+  const to = row.primaryEmail.trim();
+  if (!to) return { channel: "none", result: "skipped", reason: "no primary email (Slack delivery)" };
+  if (ctx.dryRun) return { channel: "email", result: "would-send" };
+  if (!ctx.webhook) {
+    if (!warned.webhook) {
+      console.warn("N8N_PORTAL_REMINDER_WEBHOOK_URL not set; skipping");
+      warned.webhook = true;
+    }
+    return { channel: "email", result: "skipped", reason: "webhook not configured" };
+  }
+  const id = item.entry.id;
+  if (!(await claim(id, kind, ctx.sentOn))) return { channel: "email", result: "skipped", reason: "already sent today" };
+
+  const portalUrl = buildPortalUrl(ctx.baseUrl, access.token, item.entry.projectListId);
+  const email = buildReminderEmail({
+    kind,
+    projectName: item.projectName,
+    deliverableType: item.entry.deliverableType,
+    dueLabel: item.status.dueLabel,
+    portalUrl,
+    dueWord: dueWordFor(kind, item.status.dueMs, ctx.now),
+    primaryFirstName: greetingNameFromBody(row.emailContent),
+  });
+  try {
+    await postReminderEmail(ctx.webhook, {
+      to,
+      cc: row.ccEmails ?? "",
+      from: row.senderEmail,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      portal_url: portalUrl,
+      delivery_id: id,
+      kind,
+    });
+    return { channel: "email", result: "sent" };
+  } catch (err) {
+    console.error("[portal-reminders] email failed", id, kind, err);
+    await releaseClaim(id, kind, ctx.sentOn);
+    return { channel: "email", result: "skipped", reason: "webhook call failed" };
+  }
+}
+
+async function nudgeItem(item: AwaitingItem, access: PortalAccessInfo, ctx: RunContext): Promise<ItemResult> {
+  const row = await loadDeliveryRow(item.entry.id);
+  if (!row) return { channel: "none", result: "skipped", reason: "delivery row missing" };
+  if (ctx.dryRun) return { channel: "slack", result: "would-send" };
+  const id = item.entry.id;
+  if (!(await claim(id, "overdue", ctx.sentOn))) return { channel: "slack", result: "skipped", reason: "already sent today" };
+
+  const text = buildOverdueNudgeText({
+    clientName: access.clientName,
+    projectName: item.projectName,
+    deliverableType: item.entry.deliverableType,
+    dueLabel: item.status.dueLabel,
+    portalUrl: buildPortalUrl(ctx.baseUrl, access.token, item.entry.projectListId),
+  });
+  let ok = false;
+  if (item.entry.projectListId) {
+    try {
+      const ch = await resolveProjectChannel(item.entry.projectListId, item.projectName, access.clientName);
+      if (ch.channelId) ok = Boolean(await postChannelMessage(ch.channelId, text));
+    } catch (err) {
+      console.error("[portal-reminders] channel resolve failed", item.entry.projectListId, err);
+    }
+  }
+  if (!ok) ok = await sendSlackDM(row.senderEmail, text);
+  if (ok) return { channel: "slack", result: "sent" };
+  await releaseClaim(id, "overdue", ctx.sentOn);
+  return { channel: "slack", result: "skipped", reason: "Slack post and DM both failed" };
+}
+
 async function processAccess(
   access: PortalAccessInfo,
-  ctx: { now: number; sentOn: string; closures: Set<string>; baseUrl: string; dryRun: boolean; webhook: string },
+  ctx: RunContext,
   summary: Summary,
   warned: { webhook: boolean }
 ): Promise<void> {
   const data = await loadPortal(access);
   const awaiting = data.actionItems;
   const buckets = classifyReminders(
-    awaiting.map((a) => ({
-      deliveryId: a.entry.id,
-      dueMs: a.status.dueMs,
-      state: a.status.state,
-      sentAt: a.entry.sentAt,
-    })),
+    awaiting.map((a) => ({ deliveryId: a.entry.id, dueMs: a.status.dueMs, state: a.status.state })),
     ctx.now,
     ctx.closures
   );
-  const ids = [...buckets.tomorrow, ...buckets.today, ...buckets.overdue];
-  if (ids.length === 0) return;
-
-  const rows = await prisma.delivery.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, primaryEmail: true, ccEmails: true, senderEmail: true, emailContent: true },
-  });
-  const byId = new Map(rows.map((r) => [r.id, r]));
   const itemById = new Map(awaiting.map((a) => [a.entry.id, a]));
 
-  const kinds: Array<["tomorrow" | "today", string[]]> = [
+  const work: Array<[ReminderKind, string[]]> = [
     ["tomorrow", buckets.tomorrow],
     ["today", buckets.today],
+    ["overdue", buckets.overdue],
   ];
-  for (const [kind, list] of kinds) {
-    for (const id of list) {
+  for (const [kind, ids] of work) {
+    for (const id of ids) {
       const item = itemById.get(id);
-      const row = byId.get(id);
-      if (!item || !row) continue;
+      if (!item) continue;
       const base = {
         kind,
         client: access.clientName,
         project: item.projectName,
         deliverableType: item.entry.deliverableType,
         due: item.status.dueLabel,
-      } as const;
-      const to = row.primaryEmail.trim();
-      if (!to) {
-        summary.skipped++;
-        summary.items.push({ ...base, channel: "none", result: "skipped", reason: "no primary email (Slack delivery)" });
-        continue;
-      }
-      if (ctx.dryRun) {
-        summary.emailed++;
-        summary.items.push({ ...base, channel: "email", result: "would-send" });
-        continue;
-      }
-      if (!ctx.webhook) {
-        if (!warned.webhook) {
-          console.warn("N8N_PORTAL_REMINDER_WEBHOOK_URL not set; skipping");
-          warned.webhook = true;
-        }
-        summary.skipped++;
-        summary.items.push({ ...base, channel: "email", result: "skipped", reason: "webhook not configured" });
-        continue;
-      }
-      if (!(await claim(id, kind, ctx.sentOn))) {
-        summary.skipped++;
-        summary.items.push({ ...base, channel: "email", result: "skipped", reason: "already sent today" });
-        continue;
-      }
-      const portalUrl = buildPortalUrl(ctx.baseUrl, access.token, item.entry.projectListId);
-      const email = buildReminderEmail({
-        kind,
-        clientName: access.clientName,
-        projectName: item.projectName,
-        deliverableType: item.entry.deliverableType,
-        dueLabel: item.status.dueLabel,
-        portalUrl,
-        dueWord: dueWordFor(kind, item.status.dueMs, ctx.now),
-        primaryFirstName: greetingNameFromBody(row.emailContent),
-      });
+      };
+      // One bad item (DB hiccup, malformed row) must not stop the rest.
+      let result: ItemResult;
       try {
-        await postReminderEmail(ctx.webhook, {
-          to,
-          cc: row.ccEmails ?? "",
-          from: row.senderEmail,
-          subject: email.subject,
-          html: email.html,
-          text: email.text,
-          portal_url: portalUrl,
-          delivery_id: id,
-          kind,
-        });
-        summary.emailed++;
-        summary.items.push({ ...base, channel: "email", result: "sent" });
+        result = kind === "overdue" ? await nudgeItem(item, access, ctx) : await emailItem(kind, item, access, ctx, warned);
       } catch (err) {
-        console.error("[portal-reminders] email failed", id, kind, err);
-        await releaseClaim(id, kind, ctx.sentOn);
-        summary.skipped++;
-        summary.items.push({ ...base, channel: "email", result: "skipped", reason: "webhook call failed" });
+        console.error("[portal-reminders] item failed", id, kind, err);
+        result = { channel: "none", result: "skipped", reason: "unexpected error" };
       }
-    }
-  }
-
-  for (const id of buckets.overdue) {
-    const item = itemById.get(id);
-    const row = byId.get(id);
-    if (!item || !row) continue;
-    const base = {
-      kind: "overdue" as const,
-      client: access.clientName,
-      project: item.projectName,
-      deliverableType: item.entry.deliverableType,
-      due: item.status.dueLabel,
-    };
-    if (ctx.dryRun) {
-      summary.nudged++;
-      summary.items.push({ ...base, channel: "slack", result: "would-send" });
-      continue;
-    }
-    if (!(await claim(id, "overdue", ctx.sentOn))) {
-      summary.skipped++;
-      summary.items.push({ ...base, channel: "slack", result: "skipped", reason: "already sent today" });
-      continue;
-    }
-    const text = buildOverdueNudgeText({
-      clientName: access.clientName,
-      projectName: item.projectName,
-      deliverableType: item.entry.deliverableType,
-      dueLabel: item.status.dueLabel,
-      portalUrl: buildPortalUrl(ctx.baseUrl, access.token, item.entry.projectListId),
-    });
-    let ok = false;
-    if (item.entry.projectListId) {
-      try {
-        const ch = await resolveProjectChannel(item.entry.projectListId, item.projectName, access.clientName);
-        if (ch.channelId) ok = Boolean(await postChannelMessage(ch.channelId, text));
-      } catch (err) {
-        console.error("[portal-reminders] channel resolve failed", item.entry.projectListId, err);
-      }
-    }
-    if (!ok) ok = await sendSlackDM(row.senderEmail, text);
-    if (ok) {
-      summary.nudged++;
-      summary.items.push({ ...base, channel: "slack", result: "sent" });
-    } else {
-      await releaseClaim(id, "overdue", ctx.sentOn);
-      summary.skipped++;
-      summary.items.push({ ...base, channel: "slack", result: "skipped", reason: "Slack post and DM both failed" });
+      if (result.result === "skipped") summary.skipped++;
+      else if (result.channel === "email") summary.emailed++;
+      else summary.nudged++;
+      summary.items.push({ ...base, ...result });
     }
   }
 }
@@ -248,7 +244,7 @@ async function runCron(req: Request) {
   try {
     const now = Date.now();
     const sentOn = easternDateString(now);
-    const ctx = {
+    const ctx: RunContext = {
       now,
       sentOn,
       closures: holidaySet([Number(sentOn.slice(0, 4))]),

@@ -18,7 +18,7 @@ const at9amET = (date: string) => Date.parse(`${date}T13:00:00Z`);
 function item(deliveryId: string, due: string, nowMs: number): ReminderCandidate {
   const dueMs = dateOnlySentinelMs(due);
   const state = due === new Date(nowMs).toISOString().slice(0, 10) ? "due-today" : dueMs < nowMs ? "overdue" : "open";
-  return { deliveryId, dueMs, state, sentAt: new Date("2026-09-01T15:00:00Z") };
+  return { deliveryId, dueMs, state };
 }
 
 describe("classifyReminders", () => {
@@ -137,6 +137,8 @@ describe("greetingNameFromBody", () => {
   it("returns null without a greeting, a capitalised name, or any body", () => {
     expect(greetingNameFromBody("Quick update")).toBeNull();
     expect(greetingNameFromBody("hi there,")).toBeNull();
+    expect(greetingNameFromBody("Hi Team,")).toBeNull();
+    expect(greetingNameFromBody("Hello Everyone!")).toBeNull();
     expect(greetingNameFromBody("")).toBeNull();
     expect(greetingNameFromBody("   \n  ")).toBeNull();
   });
@@ -144,7 +146,6 @@ describe("greetingNameFromBody", () => {
 
 describe("buildReminderEmail", () => {
   const base = {
-    clientName: "Acme & Co",
     projectName: "Spring <Launch>",
     deliverableType: "Rough Cut V1",
     dueLabel: "Mon, Sep 14",
