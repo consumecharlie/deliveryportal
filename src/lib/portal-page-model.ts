@@ -99,6 +99,8 @@ export interface PortalPageModel {
   token: string;
   clientName: string;
   counts: { inProgress: number; completed: number };
+  /** The line under the client name ("2 projects in progress, 1 completed"); "" when nothing to count. */
+  countsLabel?: string;
   attention: PortalAttentionItem[];
   projects: PortalProject[];
   /** When the page is a single-project view, the project shown; else null. */

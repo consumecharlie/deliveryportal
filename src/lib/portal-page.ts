@@ -12,7 +12,16 @@ import {
   type MentionNames,
 } from "@/lib/portal-timeline";
 import { extractFamilyName } from "@/lib/template-families";
-import { deliverableTitle, variantLabel, milestoneLabel, linkLabel, deliverableKey } from "@/lib/portal-labels";
+import {
+  deliverableTitle,
+  variantLabel,
+  milestoneLabel,
+  linkLabel,
+  deliverableKey,
+  informativeParentName,
+  stripVersionTokens,
+  countsLine,
+} from "@/lib/portal-labels";
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
 import { pickReviewLink } from "@/lib/portal-view-model";
 import type { LivePayload, LiveMilestone } from "@/lib/portal-live";
@@ -156,14 +165,25 @@ function buildDeliverable(
   const latest = draft.versions[0];
   const primary = pickReviewLink(latest.links);
   primaryLinks.set(latest.id, primary ? toLink(primary) : null);
-  const family = extractFamilyName(latest.deliverableType);
-  const title = deliverableTitle(latest.parentTaskName, family);
 
-  let variant = variantLabel(latest.shareTaskName, latest.deliverableType);
-  // With several versions the type of the latest one is worth a second line
-  // ("Edit V2") even when the share task name adds nothing.
-  if (!variant && draft.versions.length > 1) variant = latest.deliverableType;
-  if (variant && sameText(variant, title)) variant = null;
+  // A parent that names the deliverable ("LOC19: Intuit") is the title and
+  // the share task's variant is the second line. A missing or phase-only
+  // parent ("Post-Production") says nothing, so the share task label itself
+  // is the title and the version info alone fills the second line.
+  const parentTitle = informativeParentName(latest.parentTaskName);
+  let title: string;
+  let variant: string | null;
+  if (parentTitle) {
+    title = deliverableTitle(latest.parentTaskName, extractFamilyName(latest.deliverableType));
+    variant = variantLabel(latest.shareTaskName, latest.deliverableType);
+    // With several versions the type of the latest one is worth a second line
+    // ("Edit V2") even when the share task name adds nothing.
+    if (!variant && draft.versions.length > 1) variant = latest.deliverableType;
+    if (variant && sameText(variant, title)) variant = null;
+  } else {
+    title = milestoneLabel(latest.shareTaskName, latest.deliverableType);
+    variant = null;
+  }
 
   const status = decideFeedbackStatus({
     task: live?.feedback[latest.deliverableType] ?? null,
@@ -215,9 +235,16 @@ function buildMilestones(
     const label = m.deliverableType
       ? milestoneLabel(m.name, m.deliverableType)
       : variantLabel(m.name, "") ?? m.name;
-    const parentTitle = deliverableTitle(m.parentTaskName, "");
+    // The parent adds information only when it names a deliverable that the
+    // label does not already say ("Post Script AV" under "Post Script AV V1" does not).
+    const parentTitle = informativeParentName(m.parentTaskName);
     const sublabel =
-      parentTitle && !sameText(parentTitle, projectName) && !sameText(parentTitle, label) ? parentTitle : null;
+      parentTitle &&
+      !sameText(parentTitle, projectName) &&
+      !sameText(parentTitle, label) &&
+      !sameText(parentTitle, stripVersionTokens(label))
+        ? parentTitle
+        : null;
     const dateMs = delivered ? row?.sentAt.getTime() ?? m.closedMs ?? m.dueMs : m.dueMs;
     return { id: m.taskId, label, sublabel, dateMs, state, deliveryId: row?.id ?? null };
   });
@@ -227,12 +254,17 @@ function summarize(
   phase: PortalProject["phase"],
   wrapsUpMs: number | null,
   upNext: PortalMilestone | null,
-  lastActivityMs: number
+  lastActivityMs: number,
+  nowMs: number
 ): string {
   if (phase === "completed") return `Completed ${shortDateWithYear(lastActivityMs)}`;
-  let s = wrapsUpMs ? `In progress, wraps up ${shortDate(wrapsUpMs)}` : "In progress";
-  if (upNext) s += `, up next: ${upNext.label}${upNext.dateMs ? ` on ${shortDate(upNext.dateMs)}` : ""}`;
-  return s;
+  // A wrap date in the past is not something to promise.
+  const wrapsUp = wrapsUpMs && wrapsUpMs > nowMs ? `wraps up ${shortDate(wrapsUpMs)}` : null;
+  if (upNext) {
+    const when = upNext.dateMs ? ` on ${shortDate(upNext.dateMs)}` : "";
+    return ["In progress", wrapsUp, `up next: ${upNext.label}${when}`].filter(Boolean).join(", ");
+  }
+  return ["In progress, next deliverable not scheduled yet", wrapsUp].filter(Boolean).join(", ");
 }
 
 function buildProject(
@@ -256,15 +288,16 @@ function buildProject(
     ? buildMilestones(live.milestones, live, allRowsByTaskId, reviewByDeliveryId, name)
     : [];
 
-  const allClosed = live !== undefined && live.milestones.length > 0 && live.milestones.every((m) => m.isClosed);
-  const phase: PortalProject["phase"] = live?.archived || allClosed ? "completed" : "in-progress";
+  // Only an archived list is finished: lists keep getting share tasks as
+  // episodes are added, so "every milestone closed" is not the end.
+  const phase: PortalProject["phase"] = live?.archived ? "completed" : "in-progress";
   const upNext = milestones.find((m) => m.state === "up-next") ?? null;
 
   return {
     listId,
     name,
     phase,
-    summary: summarize(phase, live?.wrapsUpMs ?? null, upNext, lastActivityMs),
+    summary: summarize(phase, live?.wrapsUpMs ?? null, upNext, lastActivityMs, input.nowMs),
     wrapsUpMs: live?.wrapsUpMs ?? null,
     lastActivityMs,
     milestones,
@@ -329,14 +362,21 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
       });
     }
   }
+  // Real deadlines (ClickUp or the promised window) before estimates; within
+  // each group the soonest (for estimates: oldest) first.
+  const estimateRank = (a: PortalAttentionItem) => (a.review.dueIsEstimate ? 1 : 0);
   attention.sort(
-    (a, b) => (a.review.dueMs ?? Infinity) - (b.review.dueMs ?? Infinity) || a.deliveryId.localeCompare(b.deliveryId)
+    (a, b) =>
+      estimateRank(a) - estimateRank(b) ||
+      (a.review.dueMs ?? Infinity) - (b.review.dueMs ?? Infinity) ||
+      a.deliveryId.localeCompare(b.deliveryId)
   );
 
   return {
     token: input.token,
     clientName: input.clientName,
     counts,
+    countsLabel: countsLine(counts),
     attention,
     projects: shown,
     focusListId: input.focusListId,

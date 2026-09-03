@@ -16,15 +16,47 @@ function collapse(s: string): string {
 }
 
 /**
+ * Parent task names that name a phase or department rather than a
+ * deliverable ("Post-Production", "Post"). Such a parent says nothing a
+ * client needs, so title, key and rail sublabel fall back to the share task.
+ */
+export const PHASE_ONLY_WORDS: ReadonlySet<string> = new Set([
+  "post-production",
+  "post production",
+  "post-pro",
+  "pre-production",
+  "pre production",
+  "pre-pro",
+  "production",
+  "design",
+  "editing",
+  "animation",
+  "post",
+  "pre",
+]);
+
+/** The parent name minus a leading department prefix, or "" when nothing informative is left. */
+export function informativeParentName(parentName: string | null | undefined): string {
+  const raw = collapse(parentName ?? "");
+  if (!raw) return "";
+  const stripped = raw.replace(DEPARTMENT_PREFIX, "").trim();
+  if (!stripped || PHASE_ONLY_WORDS.has(stripped.toLowerCase())) return "";
+  return stripped;
+}
+
+/** True when the parent task name is missing, only a prefix, or a phase word. */
+export function isPhaseOnlyParent(parentName: string | null | undefined): boolean {
+  return informativeParentName(parentName) === "";
+}
+
+/**
  * The deliverable's title from its parent task name, minus a leading
  * department prefix ("Post-Production - ", "Design: ", ...). Falls back to
- * `fallbackFamily` when there is no usable parent name.
+ * `fallbackFamily` when there is no usable parent name (missing, blank, or a
+ * phase-only word such as "Post-Production").
  */
 export function deliverableTitle(parentName: string | null, fallbackFamily: string): string {
-  const raw = collapse(parentName ?? "");
-  if (!raw) return fallbackFamily;
-  const stripped = raw.replace(DEPARTMENT_PREFIX, "").trim();
-  return stripped || fallbackFamily;
+  return informativeParentName(parentName) || fallbackFamily;
 }
 
 /**
@@ -66,18 +98,46 @@ export function variantStem(shareTaskName: string | null, deliverableType: strin
     .join(" ");
 }
 
+/** Pure version markers (unlike VERSION_TOKEN, "edit" alone is a word, not a version). */
+const VERSION_MARKER = /^(?:v\d+|\d+|edit\d+|final|finals|potential|master|masters)$/i;
+
+/** The label minus version markers, lowercased: "Post Script AV V1" -> "post script av". */
+export function stripVersionTokens(label: string): string {
+  return words(label)
+    .filter((w) => !VERSION_MARKER.test(w))
+    .join(" ");
+}
+
 /**
- * Grouping key for a delivery: the parent task, refined by the variant stem
- * when the share task name carries one; a family key when no parent is known.
+ * Grouping key for a delivery: the parent task when it names a deliverable,
+ * else the type family; either refined by the variant stem when the share
+ * task name carries one, so two deliverables under one parent stay apart.
  */
 export function deliverableKey(row: {
   parentTaskId: string | null;
+  parentTaskName: string | null;
   shareTaskName: string | null;
   deliverableType: string;
 }): string {
-  if (!row.parentTaskId) return `family:${extractFamilyName(row.deliverableType)}`;
+  const base =
+    row.parentTaskId && !isPhaseOnlyParent(row.parentTaskName)
+      ? row.parentTaskId
+      : `family:${extractFamilyName(row.deliverableType)}`;
   const stem = variantStem(row.shareTaskName, row.deliverableType);
-  return stem ? `${row.parentTaskId}:${stem}` : row.parentTaskId;
+  return stem ? `${base}:${stem}` : base;
+}
+
+/**
+ * The line under the client name: "2 projects in progress, 1 completed",
+ * "4 completed", or "" when there is nothing to count.
+ */
+export function countsLine(counts: { inProgress: number; completed: number }): string {
+  const parts: string[] = [];
+  if (counts.inProgress > 0) {
+    parts.push(`${counts.inProgress} ${counts.inProgress === 1 ? "project" : "projects"} in progress`);
+  }
+  if (counts.completed > 0) parts.push(`${counts.completed} completed`);
+  return parts.join(", ");
 }
 
 /** Label under a roadmap pellet: the variant when it exists, else the type. */

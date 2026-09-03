@@ -93,6 +93,7 @@ const LIVE: Record<string, LivePayload> = {
     ],
   }),
   L3: live({
+    archived: true,
     feedback: { "Final Delivery": { taskId: "F3", name: "Confirm Final Feedback Received", dueMs: day("2026-08-12"), isOpen: false } },
     milestones: [
       ms({ taskId: "SL1", name: "Share Potential Master with Client", parentTaskId: "PL", parentTaskName: "Post-Production", deliverableType: "Potential Master", dueMs: day("2026-08-01"), isClosed: true }),
@@ -164,11 +165,33 @@ describe("buildPortalPage: projects and deliverables", () => {
     expect(ep21.latest.sentAtMs).toBe(Date.parse("2026-07-30T14:00:00Z"));
   });
 
-  it("falls back to the type family without a parent, and drops a variant that repeats the type", () => {
+  it("without an informative parent the share task label is the title and there is no variant", () => {
     const adhoc = page.projects.find((p) => p.name === "One-off")!;
     expect(adhoc.listId).toBe("");
-    expect(adhoc.deliverables[0]).toMatchObject({ key: "family:Edit", title: "Edit", variant: null });
+    expect(adhoc.deliverables[0]).toMatchObject({ key: "family:Edit", title: "Potential Master", variant: null });
     expect(adhoc.deliverables[0].latest.label).toBe("Potential Master");
+    const callrail = page.projects.find((p) => p.listId === "L2")!;
+    expect(callrail.deliverables[0]).toMatchObject({ key: "family:Post AV:script", title: "Post Script AV V1", variant: null });
+  });
+
+  it("versions under a phase-only parent stack as one deliverable titled by the latest share task", () => {
+    const PP = { projectListId: "L7", projectName: "Wiggam", parentTaskId: "PP", parentTaskName: "Post-Production" };
+    const p = build({
+      rows: [
+        row({ id: "p1", ...PP, shareTaskName: "Share Post Script V1 with Client", deliverableType: "Post Script V1", sentAt: new Date("2026-08-20T14:00:00Z") }),
+        row({ id: "p2", ...PP, shareTaskName: "Share Post Script V2 with Client", deliverableType: "Post Script V2", sentAt: new Date("2026-08-25T14:00:00Z") }),
+        row({ id: "p3", ...PP, shareTaskName: "Share Final Post Script with Client", deliverableType: "Post Script Final", sentAt: new Date("2026-08-28T14:00:00Z") }),
+        row({ id: "av", ...PP, shareTaskName: "Share Post Script AV V1 with Client", deliverableType: "Post AV V1", sentAt: new Date("2026-08-29T14:00:00Z") }),
+      ],
+      live: {},
+      confirmations: new Map(),
+    });
+    const w = p.projects.find((x) => x.listId === "L7")!;
+    expect(w.deliverables.map((d) => [d.title, d.variant, d.history.length])).toEqual([
+      ["Post Script AV V1", null, 0],
+      ["Final Post Script", null, 2],
+    ]);
+    expect(w.deliverables[1].history.map((v) => v.label)).toEqual(["Post Script V2", "Post Script V1"]);
   });
 });
 
@@ -279,6 +302,28 @@ describe("buildPortalPage: milestones, phase and summary", () => {
     expect(loc.milestones[6]).toMatchObject({ label: "Edit V1", sublabel: null });
   });
 
+  it("phase-only parents and parents the label already says give no sublabel", () => {
+    const callrail = page.projects.find((p) => p.listId === "L2")!;
+    expect(callrail.milestones.map((m) => m.sublabel)).toEqual([null, null]);
+    const p = build({
+      live: {
+        L2: live({
+          milestones: [
+            ms({ taskId: "a", name: "Share Post Script AV V1 with Client", parentTaskId: "X", parentTaskName: "Post Script AV", deliverableType: "Post AV V1", dueMs: day("2026-09-10") }),
+            ms({ taskId: "b", name: "Share Edit V1 with Client", parentTaskId: "Y", parentTaskName: "Post-Production - Edit", dueMs: day("2026-09-11") }),
+            ms({ taskId: "c", name: "Share Edit V1 with Client", parentTaskId: "Z", parentTaskName: "Post-Production - Ep #22", dueMs: day("2026-09-12") }),
+          ],
+        }),
+      },
+    });
+    const m = p.projects.find((x) => x.listId === "L2")!.milestones;
+    expect(m.map((x) => [x.label, x.sublabel])).toEqual([
+      ["Post Script AV V1", null],
+      ["Edit V1", null],
+      ["Edit V1", "Ep #22"],
+    ]);
+  });
+
   it("a closed share task without a delivery row is delivered, or in-review while its feedback task is open", () => {
     const done = page.projects.find((p) => p.listId === "L3")!;
     expect(done.milestones.map((m) => m.state)).toEqual(["delivered", "delivered"]);
@@ -296,7 +341,26 @@ describe("buildPortalPage: milestones, phase and summary", () => {
     expect(done.phase).toBe("completed");
     expect(done.summary).toBe("Completed Aug 10, 2026");
     expect(done.lastActivityMs).toBe(Date.parse("2026-08-10T14:00:00Z"));
-    expect(page.projects.find((p) => p.name === "One-off")!.summary).toBe("In progress");
+    expect(page.projects.find((p) => p.name === "One-off")!.summary).toBe("In progress, next deliverable not scheduled yet");
+  });
+
+  it("only an archived list is completed; every milestone closed still means in progress", () => {
+    // Leaders of Code keeps getting episodes: 17 closed share tasks, not archived.
+    const allClosed = live({
+      ...LIVE.L1,
+      milestones: LIVE.L1.milestones.slice(0, 4),
+      feedback: {},
+    });
+    const p = build({ live: { ...LIVE, L1: allClosed } });
+    const l1 = p.projects.find((x) => x.listId === "L1")!;
+    expect(l1.phase).toBe("in-progress");
+    expect(l1.summary).toBe("In progress, next deliverable not scheduled yet, wraps up Sep 28");
+    expect(l1.milestones.every((m) => m.state === "delivered")).toBe(true);
+
+    const noWrap = build({ live: { ...LIVE, L1: { ...allClosed, wrapsUpMs: null } } });
+    expect(noWrap.projects.find((x) => x.listId === "L1")!.summary).toBe("In progress, next deliverable not scheduled yet");
+    const pastWrap = build({ live: { ...LIVE, L1: { ...allClosed, wrapsUpMs: day("2026-08-01") } } });
+    expect(pastWrap.projects.find((x) => x.listId === "L1")!.summary).toBe("In progress, next deliverable not scheduled yet");
   });
 
   it("an archived list is completed even with open milestones", () => {
@@ -305,6 +369,7 @@ describe("buildPortalPage: milestones, phase and summary", () => {
     expect(l1.phase).toBe("completed");
     expect(l1.summary).toBe("Completed Jul 30, 2026");
     expect(p.counts).toEqual({ inProgress: 2, completed: 2 });
+    expect(p.countsLabel).toBe("2 projects in progress, 2 completed");
     // Completed projects also sort by latest activity.
     expect(p.projects.map((x) => x.listId)).toEqual(["L2", "", "L3", "L1"]);
   });
@@ -314,15 +379,17 @@ describe("buildPortalPage: milestones, phase and summary", () => {
     const l1 = p.projects.find((x) => x.listId === "L1")!;
     expect(l1.milestones).toEqual([]);
     expect(l1.phase).toBe("in-progress");
-    expect(l1.summary).toBe("In progress");
+    expect(l1.summary).toBe("In progress, next deliverable not scheduled yet");
   });
 });
 
 describe("buildPortalPage: attention and focus", () => {
-  it("lists everything awaiting the client, soonest first, with the review link", () => {
+  it("lists everything awaiting the client, real deadlines first, then estimates, with the review link", () => {
     const page = build();
-    expect(page.attention.map((a) => a.deliveryId)).toEqual(["c1", "e21"]);
-    expect(page.attention[1]).toEqual({
+    // c1's Sep 3 date is an estimate, so e21's real Sep 8 deadline comes first.
+    expect(page.attention.map((a) => a.deliveryId)).toEqual(["e21", "c1"]);
+    expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, label: "Suggested by Thu, Sep 3" });
+    expect(page.attention[0]).toEqual({
       deliveryId: "e21",
       deliverableTitle: "Leaders of Code - Ep #21",
       variant: "Video Edit01",
@@ -331,7 +398,24 @@ describe("buildPortalPage: attention and focus", () => {
       review: expect.objectContaining({ state: "awaiting" }),
       primaryLink: { url: FRAME.url, label: "Frame.io review" },
     });
-    expect(page.attention[0].primaryLink).toEqual({ url: FRAME.url, label: "Frame.io review" });
+    expect(page.attention[1].primaryLink).toEqual({ url: FRAME.url, label: "Frame.io review" });
+  });
+
+  it("orders real deadlines by date, then estimates oldest first", () => {
+    const P = { projectListId: "L8", projectName: "P8" };
+    const rows = [
+      row({ id: "est-old", ...P, deliverableType: "AV Script V1", feedbackWindows: "", sentAt: new Date("2026-08-31T14:00:00Z") }),
+      row({ id: "est-new", ...P, deliverableType: "Storyboards V1", feedbackWindows: "", sentAt: new Date("2026-09-02T14:00:00Z") }),
+      row({ id: "real-late", ...P, deliverableType: "Edit V1", sentAt: new Date("2026-09-01T14:00:00Z") }),
+      row({ id: "real-soon", ...P, deliverableType: "Post AV V1", feedbackWindows: "1 Business Day", sentAt: new Date("2026-09-02T14:00:00Z") }),
+    ];
+    const page = build({
+      rows,
+      confirmations: new Map(),
+      live: { L8: live({ feedback: { "Edit V1": { taskId: "F", name: "n", dueMs: day("2026-09-10"), isOpen: true } } }) },
+    });
+    expect(page.attention.map((a) => a.deliveryId)).toEqual(["real-soon", "real-late", "est-old", "est-new"]);
+    expect(page.attention.map((a) => a.review.dueIsEstimate)).toEqual([false, false, true, true]);
   });
 
   it("prefers Frame.io, then Loom, then the first link", () => {
@@ -353,6 +437,11 @@ describe("buildPortalPage: attention and focus", () => {
     expect(page.projects.map((p) => p.listId)).toEqual(["L1"]);
     expect(page.attention.map((a) => a.deliveryId)).toEqual(["e21"]);
     expect(page.counts).toEqual({ inProgress: 3, completed: 1 });
+    expect(page.countsLabel).toBe("3 projects in progress, 1 completed");
+  });
+
+  it("countsLabel is empty when there is nothing to count", () => {
+    expect(build({ rows: [], live: {}, confirmations: new Map() }).countsLabel).toBe("");
   });
 
   it("a focus on an unknown list yields no projects", () => {

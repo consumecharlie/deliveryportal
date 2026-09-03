@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { deliverableTitle, variantLabel, variantStem, deliverableKey, milestoneLabel, linkLabel } from "@/lib/portal-labels";
+import {
+  deliverableTitle,
+  variantLabel,
+  variantStem,
+  deliverableKey,
+  milestoneLabel,
+  linkLabel,
+  isPhaseOnlyParent,
+  stripVersionTokens,
+  countsLine,
+  PHASE_ONLY_WORDS,
+} from "@/lib/portal-labels";
 
 describe("deliverableTitle", () => {
   it("keeps a parent name with no department prefix", () => {
@@ -20,8 +31,31 @@ describe("deliverableTitle", () => {
     expect(deliverableTitle("Post-Production - (1) 2 min Customer Testimonial ", "Edit")).toBe("(1) 2 min Customer Testimonial");
   });
 
-  it("leaves a bare department name alone (nothing after the prefix)", () => {
-    expect(deliverableTitle("Post-Production", "Edit")).toBe("Post-Production");
+  it("treats a bare phase or department name as no parent at all", () => {
+    expect(deliverableTitle("Post-Production", "Edit")).toBe("Edit");
+    expect(deliverableTitle("post production", "Edit")).toBe("Edit");
+    expect(deliverableTitle("Post", "Post Script")).toBe("Post Script");
+    expect(deliverableTitle("PRE-PRO", "AV Script")).toBe("AV Script");
+    expect(deliverableTitle("Design", "Storyboards")).toBe("Storyboards");
+    expect(deliverableTitle("Editing", "Edit")).toBe("Edit");
+    expect(deliverableTitle("Animation", "Edit")).toBe("Edit");
+    for (const w of PHASE_ONLY_WORDS) expect(deliverableTitle(w, "fallback")).toBe("fallback");
+  });
+
+  it("keeps a parent that merely contains a phase word", () => {
+    expect(deliverableTitle("Post Script AV", "Post AV")).toBe("Post Script AV");
+    expect(deliverableTitle("Production Prep", "Production Schedule")).toBe("Production Prep");
+    // A prefix followed by a phase word is still just a phase.
+    expect(deliverableTitle("Post-Production - Post", "Edit")).toBe("Edit");
+  });
+
+  it("isPhaseOnlyParent covers missing, blank, prefix-only and phase names", () => {
+    expect(isPhaseOnlyParent(null)).toBe(true);
+    expect(isPhaseOnlyParent(" ")).toBe(true);
+    expect(isPhaseOnlyParent("Design - ")).toBe(true);
+    expect(isPhaseOnlyParent("Post-Production")).toBe(true);
+    expect(isPhaseOnlyParent("LOC19: Intuit")).toBe(false);
+    expect(isPhaseOnlyParent("Post Script AV")).toBe(false);
   });
 
   it("falls back when the parent is null, blank, or only a prefix", () => {
@@ -80,12 +114,52 @@ describe("variantStem / deliverableKey", () => {
   });
 
   it("keys by parent (plus stem) or by family without a parent", () => {
-    expect(deliverableKey({ parentTaskId: "P19", shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:video");
-    expect(deliverableKey({ parentTaskId: "P19", shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:snippets");
-    expect(deliverableKey({ parentTaskId: "P1", shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("P1");
-    expect(deliverableKey({ parentTaskId: "P1", shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery" })).toBe("P1");
-    expect(deliverableKey({ parentTaskId: null, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("family:Edit");
-    expect(deliverableKey({ parentTaskId: null, shareTaskName: null, deliverableType: "Potential Master" })).toBe("family:Edit");
+    const P19 = { parentTaskId: "P19", parentTaskName: "LOC19: Intuit" };
+    const P1 = { parentTaskId: "P1", parentTaskName: "Post-Production - (1) 90s Product Demo (16:9)" };
+    expect(deliverableKey({ ...P19, shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:video");
+    expect(deliverableKey({ ...P19, shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:snippets");
+    expect(deliverableKey({ ...P1, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("P1");
+    expect(deliverableKey({ ...P1, shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery" })).toBe("P1");
+    expect(deliverableKey({ parentTaskId: null, parentTaskName: null, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("family:Edit");
+    expect(deliverableKey({ parentTaskId: null, parentTaskName: null, shareTaskName: null, deliverableType: "Potential Master" })).toBe("family:Edit");
+  });
+
+  it("a phase-only parent keys by family: versions stack, different deliverables still split", () => {
+    const PP = { parentTaskId: "PP", parentTaskName: "Post-Production" };
+    const v1 = deliverableKey({ ...PP, shareTaskName: "Share Post Script V1 with Client", deliverableType: "Post Script V1" });
+    const v2 = deliverableKey({ ...PP, shareTaskName: "Share Post Script V2 with Client", deliverableType: "Post Script V2" });
+    const fin = deliverableKey({ ...PP, shareTaskName: "Share Final Post Script with Client", deliverableType: "Post Script Final" });
+    expect(v1).toBe("family:Post Script");
+    expect(v2).toBe(v1);
+    expect(fin).toBe(v1);
+    const av = deliverableKey({ ...PP, shareTaskName: "Share Post Script AV V1 with Client", deliverableType: "Post AV V1" });
+    expect(av).not.toBe(v1);
+    expect(deliverableKey({ ...PP, shareTaskName: "Share Post Script AV V2 with Client", deliverableType: "Post AV V2" })).toBe(av);
+    // Same type family, different variant, same phase-only parent: separate deliverables.
+    const a = deliverableKey({ ...PP, shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" });
+    const b = deliverableKey({ ...PP, shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" });
+    expect(a).toBe("family:Edit:video");
+    expect(b).toBe("family:Edit:snippets");
+  });
+});
+
+describe("stripVersionTokens", () => {
+  it("removes version markers and keeps the rest", () => {
+    expect(stripVersionTokens("Post Script AV V1")).toBe("post script av");
+    expect(stripVersionTokens("Final Post Script")).toBe("post script");
+    expect(stripVersionTokens("Video Edit01")).toBe("video");
+    expect(stripVersionTokens("Edit V2")).toBe("edit");
+  });
+});
+
+describe("countsLine", () => {
+  it("says nothing with nothing to count", () => {
+    expect(countsLine({ inProgress: 0, completed: 0 })).toBe("");
+  });
+  it("counts each side, with plural handling", () => {
+    expect(countsLine({ inProgress: 0, completed: 4 })).toBe("4 completed");
+    expect(countsLine({ inProgress: 1, completed: 0 })).toBe("1 project in progress");
+    expect(countsLine({ inProgress: 2, completed: 1 })).toBe("2 projects in progress, 1 completed");
   });
 });
 
