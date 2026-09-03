@@ -15,7 +15,7 @@ interface SectionProps {
 
 export function ProjectSection({ token, project, linkName, hideHeading = false }: SectionProps) {
   return (
-    <section className="portal-project" aria-label={hideHeading ? project.name : undefined} aria-labelledby={hideHeading ? undefined : `p-${project.listId}`}>
+    <section className={`portal-project${hideHeading ? " portal-project-bare" : ""}`} aria-label={hideHeading ? project.name : undefined} aria-labelledby={hideHeading ? undefined : `p-${project.listId}`}>
       {!hideHeading && (
         <div className="portal-project-head">
           <h2 id={`p-${project.listId}`} className="portal-h2">

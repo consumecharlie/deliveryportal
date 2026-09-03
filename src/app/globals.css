@@ -505,6 +505,7 @@
   gap: 64px;
 }
 .portal-project { min-width: 0; }
+.portal-project-bare .portal-rail-wrap { margin-top: 0; }
 .portal-project-head {
   display: flex;
   align-items: baseline;
