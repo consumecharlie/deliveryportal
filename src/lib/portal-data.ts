@@ -105,7 +105,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   const timeline = buildTimeline(
     rows.map((r) => ({
       id: r.id,
-      projectListId: r.projectListId ?? "",
+      projectListId: r.projectListId,
       projectName: r.projectName,
       deliverableType: r.deliverableType,
       department: r.department,
@@ -127,10 +127,13 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
 
   for (const project of timeline.projects) {
     let live: LiveFeedbackMap = {};
-    try {
-      live = await getLiveFeedback(project.listId);
-    } catch (err) {
-      console.warn("live feedback failed", project.listId, err);
+    // Ad-hoc deliveries with no list have no ClickUp tasks to look up.
+    if (project.listId) {
+      try {
+        live = await getLiveFeedback(project.listId);
+      } catch (err) {
+        console.warn("live feedback failed", project.listId, err);
+      }
     }
 
     for (const group of project.deliverables) {

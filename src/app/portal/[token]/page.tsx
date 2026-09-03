@@ -20,11 +20,15 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ t
       <ActionItems token={token} items={data.actionItems} />
       <section className="mt-10 space-y-10">
         {data.timeline.projects.map((p) => (
-          <div key={p.listId}>
+          <div key={p.listId || `name:${p.name}`}>
             <h2 className="mb-4 text-lg font-semibold">
-              <a href={`/portal/${token}/${p.listId}`} className="hover:underline">
-                {p.name}
-              </a>
+              {p.listId ? (
+                <a href={`/portal/${token}/${p.listId}`} className="hover:underline">
+                  {p.name}
+                </a>
+              ) : (
+                p.name
+              )}
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
               {p.deliverables.map((g) => (
