@@ -177,6 +177,16 @@ export interface DeliveryFormState {
   // over these so links/scope stay reactive after editing. Persisted in drafts.
   editedSnippet?: string | null;
   editedSubject?: string | null;
+  /** ClickUp task ids of contacts excluded from the greeting/@mentions for
+   *  this delivery only. They stay on email To/CC and still receive it. */
+  excludedContactIds?: string[];
+  /** Standalone bullet links are prefixed with the project name by the merge.
+   *  False drops that prefix for this delivery. */
+  prefixLinksWithProjectName?: boolean;
+  /** Fully-merged body the user chose to edit as final text. When set, the
+   *  message is FROZEN: the merge no longer runs and form fields stop flowing
+   *  in. Deliberately explicit and revertible, unlike the old silent freeze. */
+  finalText?: string | null;
   editedToEmail: string | null;
   editedCcEmails: string | null;
   editedSenderEmail: string | null;

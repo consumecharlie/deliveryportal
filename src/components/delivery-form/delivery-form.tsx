@@ -23,6 +23,7 @@ import type { ScheduledSendPayload } from "@/lib/schedule-send";
 import { DepartmentBadge } from "@/components/dashboard/department-badge";
 import { ReviewLinksSection } from "./review-links-section";
 import { ScopeSection } from "./scope-section";
+import { GreetingContacts } from "./greeting-contacts";
 import { ClientPreferenceBanner } from "./client-preference-banner";
 import { findBlockedLinks, collectReviewLinkUrls } from "@/lib/client-preferences";
 import { VersionNotesSection } from "./version-notes-section";
@@ -153,6 +154,13 @@ export function DeliveryForm({
   // over them so links/scope keep flowing in after editing. They are never
   // written back to the shared template.
   const [editedSnippet, setEditedSnippet] = useState<string | null>(null);
+  // Per-delivery message controls. See greeting-contacts.tsx for why these are
+  // direct form controls rather than something you fix by editing the message.
+  const [excludedContactIds, setExcludedContactIds] = useState<string[]>([]);
+  const [prefixLinksWithProjectName, setPrefixLinksWithProjectName] = useState(true);
+  // Non-null once the user chooses "Edit as final text": the message is frozen
+  // and the merge stops running.
+  const [finalText, setFinalText] = useState<string | null>(null);
   const [editedSubject, setEditedSubject] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [slackLintErrors, setSlackLintErrors] = useState<SlackLintError[]>([]);
@@ -352,6 +360,9 @@ export function DeliveryForm({
     setEditedSnippet(null);
     setEditedSubject(null);
     setIsEditMode(false);
+    setExcludedContactIds([]);
+    setPrefixLinksWithProjectName(true);
+    setFinalText(null);
     setEditedToEmail(null);
     setEditedCcEmails(null);
     setEditedSenderEmail(null);
@@ -553,6 +564,13 @@ export function DeliveryForm({
     return activeTemplate.snippet;
   }, [activeTemplate?.snippet, addonProject, addonTaskDetail?.template?.snippet, sameProject]);
 
+  // Contacts actually addressed in the greeting/@mentions. Excluding someone
+  // affects only how the message reads; recipients (To/CC) use the full list.
+  const greetedContacts = useMemo(
+    () => contacts.filter((c) => !excludedContactIds.includes(c.taskId)),
+    [contacts, excludedContactIds]
+  );
+
   const displayTemplate = editedSnippet ?? defaultTemplate;
   const displaySubject = editedSubject ?? activeTemplate?.subjectLine ?? "";
 
@@ -560,7 +578,7 @@ export function DeliveryForm({
     if (!activeTemplate?.snippet) return null;
 
     const primaryVariables = {
-      contacts,
+      contacts: greetedContacts,
       projectName: task.projectName,
       versionNotes,
       revisionRounds,
@@ -577,6 +595,7 @@ export function DeliveryForm({
       rushedProject,
       repeatClient,
       linkLabels: Object.keys(linkLabels).length > 0 ? linkLabels : undefined,
+      prefixLinksWithProjectName,
     };
 
     // Merged delivery: merge the combined template, resolving primary tokens
@@ -610,7 +629,7 @@ export function DeliveryForm({
     displayTemplate,
     displaySubject,
     activeTemplate?.snippet,
-    contacts,
+    greetedContacts,
     task.projectName,
     versionNotes,
     revisionRounds,
@@ -628,6 +647,7 @@ export function DeliveryForm({
     addonLinkLabels,
     addonRevisionRounds,
     addonFeedbackWindows,
+    prefixLinksWithProjectName,
   ]);
 
   // ── Recipient logic ──
@@ -854,9 +874,22 @@ export function DeliveryForm({
 
   // Final merged content to display/send. The merge always runs over the
   // (possibly edited) template, so this stays reactive even after editing.
-  const displayEmailContent = mergedContent?.emailContent ?? "";
-  const displaySubjectLine = mergedContent?.subjectLine ?? "";
-  const displaySlackContent = mergedContent?.slackContent ?? "";
+  // ── Final-text freeze ──
+  // When the user has chosen "Edit as final text", their text replaces the
+  // merged body for the active channel and the merge stops feeding it. The
+  // subject and recipients keep merging. This is the old frozen-snapshot
+  // behaviour, but opt-in, visible (banner in the preview) and revertible,
+  // which is what made the original silent version a bug.
+  const effectiveMerged: MergedContent | null = useMemo(() => {
+    if (!mergedContent || finalText === null) return mergedContent;
+    return showSlack
+      ? { ...mergedContent, slackContent: finalText }
+      : { ...mergedContent, emailContent: finalText };
+  }, [mergedContent, finalText, showSlack]);
+
+  const displayEmailContent = effectiveMerged?.emailContent ?? "";
+  const displaySubjectLine = effectiveMerged?.subjectLine ?? "";
+  const displaySlackContent = effectiveMerged?.slackContent ?? "";
 
   // Build the form state for save/send
   const formState: DeliveryFormState = {
@@ -887,6 +920,9 @@ export function DeliveryForm({
     editedEmailContent: null,
     editedSlackContent: null,
     editedSubjectLine: null,
+    excludedContactIds,
+    prefixLinksWithProjectName,
+    finalText,
     // The per-delivery template edits (drive mergedContent, persisted in drafts).
     editedSnippet,
     editedSubject,
@@ -967,6 +1003,10 @@ export function DeliveryForm({
         );
         setManualFeedbackDate(draftDeadline.date);
         setManualFeedbackTime(draftDeadline.time);
+        if (Array.isArray(saved.excludedContactIds)) setExcludedContactIds(saved.excludedContactIds);
+        if (typeof saved.prefixLinksWithProjectName === "boolean")
+          setPrefixLinksWithProjectName(saved.prefixLinksWithProjectName);
+        if (typeof saved.finalText === "string") setFinalText(saved.finalText);
         if (saved.reviewLinks) {
           setReviewLinks((prev) => ({ ...prev, ...saved.reviewLinks }));
         }
@@ -1045,7 +1085,7 @@ export function DeliveryForm({
 
   const buildScheduledPayload = useCallback((): ScheduledSendPayload => ({
     formState,
-    mergedContent,
+    mergedContent: effectiveMerged,
     primaryEmail: displayToEmail,
     ccEmails: displayCcEmails,
     senderEmail: displaySenderEmail,
@@ -1071,7 +1111,7 @@ export function DeliveryForm({
       : {}),
   }), [
     formState,
-    mergedContent,
+    effectiveMerged,
     displayToEmail,
     displayCcEmails,
     displaySenderEmail,
@@ -1424,6 +1464,33 @@ export function DeliveryForm({
             onRemoveExtraLink={handleRemoveExtraLink}
           />
 
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={prefixLinksWithProjectName}
+              onChange={(e) => setPrefixLinksWithProjectName(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-[#6AC387]"
+            />
+            <span>Prefix link labels with the project name</span>
+            <span className="text-xs text-muted-foreground">
+              {prefixLinksWithProjectName
+                ? `e.g. "${task.projectName} - AV Script V1"`
+                : 'e.g. "AV Script V1"'}
+            </span>
+          </label>
+
+          {/* Who the message addresses (greeting/@mentions only) */}
+          <GreetingContacts
+            contacts={contacts}
+            excludedIds={excludedContactIds}
+            postToSlack={showSlack}
+            onToggle={(taskId) =>
+              setExcludedContactIds((prev) =>
+                prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+              )
+            }
+          />
+
           {/* Scope */}
           <ScopeSection
             revisionRounds={revisionRounds}
@@ -1573,6 +1640,13 @@ export function DeliveryForm({
             primaryEmail={displayToEmail}
             senderEmail={displaySenderEmail}
             isEditMode={isEditMode}
+            finalText={finalText}
+            onEnterFinalText={(baked) => {
+              setFinalText(baked);
+              setIsEditMode(false);
+            }}
+            onExitFinalText={() => setFinalText(null)}
+            onFinalTextChange={setFinalText}
             onToggleEditMode={handleToggleEditMode}
             onTemplateChange={setEditedSnippet}
             onSubjectChange={setEditedSubject}
@@ -1650,7 +1724,7 @@ export function DeliveryForm({
       <SendBar
         taskId={task.id}
         formState={formState}
-        mergedContent={mergedContent}
+        mergedContent={effectiveMerged}
         primaryEmail={displayToEmail}
         ccEmails={displayCcEmails}
         senderEmail={displaySenderEmail}

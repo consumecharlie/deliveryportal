@@ -32,6 +32,11 @@ interface MergeVariables {
   repeatClient?: boolean;
   // Custom link labels — overrides the template's [Link Text | varName] defaults
   linkLabels?: Record<string, string>;
+  // Standalone bullet links are prefixed with the project name
+  // ("CINC Tradeshow – AV Script V1"). Set false to drop the prefix for this
+  // delivery; the label field alone cannot express "no prefix", since the
+  // enrichment is applied by the merge, not carried in the token.
+  prefixLinksWithProjectName?: boolean;
 }
 
 /**
@@ -86,7 +91,8 @@ function performMerge(
   // given variable. Defaults to the single `projectName` replacement. Combined
   // (add-on) merges pass a resolver so namespaced add-on links get the add-on's
   // project name instead of the primary's.
-  projectNameFor?: (varName: string) => string
+  projectNameFor?: (varName: string) => string,
+  prefixLinksWithProjectName: boolean = true
 ): string {
   let result = template;
 
@@ -100,8 +106,9 @@ function performMerge(
   //   → Plain link text: "[Frame.io](url)"
   //   These already have surrounding context and don't need the project name.
 
-  const resolveProjectName =
-    projectNameFor ?? (() => replacements.projectName || "");
+  const resolveProjectName = prefixLinksWithProjectName
+    ? (projectNameFor ?? (() => replacements.projectName || ""))
+    : () => "";
 
   // Pass 1: Standalone bullet/line links — enrich with project name
   const standaloneLinkPattern = /^(\s*[-•*]\s*)\[([^\]|]+)\s*\|\s*([^\]]+)\]/gm;
@@ -560,7 +567,7 @@ export function mergeTemplate(
   };
 
   // Merge the email version
-  let emailContent = performMerge(template, replacements, variables.linkLabels);
+  let emailContent = performMerge(template, replacements, variables.linkLabels, undefined, variables.prefixLinksWithProjectName ?? true);
   emailContent = stripRepeatClientSections(emailContent, variables.repeatClient);
   emailContent = injectRushedNotice(emailContent, rushedOpts);
   emailContent = injectFlexibleFeedbackNotice(emailContent, flexibleOpts);
@@ -573,7 +580,7 @@ export function mergeTemplate(
     ...replacements,
     contacts: formatContactsSlack(variables.contacts),
   };
-  let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
+  let slackContent = performMerge(template, slackReplacements, variables.linkLabels, undefined, variables.prefixLinksWithProjectName ?? true);
   slackContent = stripRepeatClientSections(slackContent, variables.repeatClient);
   slackContent = injectRushedNotice(slackContent, rushedOpts);
   slackContent = injectFlexibleFeedbackNotice(slackContent, flexibleOpts);
@@ -1137,7 +1144,7 @@ export function mergeCombinedTemplate(input: {
 
   const run = (contactsValue: string) => {
     const replacements = { ...baseReplacements, contacts: contactsValue };
-    let out = performMerge(combinedTemplate, replacements, linkLabels, projectNameFor);
+    let out = performMerge(combinedTemplate, replacements, linkLabels, projectNameFor, pv.prefixLinksWithProjectName ?? true);
     out = stripRepeatClientSections(out, pv.repeatClient);
     out = injectRushedNotice(out, rushedOpts);
     out = injectFlexibleFeedbackNotice(out, flexibleOpts);

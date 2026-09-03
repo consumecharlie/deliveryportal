@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pencil, RotateCcw, Eye, Check, ChevronDown, FileEdit } from "lucide-react";
+import { Pencil, RotateCcw, Eye, Check, ChevronDown, FileEdit, PenLine, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
 import { SlackValidationPanel } from "@/components/shared/slack-validation-panel";
@@ -48,6 +48,11 @@ interface PreviewPanelProps {
   primaryEmail: string;
   senderEmail: string;
   isEditMode: boolean;
+  /** Non-null when the message is frozen as final text. */
+  finalText: string | null;
+  onEnterFinalText: (baked: string) => void;
+  onExitFinalText: () => void;
+  onFinalTextChange: (value: string) => void;
   onToggleEditMode: () => void;
   /** Receives the edited template body. */
   onTemplateChange: (content: string) => void;
@@ -97,6 +102,10 @@ export function PreviewPanel({
   primaryEmail,
   senderEmail,
   isEditMode,
+  finalText,
+  onEnterFinalText,
+  onExitFinalText,
+  onFinalTextChange,
   onToggleEditMode,
   onTemplateChange,
   onSubjectChange,
@@ -163,13 +172,19 @@ export function PreviewPanel({
         <div className="flex items-center justify-between border-b px-4 py-2">
           <span className="text-sm font-medium">Preview</span>
           <div className="flex gap-1">
-            {isEditMode && (
+            {finalText !== null && (
+              <Button variant="ghost" size="sm" onClick={onExitFinalText}>
+                <RotateCcw className="mr-1 h-3 w-3" />
+                Revert to template
+              </Button>
+            )}
+            {finalText === null && isEditMode && (
               <Button variant="ghost" size="sm" onClick={onResetToTemplate}>
                 <RotateCcw className="mr-1 h-3 w-3" />
                 Reset
               </Button>
             )}
-            {isEditMode ? (
+            {finalText !== null ? null : isEditMode ? (
               <Button
                 variant={hasEdited ? "default" : "ghost"}
                 size="sm"
@@ -200,6 +215,12 @@ export function PreviewPanel({
                   <DropdownMenuItem onClick={onToggleEditMode}>
                     <Pencil className="mr-2 h-3.5 w-3.5" />
                     Edit Message
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onEnterFinalText(showSlack ? slackContent : emailContent)}
+                  >
+                    <PenLine className="mr-2 h-3.5 w-3.5" />
+                    Edit as final text
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {templateTaskId && addonTemplateTaskId ? (
@@ -298,7 +319,33 @@ export function PreviewPanel({
 
             {/* Email body */}
             <div className="max-h-[60vh] overflow-y-auto p-4">
-              {isEditMode ? (
+              {/* Frozen-message banner. The old snapshot behaviour was a bug because
+                  it froze SILENTLY and could not be undone; this says so plainly
+                  and offers one-click revert. */}
+              {finalText !== null && (
+                <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-700 dark:bg-amber-950/40">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="space-y-0.5 text-amber-900 dark:text-amber-100">
+                    <p className="font-medium">Editing as final text.</p>
+                    <p className="text-amber-800 dark:text-amber-200">
+                      Form fields no longer flow into this message. Changing a link or the
+                      deadline will not update it.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {finalText !== null ? (
+                <RichTextEditor
+                  key="email-final"
+                  content={finalText}
+                  onChange={onFinalTextChange}
+                  placeholder="Edit the final message exactly as the client will see it"
+                  outputFormat="markdown"
+                  showToolbar={true}
+                  minHeight="300px"
+                  mentionItems={mentionItems}
+                />
+              ) : isEditMode ? (
                 <RichTextEditor
                   key="email-edit"
                   content={templateContent}
@@ -328,7 +375,33 @@ export function PreviewPanel({
 
           <TabsContent value="slack" className="m-0">
             <div className="max-h-[60vh] overflow-y-auto p-4">
-              {isEditMode ? (
+              {/* Frozen-message banner. The old snapshot behaviour was a bug because
+                  it froze SILENTLY and could not be undone; this says so plainly
+                  and offers one-click revert. */}
+              {finalText !== null && (
+                <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-700 dark:bg-amber-950/40">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="space-y-0.5 text-amber-900 dark:text-amber-100">
+                    <p className="font-medium">Editing as final text.</p>
+                    <p className="text-amber-800 dark:text-amber-200">
+                      Form fields no longer flow into this message. Changing a link or the
+                      deadline will not update it.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {finalText !== null ? (
+                <RichTextEditor
+                  key="slack-final"
+                  content={finalText}
+                  onChange={onFinalTextChange}
+                  placeholder="Edit the final message exactly as the client will see it"
+                  outputFormat="markdown"
+                  showToolbar={true}
+                  minHeight="300px"
+                  mentionItems={mentionItems}
+                />
+              ) : isEditMode ? (
                 <RichTextEditor
                   key="slack-edit"
                   content={templateContent}
