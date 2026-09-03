@@ -21,8 +21,15 @@ describe("getChannelMembership", () => {
       name: "acme",
       isMember: true,
       isPrivate: false,
+      isShared: false,
       notVisible: false,
     });
+  });
+
+  it("flags Slack Connect channels as shared", async () => {
+    mockFetch({ ok: true, channel: { name: "acme-consume", is_member: true, is_ext_shared: true } });
+    const result = await getChannelMembership("C777");
+    expect(result.isShared).toBe(true);
   });
 
   it("maps channel_not_found to notVisible", async () => {

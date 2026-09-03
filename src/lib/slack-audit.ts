@@ -8,6 +8,8 @@ export interface ChannelMembership {
   name: string | null;
   isMember: boolean;
   isPrivate: boolean;
+  /** Slack Connect (shared with another workspace). */
+  isShared: boolean;
   /** true when Slack couldn't return the channel (e.g. private + bot not in). */
   notVisible: boolean;
 }
@@ -19,13 +21,14 @@ export async function getChannelMembership(channelId: string): Promise<ChannelMe
   const data = await res.json();
   if (!data.ok) {
     // channel_not_found on a private channel the bot isn't in → not visible.
-    return { channelId, name: null, isMember: false, isPrivate: false, notVisible: true };
+    return { channelId, name: null, isMember: false, isPrivate: false, isShared: false, notVisible: true };
   }
   return {
     channelId,
     name: data.channel?.name ?? null,
     isMember: data.channel?.is_member ?? false,
     isPrivate: data.channel?.is_private ?? false,
+    isShared: Boolean(data.channel?.is_ext_shared || data.channel?.is_shared),
     notVisible: false,
   };
 }

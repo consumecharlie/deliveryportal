@@ -26,6 +26,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfigureWizard } from "@/components/setup/configure-wizard";
+import { ProjectChannelCell, type ProjectChannelMapping } from "@/components/setup/project-channel-cell";
 import { WORKSPACE_ID } from "@/lib/custom-field-ids";
 
 const GREEN = "#6AC387";
@@ -206,6 +207,20 @@ export function AuditTable() {
       return res.json();
     },
   });
+
+  const { data: channelData } = useQuery<{ channels: ProjectChannelMapping[] }>({
+    queryKey: ["project-channels"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/project-channel");
+      if (!res.ok) throw new Error("Failed to fetch project channels");
+      return res.json();
+    },
+  });
+  const channelByList = useMemo(() => {
+    const m = new Map<string, ProjectChannelMapping>();
+    for (const c of channelData?.channels ?? []) m.set(c.projectListId, c);
+    return m;
+  }, [channelData]);
 
   const scanMutation = useMutation({
     mutationFn: async () => {
@@ -442,6 +457,12 @@ export function AuditTable() {
                       <ModeBadge mode={row.mode} />
                       <StatusPill row={row} />
                     </div>
+                    <ProjectChannelCell
+                      listId={row.listId}
+                      projectName={row.projectName}
+                      clientName={row.clientName}
+                      mapping={channelByList.get(row.listId) ?? null}
+                    />
                     {row.mode === "slack" ? (
                       <Button
                         size="xs"
