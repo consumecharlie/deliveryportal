@@ -44,6 +44,10 @@ model Delivery {
   /** Feedback Windows value at send time. Used by the client portal to compute
    *  a fallback deadline when no live Feedback Deadline task exists. */
   feedbackWindows String?
+  // Identity of the deliverable behind this send: the share task's parent names the deliverable, the share task name carries the variant.
+  parentTaskId    String?
+  parentTaskName  String?
+  shareTaskName   String?
   links           DeliveryLink[]
   confirmations   FeedbackConfirmation[]
   createdAt       DateTime       @default(now())

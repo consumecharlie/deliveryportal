@@ -276,6 +276,10 @@ export async function POST(req: Request) {
         const delivery = await prisma.delivery.create({
           data: {
             taskId,
+            // Ad-hoc share tasks are created at the list root, so there is no parent deliverable.
+            shareTaskName: newTask.name || `Share ${deliverableType} with Client`,
+            parentTaskId: null,
+            parentTaskName: null,
             projectName: taskMeta?.projectName || "",
             clientName: taskMeta?.clientName || "",
             deliverableType,

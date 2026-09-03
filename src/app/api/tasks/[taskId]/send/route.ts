@@ -15,6 +15,7 @@ import {
   LINK_VARIABLE_MAP,
 } from "@/lib/custom-field-ids";
 import { prisma } from "@/lib/db";
+import { resolveShareIdentity } from "@/lib/delivery-identity";
 import { mergeTemplate, convertToSlackFormat } from "@/lib/template-merge";
 import type { DeliveryFormState, MergedContent, SendPayload } from "@/lib/types";
 import { getSessionUserEmail } from "@/lib/get-session-user";
@@ -348,11 +349,14 @@ export async function POST(
     if (!testMode) {
       // Client folder for portal grouping. One cheap ClickUp call; non-fatal.
       const clientFolderId = await resolveClientFolderId(listId);
+      // Deliverable identity (parent task + share task name) for the client portal; non-fatal.
+      const identity = await resolveShareIdentity(taskId);
 
       try {
         const delivery = await prisma.delivery.create({
           data: {
             taskId,
+            ...identity,
             projectName: taskMeta?.projectName || "",
             clientName: taskMeta?.clientName || "",
             deliverableType: formState.deliverableType,
@@ -500,9 +504,11 @@ export async function POST(
 
         // Log addon delivery to DB
         try {
+          const addonIdentity = await resolveShareIdentity(addonTaskId);
           const addonDelivery = await prisma.delivery.create({
             data: {
               taskId: addonTaskId,
+              ...addonIdentity,
               projectName: body.addonProjectName || "",
               clientName: taskMeta?.clientName || "",
               deliverableType: addonDeliverableType,
