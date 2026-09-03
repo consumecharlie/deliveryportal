@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   createTask,
-  getList,
+  resolveClientFolderId,
   getListFields,
   updateTaskCustomField,
   updateTaskStatus,
@@ -270,12 +270,7 @@ export async function POST(req: Request) {
     let deliveryId: string | undefined;
     if (!testMode) {
       // Client folder for portal grouping. One cheap ClickUp call; non-fatal.
-      let clientFolderId: string | null = null;
-      try {
-        clientFolderId = (await getList(listId)).folder?.id ?? null;
-      } catch (err) {
-        console.warn("Could not resolve client folder for", listId, err);
-      }
+      const clientFolderId = await resolveClientFolderId(listId);
 
       try {
         const delivery = await prisma.delivery.create({

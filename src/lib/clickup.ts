@@ -242,9 +242,23 @@ export async function getFolderLists(
 }
 
 export async function getList(listId: string) {
-  return clickupFetch<{ id: string; name: string; folder: { id: string; name: string } }>(
-    `/list/${listId}`
-  );
+  return clickupFetch<{
+    id: string;
+    name: string;
+    folder: { id: string; name: string; hidden?: boolean };
+  }>(`/list/${listId}`);
+}
+
+/** Best-effort list -> client folder. Never throws; folderless lists resolve to null. */
+export async function resolveClientFolderId(listId: string | null | undefined): Promise<string | null> {
+  if (!listId) return null;
+  try {
+    const { folder } = await getList(listId);
+    return folder && !folder.hidden ? folder.id : null;
+  } catch (err) {
+    console.warn("Could not resolve client folder for", listId, err);
+    return null;
+  }
 }
 
 // ── Field / List Metadata ──

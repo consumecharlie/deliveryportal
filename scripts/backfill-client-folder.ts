@@ -4,7 +4,7 @@
  *   npx tsx --env-file=.env.local scripts/backfill-client-folder.ts
  */
 import { prisma } from "../src/lib/db";
-import { getList } from "../src/lib/clickup";
+import { resolveClientFolderId } from "../src/lib/clickup";
 
 async function main() {
   const rows = await prisma.delivery.findMany({
@@ -14,12 +14,16 @@ async function main() {
   });
   console.log(`lists to resolve: ${rows.length}`);
   let updated = 0;
+  let failed = 0;
   for (const { projectListId } of rows) {
     if (!projectListId) continue;
     try {
-      const list = await getList(projectListId);
-      const folderId = list.folder?.id;
-      if (!folderId) { console.warn("no folder for list", projectListId); continue; }
+      const folderId = await resolveClientFolderId(projectListId);
+      if (!folderId) {
+        console.warn("no folder for list (folderless or lookup failed), skipping", projectListId);
+        failed++;
+        continue;
+      }
       const d = await prisma.delivery.updateMany({
         where: { projectListId, OR: [{ clientFolderId: null }, { clientFolderId: "" }] },
         data: { clientFolderId: folderId },
@@ -29,12 +33,17 @@ async function main() {
         data: { clientFolderId: folderId },
       });
       updated += d.count;
-      console.log(`${projectListId} -> ${folderId} (${list.folder.name}): ${d.count} deliveries, ${l.count} links`);
+      console.log(`${projectListId} -> ${folderId}: ${d.count} deliveries, ${l.count} links`);
     } catch (err) {
       console.warn("failed", projectListId, err);
+      failed++;
     }
   }
-  console.log(`done, ${updated} deliveries updated`);
+  console.log(`done, ${updated} deliveries updated, ${failed} lists failed`);
+  process.exit(failed > 0 ? 1 : 0);
 }
 
-main().then(() => process.exit(0));
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

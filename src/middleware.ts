@@ -3,11 +3,14 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 /**
- * Auth middleware — protects all routes except:
+ * Auth middleware. Protects all routes except:
  * - /auth/* (sign-in, sign-out, error pages)
  * - /api/auth/* (NextAuth API routes)
- * - /_next/* (Next.js internals)
+ * - /api/cron/* (cron entry points; they verify CRON_SECRET themselves)
+ * - /portal/* and /api/portal/* (client portal; handlers resolve a token themselves)
+ * - /_next/* (Next.js internals), /icons/*, and static assets (svg, png, ico, jpg, woff, woff2)
  * - /favicon.ico, /robots.txt
+ * - Any request presenting a valid CRON_SECRET bearer (internal fan-out calls)
  *
  * When Google OAuth credentials are not configured (GOOGLE_CLIENT_ID is empty),
  * the middleware is effectively disabled and all routes are accessible.
@@ -29,8 +32,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
-    pathname.startsWith("/portal") ||
-    pathname.startsWith("/api/portal") ||
+    pathname === "/portal" || pathname.startsWith("/portal/") ||
+    pathname === "/api/portal" || pathname.startsWith("/api/portal/") ||
     pathname.startsWith("/_next") ||
     pathname.endsWith(".svg") ||
     pathname.endsWith(".png") ||
