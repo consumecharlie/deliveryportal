@@ -5,7 +5,7 @@ import type { DeliverableGroup, TimelineLink } from "@/lib/portal-timeline";
 import type { FeedbackStatus } from "@/lib/portal-data";
 import { renderPortalBody } from "@/lib/portal-render";
 import { FeedbackBadge } from "./feedback-badge";
-import { ConfirmButton } from "./confirm-button";
+import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 
 const LINK_LABELS: Record<string, string> = {
   frameReviewLink: "Frame.io review",
@@ -104,7 +104,13 @@ export function DeliverableCard({ token, group, status }: Props) {
 
       {isLatest && status && status.kind !== "none" && (
         <div className="border-t border-neutral-200 pt-4">
-          <ConfirmButton token={token} deliveryId={entry.id} initialConfirmed={status.kind === "confirmed"} />
+          <ConfirmButton
+            key={confirmButtonKey(entry.id, status)}
+            token={token}
+            deliveryId={entry.id}
+            initialConfirmed={status.kind === "confirmed"}
+            canUndo={status.confirmedAt !== null}
+          />
         </div>
       )}
     </article>

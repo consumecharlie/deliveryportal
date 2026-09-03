@@ -1,6 +1,6 @@
 import type { PortalActionItem } from "@/lib/portal-data";
 import { FeedbackBadge } from "./feedback-badge";
-import { ConfirmButton } from "./confirm-button";
+import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 
 export function ActionItems({ token, items }: { token: string; items: PortalActionItem[] }) {
   return (
@@ -35,7 +35,13 @@ export function ActionItems({ token, items }: { token: string; items: PortalActi
                       Open review
                     </a>
                   )}
-                  <ConfirmButton token={token} deliveryId={entry.id} initialConfirmed={false} />
+                  <ConfirmButton
+                    key={confirmButtonKey(entry.id, status)}
+                    token={token}
+                    deliveryId={entry.id}
+                    initialConfirmed={false}
+                    canUndo={status.confirmedAt !== null}
+                  />
                 </div>
               </li>
             );

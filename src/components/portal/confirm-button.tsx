@@ -7,12 +7,31 @@ interface Props {
   token: string;
   deliveryId: string;
   initialConfirmed: boolean;
+  /**
+   * False when the delivery shows as confirmed only because the ClickUp
+   * feedback task is closed: there is no confirmation row to undo.
+   */
+  canUndo: boolean;
+}
+
+/** React key that changes whenever the server-side status does, so every instance re-seeds. */
+export function confirmButtonKey(
+  deliveryId: string,
+  status: { kind: string; confirmedAt: Date | null }
+): string {
+  const at = status.confirmedAt ? new Date(status.confirmedAt).getTime() : "";
+  return `${deliveryId}:${status.kind}:${at}`;
 }
 
 const UNDO_WARNING =
   "Undoing this reopens the feedback window and can delay the project timeline. Continue?";
 
-export function ConfirmButton({ token, deliveryId, initialConfirmed }: Props) {
+/**
+ * Local state seeds from props once, so call sites key this component on the
+ * delivery id plus its status so a confirm made from one instance (the action
+ * list) is reflected by the other (the card) after router.refresh().
+ */
+export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: Props) {
   const router = useRouter();
   const [confirmed, setConfirmed] = useState(initialConfirmed);
   const [busy, setBusy] = useState(false);
@@ -44,18 +63,20 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed }: Props) {
       {confirmed ? (
         <div className="flex items-center gap-3 text-sm">
           <span className="font-medium text-emerald-700">Feedback confirmed, thank you</span>
-          <button
-            type="button"
-            onClick={() => setAskUndo(true)}
-            disabled={busy}
-            className="text-neutral-500 underline underline-offset-2 hover:text-neutral-800 disabled:opacity-60"
-          >
-            Undo
-          </button>
+          {(canUndo || confirmed !== initialConfirmed) && (
+            <button
+              type="button"
+              onClick={() => setAskUndo(true)}
+              disabled={busy}
+              className="text-neutral-500 underline underline-offset-2 hover:text-neutral-800 disabled:opacity-60"
+            >
+              Undo
+            </button>
+          )}
         </div>
       ) : (
         <button type="button" onClick={() => post("confirm")} disabled={busy} className="portal-btn portal-btn-primary">
-          {busy ? "Saving" : "I've sent my feedback"}
+          {busy ? "Saving" : "All feedback is in"}
         </button>
       )}
       {error && <span className="whitespace-nowrap text-xs text-red-700">{error}</span>}
