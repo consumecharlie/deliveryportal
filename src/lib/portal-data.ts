@@ -115,7 +115,7 @@ export async function loadPortal(access: PortalAccessInfo, onlyListId?: string):
   const liveByList = await getLiveFeedbackMany(timeline.projects.map((p) => p.listId));
 
   for (const project of timeline.projects) {
-    const live = liveByList[project.listId] ?? {};
+    const live = liveByList[project.listId]?.feedback ?? {};
 
     for (const group of project.deliverables) {
       const e = group.latest;

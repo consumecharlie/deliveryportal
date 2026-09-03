@@ -296,6 +296,9 @@ export async function getList(listId: string) {
     id: string;
     name: string;
     folder: { id: string; name: string; hidden?: boolean };
+    /** Epoch ms string: the project's wrap date. */
+    due_date?: string | null;
+    archived?: boolean;
   }>(`/list/${listId}`);
 }
 

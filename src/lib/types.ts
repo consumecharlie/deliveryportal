@@ -40,6 +40,9 @@ export interface ClickUpTask {
   due_date: string | null;
   date_created: string;
   date_updated: string;
+  /** Epoch ms strings set by ClickUp when the task enters a closed / done status. */
+  date_closed?: string | null;
+  date_done?: string | null;
   list: {
     id: string;
     name: string;

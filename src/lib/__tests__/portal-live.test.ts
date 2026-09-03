@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { selectFeedbackTasks, runPool, getLiveFeedback, getLiveFeedbackMany } from "@/lib/portal-live";
+import {
+  selectFeedbackTasks,
+  selectMilestones,
+  runPool,
+  getLiveFeedback,
+  getLiveFeedbackMany,
+  LIVE_PAYLOAD_VERSION,
+  EMPTY_LIVE_PAYLOAD,
+  type LivePayload,
+} from "@/lib/portal-live";
 import { prisma } from "@/lib/db";
-import { getListTasksByDropdownField } from "@/lib/clickup";
+import { getListTasksByDropdownField, getList, getTask } from "@/lib/clickup";
 import { after } from "next/server";
 
 vi.mock("@/lib/db", () => ({
@@ -12,11 +21,15 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/clickup", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/clickup")>()),
   getListTasksByDropdownField: vi.fn(),
+  getList: vi.fn(),
+  getTask: vi.fn(),
 }));
 vi.mock("next/server", () => ({ after: vi.fn() }));
 
 const cache = vi.mocked(prisma.dashboardCache);
 const fetchTasks = vi.mocked(getListTasksByDropdownField);
+const fetchList = vi.mocked(getList);
+const fetchTask = vi.mocked(getTask);
 const afterMock = vi.mocked(after);
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
 import type { ClickUpTask } from "@/lib/types";
@@ -32,17 +45,22 @@ const DT_OPTIONS = [
 
 function t(over: {
   id: string;
+  name?: string;
   taskType?: string | number | null;
   deliverableType?: string | number | null;
   due?: string | null;
   status?: string;
   statusType?: string;
+  parent?: string | null;
+  dateClosed?: string | null;
 }): ClickUpTask {
   return {
     id: over.id,
-    name: `Task ${over.id}`,
+    name: over.name ?? `Task ${over.id}`,
     status: { status: over.status ?? "waiting on client", color: "", type: over.statusType ?? "custom" },
     due_date: over.due === undefined ? null : over.due,
+    parent: over.parent ?? null,
+    date_closed: over.dateClosed ?? null,
     custom_fields: [
       { id: CUSTOM_FIELDS.PROJECT_TASK_TYPE, name: "Project Task Type", type: "drop_down", type_config: { options: TYPE_OPTIONS }, value: over.taskType === undefined ? 3 : over.taskType },
       { id: CUSTOM_FIELDS.DELIVERABLE_TYPE, name: "Deliverable Type", type: "drop_down", type_config: { options: DT_OPTIONS }, value: over.deliverableType === undefined ? 0 : over.deliverableType },
@@ -88,6 +106,42 @@ describe("selectFeedbackTasks", () => {
   });
 });
 
+describe("selectMilestones", () => {
+  it("keeps only Delivery Deadline tasks, ordered by due date with undated last", () => {
+    const ms = selectMilestones([
+      t({ id: "fd", taskType: 3, due: "500" }),
+      t({ id: "late", taskType: 4, due: "9000", name: "Share Edit V2 with Client", deliverableType: 1 }),
+      t({ id: "undated", taskType: 4, due: null, name: "Share Final Deliverables with Client" }),
+      t({ id: "soon", taskType: PROJECT_TASK_TYPES.DELIVERY_DEADLINE, due: "1000", name: "Share Edit V1 with Client", parent: "P1", status: "complete", statusType: "closed", dateClosed: "1200" }),
+    ]);
+    expect(ms.map((m) => m.taskId)).toEqual(["soon", "late", "undated"]);
+    expect(ms[0]).toEqual({
+      taskId: "soon",
+      name: "Share Edit V1 with Client",
+      parentTaskId: "P1",
+      parentTaskName: null,
+      deliverableType: "AV Script V1",
+      dueMs: 1000,
+      closedMs: 1200,
+      isClosed: true,
+    });
+    expect(ms[1]).toMatchObject({ deliverableType: "AV Script V2", isClosed: false, closedMs: null, parentTaskId: null });
+  });
+
+  it("an open task never carries a closedMs, and a closed one without date_closed reports null", () => {
+    const ms = selectMilestones([
+      t({ id: "a", taskType: 4, dateClosed: "1" }),
+      t({ id: "b", taskType: 4, status: "complete", dateClosed: null }),
+    ]);
+    expect(ms.find((m) => m.taskId === "a")?.closedMs).toBeNull();
+    expect(ms.find((m) => m.taskId === "b")).toMatchObject({ isClosed: true, closedMs: null });
+  });
+
+  it("returns an empty list when there are no share tasks", () => {
+    expect(selectMilestones([t({ id: "fd" })])).toEqual([]);
+  });
+});
+
 describe("runPool", () => {
   it("bounds concurrency, preserves order, and captures rejections", async () => {
     let active = 0;
@@ -109,11 +163,32 @@ describe("runPool", () => {
   });
 });
 
-const STALE_DATA = { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } };
-const FRESH_TASKS = [t({ id: "new", due: "2000" })];
+const STALE_DATA: LivePayload = {
+  version: LIVE_PAYLOAD_VERSION,
+  feedback: { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } },
+  milestones: [],
+  wrapsUpMs: null,
+  archived: false,
+};
+/** A row written by the previous payload shape (a bare feedback map). */
+const OLD_SHAPE_DATA = { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } };
+const FRESH_FD = [t({ id: "new", due: "2000" })];
+const FRESH_DD = [
+  t({ id: "share1", taskType: 4, due: "3000", name: "Share Video Edit01 with Client", parent: "P1", status: "complete" }),
+  t({ id: "share2", taskType: 4, due: "4000", name: "Share Snippets Edit01 with Client", parent: "P1" }),
+  t({ id: "share3", taskType: 4, due: "5000", name: "Share Edit V2 with Client", parent: "P2", deliverableType: 1 }),
+];
 
-function row(key: string, ageMs: number) {
-  return { key, data: STALE_DATA, updatedAt: new Date(Date.now() - ageMs) };
+function row(key: string, ageMs: number, data: unknown = STALE_DATA) {
+  return { key, data, updatedAt: new Date(Date.now() - ageMs) };
+}
+
+function mockClickUpHealthy() {
+  fetchTasks.mockImplementation(async (_list, _field, optionId) => ({
+    tasks: optionId === PROJECT_TASK_TYPES.DELIVERY_DEADLINE ? FRESH_DD : FRESH_FD,
+  }));
+  fetchList.mockResolvedValue({ id: "L1", name: "List", folder: { id: "F", name: "Client" }, due_date: "7000", archived: false });
+  fetchTask.mockImplementation(async (id) => ({ id, name: id === "P1" ? "Post-Production - Ep #21" : "LOC19: Intuit" }) as ClickUpTask);
 }
 
 describe("getLiveFeedback (cache + outage behaviour)", () => {
@@ -132,36 +207,68 @@ describe("getLiveFeedback (cache + outage behaviour)", () => {
 
   it("returns a stale row immediately and refreshes in the background", async () => {
     cache.findUnique.mockResolvedValue(row("portal:fd:L1", 10 * 60_000) as never);
-    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
+    mockClickUpHealthy();
     expect(await getLiveFeedback("L1")).toEqual(STALE_DATA);
     expect(fetchTasks).not.toHaveBeenCalled();
     expect(afterMock).toHaveBeenCalledTimes(1);
-    // Run the scheduled refresh: it fetches and stores the new map.
+    // Run the scheduled refresh: it fetches both task types plus the list and stores the payload.
     await (afterMock.mock.calls[0][0] as () => Promise<void>)();
-    expect(fetchTasks).toHaveBeenCalledWith("L1", expect.any(String), expect.any(String), true);
+    expect(fetchTasks).toHaveBeenCalledWith("L1", CUSTOM_FIELDS.PROJECT_TASK_TYPE, PROJECT_TASK_TYPES.FEEDBACK_DEADLINE, true);
+    expect(fetchTasks).toHaveBeenCalledWith("L1", CUSTOM_FIELDS.PROJECT_TASK_TYPE, PROJECT_TASK_TYPES.DELIVERY_DEADLINE, true);
+    expect(fetchList).toHaveBeenCalledWith("L1");
     expect(cache.upsert).toHaveBeenCalledTimes(1);
-    expect((cache.upsert.mock.calls[0][0] as unknown as { update: { data: Record<string, { taskId: string }> } }).update.data["AV Script V1"].taskId).toBe("new");
+    const stored = (cache.upsert.mock.calls[0][0] as unknown as { update: { data: LivePayload } }).update.data;
+    expect(stored.version).toBe(LIVE_PAYLOAD_VERSION);
+    expect(stored.feedback["AV Script V1"].taskId).toBe("new");
+    expect(stored.wrapsUpMs).toBe(7000);
   });
 
   it("a forced refresh that throws falls back to the stale row with a warning", async () => {
     cache.findUnique.mockResolvedValue(row("portal:fd:L1", 10 * 60_000) as never);
     fetchTasks.mockRejectedValue(new Error("ClickUp down"));
+    fetchList.mockRejectedValue(new Error("ClickUp down"));
     expect(await getLiveFeedback("L1", true)).toEqual(STALE_DATA);
     expect(console.warn).toHaveBeenCalled();
   });
 
-  it("a total miss with a failing fetch returns an empty map", async () => {
+  it("a total miss with a failing fetch returns the empty payload", async () => {
     cache.findUnique.mockResolvedValue(null);
     fetchTasks.mockRejectedValue(new Error("ClickUp down"));
-    expect(await getLiveFeedback("L1")).toEqual({});
+    fetchList.mockRejectedValue(new Error("ClickUp down"));
+    expect(await getLiveFeedback("L1")).toEqual(EMPTY_LIVE_PAYLOAD);
   });
 
-  it("a miss fetches, stores, and returns the selected tasks", async () => {
+  it("a miss fetches, stores, and returns feedback, milestones with parent names, and list dates", async () => {
     cache.findUnique.mockResolvedValue(null);
-    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
-    const map = await getLiveFeedback("L1");
-    expect(map["AV Script V1"].taskId).toBe("new");
+    mockClickUpHealthy();
+    const p = await getLiveFeedback("L1");
+    expect(p.feedback["AV Script V1"].taskId).toBe("new");
+    expect(p.milestones.map((m) => m.taskId)).toEqual(["share1", "share2", "share3"]);
+    expect(p.milestones[0]).toMatchObject({ parentTaskId: "P1", parentTaskName: "Post-Production - Ep #21", isClosed: true });
+    expect(p.milestones[2]).toMatchObject({ parentTaskName: "LOC19: Intuit", deliverableType: "AV Script V2", isClosed: false });
+    // One getTask per distinct parent, not per milestone.
+    expect(fetchTask).toHaveBeenCalledTimes(2);
+    expect(p.wrapsUpMs).toBe(7000);
+    expect(p.archived).toBe(false);
     expect(cache.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("a parent name lookup failure leaves that name null without failing the list", async () => {
+    cache.findUnique.mockResolvedValue(null);
+    mockClickUpHealthy();
+    fetchTask.mockRejectedValue(new Error("404"));
+    const p = await getLiveFeedback("L1");
+    expect(p.milestones.map((m) => m.parentTaskName)).toEqual([null, null, null]);
+    expect(p.milestones[0].name).toBe("Share Video Edit01 with Client");
+  });
+
+  it("a row from the previous payload shape is a miss and is refetched inline", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:fd:L1", 1000, OLD_SHAPE_DATA) as never);
+    mockClickUpHealthy();
+    const p = await getLiveFeedback("L1");
+    expect(p.version).toBe(LIVE_PAYLOAD_VERSION);
+    expect(p.feedback["AV Script V1"].taskId).toBe("new");
+    expect(afterMock).not.toHaveBeenCalled();
   });
 });
 
@@ -174,44 +281,56 @@ describe("getLiveFeedbackMany", () => {
 
   it("reads all rows in one query, serves fresh and stale rows, fetches only misses, skips blanks", async () => {
     cache.findMany.mockResolvedValue([row("portal:fd:fresh", 1000), row("portal:fd:stale", 10 * 60_000)] as never);
-    fetchTasks.mockResolvedValue({ tasks: FRESH_TASKS });
+    mockClickUpHealthy();
     const out = await getLiveFeedbackMany(["fresh", "stale", "miss", "", "miss"]);
     expect(cache.findMany).toHaveBeenCalledTimes(1);
     expect(Object.keys(out).sort()).toEqual(["fresh", "miss", "stale"]);
     expect(out.fresh).toEqual(STALE_DATA);
     expect(out.stale).toEqual(STALE_DATA);
-    expect(out.miss["AV Script V1"].taskId).toBe("new");
-    expect(fetchTasks).toHaveBeenCalledTimes(1);
+    expect(out.miss.feedback["AV Script V1"].taskId).toBe("new");
+    expect(out.miss.milestones).toHaveLength(3);
+    expect(fetchList).toHaveBeenCalledTimes(1);
     expect(afterMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats rows from an older payload version as misses", async () => {
+    cache.findMany.mockResolvedValue([row("portal:fd:old", 1000, OLD_SHAPE_DATA)] as never);
+    mockClickUpHealthy();
+    const out = await getLiveFeedbackMany(["old"]);
+    expect(out.old.version).toBe(LIVE_PAYLOAD_VERSION);
+    expect(fetchList).toHaveBeenCalledTimes(1);
+    expect(afterMock).not.toHaveBeenCalled();
   });
 
   it("stale lists refresh through one scheduled pool, not one background call each", async () => {
     const ids = ["s1", "s2", "s3", "s4", "s5", "s6"];
     cache.findMany.mockResolvedValue(ids.map((id) => row(`portal:fd:${id}`, 10 * 60_000)) as never);
+    mockClickUpHealthy();
     let active = 0;
     let peak = 0;
-    fetchTasks.mockImplementation(async () => {
+    fetchList.mockImplementation(async (id) => {
       active++;
       peak = Math.max(peak, active);
       await new Promise((r) => setTimeout(r, 5));
       active--;
-      return { tasks: FRESH_TASKS };
+      return { id, name: "List", folder: { id: "F", name: "Client" } };
     });
     const out = await getLiveFeedbackMany(ids);
     expect(Object.keys(out)).toHaveLength(6);
     expect(fetchTasks).not.toHaveBeenCalled();
     expect(afterMock).toHaveBeenCalledTimes(1);
     await (afterMock.mock.calls[0][0] as () => Promise<void>)();
-    expect(fetchTasks).toHaveBeenCalledTimes(6);
+    expect(fetchList).toHaveBeenCalledTimes(6);
     expect(peak).toBe(4);
     expect(cache.upsert).toHaveBeenCalledTimes(6);
   });
 
-  it("a failing fetch for a miss yields an empty map for that list only", async () => {
+  it("a failing fetch for a miss yields the empty payload for that list only", async () => {
     cache.findMany.mockResolvedValue([row("portal:fd:ok", 1000)] as never);
     fetchTasks.mockRejectedValue(new Error("down"));
+    fetchList.mockRejectedValue(new Error("down"));
     const out = await getLiveFeedbackMany(["ok", "bad"]);
     expect(out.ok).toEqual(STALE_DATA);
-    expect(out.bad).toEqual({});
+    expect(out.bad).toEqual(EMPTY_LIVE_PAYLOAD);
   });
 });
