@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { buildPortalUrl, maskPortalToken } from "@/lib/portal-access";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 interface PortalLink {
   id: string;
@@ -66,13 +67,6 @@ type PendingAction =
   | { kind: "rotate"; row: ClientRow }
   | { kind: "revoke"; row: ClientRow }
   | null;
-
-function appBase(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (typeof window !== "undefined" ? window.location.origin : "")
-  );
-}
 
 async function copyText(text: string, label: string) {
   try {
@@ -116,9 +110,9 @@ export function ClientPortalSection() {
   });
 
   const projectsQuery = useQuery<{ clients: ClientWithProjects[] }>({
-    queryKey: ["projects", "active"],
+    queryKey: ["projects", "all"],
     queryFn: async () => {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects?all=true");
       if (!res.ok) throw new Error("Failed to fetch projects");
       return res.json();
     },
@@ -193,8 +187,8 @@ export function ClientPortalSection() {
       link: linkByFolder.get(c.folderId) ?? null,
     }));
     // Active links for folders the projects list does not currently show
-    // (archived client, or no deliveries yet) still need to be visible so
-    // they can be copied or revoked.
+    // (archived client) still need to be visible so they can be copied or
+    // revoked.
     const seen = new Set(out.map((r) => r.folderId));
     for (const l of links) {
       if (seen.has(l.clientFolderId)) continue;
@@ -215,13 +209,13 @@ export function ClientPortalSection() {
 
   function copyLink(row: ClientRow) {
     if (!row.link) return;
-    void copyText(buildPortalUrl(appBase(), row.link.token), "Portal link");
+    void copyText(buildPortalUrl(getAppBaseUrl(), row.link.token), "Portal link");
   }
 
   function copyProjectLink(row: ClientRow, project: ProjectSummary) {
     if (!row.link) return;
     void copyText(
-      buildPortalUrl(appBase(), row.link.token, project.listId),
+      buildPortalUrl(getAppBaseUrl(), row.link.token, project.listId),
       `Project link for ${project.name}`
     );
     setPickerFor(null);
@@ -248,7 +242,7 @@ export function ClientPortalSection() {
         </Card>
       ) : rows.length === 0 ? (
         <Card className="px-6 py-4 text-sm text-muted-foreground">
-          No clients with deliveries yet.
+          No active client folders found.
         </Card>
       ) : (
         <div className="rounded-md border">
@@ -317,14 +311,6 @@ export function ClientPortalSection() {
                     <TableCell className="text-right">
                       {link ? (
                         <div className="inline-flex items-center gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyLink(row)}
-                          >
-                            <Copy className="h-3.5 w-3.5 mr-1" />
-                            Copy
-                          </Button>
                           <Popover
                             open={pickerFor === row.folderId}
                             onOpenChange={(open) =>
@@ -343,7 +329,7 @@ export function ClientPortalSection() {
                               </p>
                               {row.projects.length === 0 ? (
                                 <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                                  No active projects with deliveries.
+                                  No active projects in this client folder.
                                 </p>
                               ) : (
                                 <ul className="max-h-64 overflow-y-auto">

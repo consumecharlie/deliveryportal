@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { deriveClientFeedback } from "@/lib/client-feedback-state";
 import { buildPortalUrl } from "@/lib/portal-access";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 /**
  * GET /api/deliveries/[id]
@@ -51,9 +52,8 @@ export async function GET(
         : Promise.resolve(null),
     ]);
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
     const portalUrl = access
-      ? buildPortalUrl(base, access.token, delivery.projectListId)
+      ? buildPortalUrl(getAppBaseUrl(req), access.token, delivery.projectListId)
       : null;
 
     return NextResponse.json({

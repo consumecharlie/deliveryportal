@@ -5,6 +5,7 @@ import {
   buildPortalUrl,
   maskPortalToken,
 } from "@/lib/portal-access";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 function mockDb() {
   const calls: string[] = [];
@@ -102,5 +103,23 @@ describe("buildPortalUrl", () => {
 describe("maskPortalToken", () => {
   it("shows only the first and last four characters", () => {
     expect(maskPortalToken("abcd0123456789wxyz")).toBe("…/portal/abcd…wxyz");
+  });
+});
+
+describe("getAppBaseUrl", () => {
+  it("prefers a non-empty NEXT_PUBLIC_APP_URL, else the request origin", () => {
+    const prev = process.env.NEXT_PUBLIC_APP_URL;
+    const req = new Request("https://preview.example.com/api/deliveries/1");
+    try {
+      process.env.NEXT_PUBLIC_APP_URL = "https://portal.example.com/";
+      expect(getAppBaseUrl(req)).toBe("https://portal.example.com");
+      process.env.NEXT_PUBLIC_APP_URL = "";
+      expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
+      delete process.env.NEXT_PUBLIC_APP_URL;
+      expect(getAppBaseUrl(req)).toBe("https://preview.example.com");
+    } finally {
+      if (prev === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+      else process.env.NEXT_PUBLIC_APP_URL = prev;
+    }
   });
 });

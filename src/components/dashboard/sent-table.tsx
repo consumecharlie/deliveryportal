@@ -261,7 +261,7 @@ export function SentTable() {
 
   // Detail fetch for the open dialog: the list payload has everything except
   // the client's portal deep link, which needs a PortalAccess lookup.
-  const { data: detailData } = useQuery<{ delivery: DeliveryDetail }>({
+  const { data: detailData, isError: detailError } = useQuery<{ delivery: DeliveryDetail }>({
     queryKey: ["deliveries", selectedDeliveryId],
     queryFn: async () => {
       const res = await fetch(`/api/deliveries/${selectedDeliveryId}`);
@@ -795,6 +795,10 @@ export function SentTable() {
                               Copy
                             </Button>
                           </div>
+                        ) : detailError ? (
+                          <p className="text-xs text-muted-foreground">
+                            Portal link unavailable
+                          </p>
                         ) : (
                           <p className="text-xs text-muted-foreground">
                             No active portal link for this client. Create one in Settings.

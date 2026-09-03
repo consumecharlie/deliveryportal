@@ -4,11 +4,10 @@
  *
  *   confirmed  newest row is live (undoneAt null)
  *   reopened   newest row was undone by the client
- *   awaiting / none  reserved for a portal-aware timeline; the Sent list
- *                    cannot tell them apart cheaply, so it returns null when
- *                    a delivery has no confirmation rows at all.
+ *
+ * A delivery with no confirmation rows has no entry (the caller shows null).
  */
-export type ClientFeedbackState = "awaiting" | "confirmed" | "reopened" | "none";
+export type ClientFeedbackState = "confirmed" | "reopened";
 
 export interface ClientFeedback {
   state: ClientFeedbackState;
