@@ -1,17 +1,17 @@
-import type { FeedbackStatus } from "@/lib/portal-data";
+import type { PortalCardStatus } from "@/lib/portal-view-model";
 
 /**
  * Deadline wording. A default-window date is a suggestion, not a commitment
  * anyone made, so the copy softens rather than demands.
  */
-export function deadlineLabel(status: FeedbackStatus): string {
+export function deadlineLabel(status: PortalCardStatus): string {
   return status.dueIsEstimate
     ? `Feedback by ${status.dueLabel} (suggested)`
     : `Feedback due ${status.dueLabel}`;
 }
 
 /** Status pill. Pills are for status only; every clickable control is a button. */
-export function FeedbackBadge({ status }: { status: FeedbackStatus | undefined }) {
+export function FeedbackBadge({ status }: { status: PortalCardStatus | undefined }) {
   if (!status || status.kind === "none") return null;
 
   let label: string;

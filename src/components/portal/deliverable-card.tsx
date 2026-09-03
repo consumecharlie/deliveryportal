@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DeliverableGroup, TimelineLink } from "@/lib/portal-timeline";
-import type { FeedbackStatus } from "@/lib/portal-data";
+import type { TimelineLink } from "@/lib/portal-timeline";
+import type { PortalCardGroup, PortalCardStatus } from "@/lib/portal-view-model";
 import { renderPortalBody } from "@/lib/portal-render";
 import { FeedbackBadge } from "./feedback-badge";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
@@ -32,8 +32,8 @@ function sentDate(d: Date, withYear: boolean): string {
 
 interface Props {
   token: string;
-  group: DeliverableGroup;
-  status: FeedbackStatus | undefined;
+  group: PortalCardGroup;
+  status: PortalCardStatus | undefined;
 }
 
 export function DeliverableCard({ token, group, status }: Props) {

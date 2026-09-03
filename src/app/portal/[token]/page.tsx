@@ -4,6 +4,7 @@ import { recordView } from "@/lib/portal-views";
 import { PortalHeader } from "@/components/portal/portal-header";
 import { ActionItems } from "@/components/portal/action-items";
 import { DeliverableCard } from "@/components/portal/deliverable-card";
+import { toCardGroup, toCardStatus } from "@/lib/portal-view-model";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,12 @@ export default async function ClientPortalPage({ params }: { params: Promise<{ t
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
               {p.deliverables.map((g) => (
-                <DeliverableCard key={g.latest.id} token={token} group={g} status={data.status[g.latest.id]} />
+                <DeliverableCard
+                  key={g.latest.id}
+                  token={token}
+                  group={toCardGroup(g)}
+                  status={toCardStatus(data.status[g.latest.id])}
+                />
               ))}
             </div>
           </div>
