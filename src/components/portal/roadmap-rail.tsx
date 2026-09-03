@@ -37,9 +37,18 @@ const STATE_TEXT: Record<PortalMilestone["state"], string> = {
   planned: "Planned",
 };
 
-/** The one bold element on the page: the project's roadmap as a pellet rail. */
+/** A rail is worth drawing only while something is still ahead. */
+export function hasRoadAhead(milestones: PortalMilestone[]): boolean {
+  return milestones.some((m) => m.state === "up-next" || m.state === "planned" || m.state === "in-review");
+}
+
+/**
+ * The one bold element on the page: the project's roadmap as a pellet rail.
+ * Hidden when every milestone is delivered (a long-running series would only
+ * show "+N earlier"); the table is the history in that case.
+ */
 export function RoadmapRail({ milestones }: Props) {
-  if (milestones.length === 0) return null;
+  if (!hasRoadAhead(milestones)) return null;
   const { shown, earlier } = trimMilestones(milestones);
   const hasUpNext = shown.some((m) => m.state === "up-next");
 
