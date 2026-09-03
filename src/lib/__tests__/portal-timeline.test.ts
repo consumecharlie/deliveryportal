@@ -55,7 +55,7 @@ describe("buildTimeline", () => {
     const t = buildTimeline([
       d({ id: "v1", deliverableType: "Edit V1", sentAt: new Date("2026-06-01") }),
       d({ id: "v2", deliverableType: "Edit V2", sentAt: new Date("2026-06-08") }),
-      d({ id: "f", deliverableType: "Final Edit", sentAt: new Date("2026-06-15") }),
+      d({ id: "f", deliverableType: "Final Delivery", sentAt: new Date("2026-06-15") }),
     ], {});
     const g = t.projects[0].deliverables;
     expect(g).toHaveLength(1);

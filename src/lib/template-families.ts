@@ -82,12 +82,6 @@ const VERSION_SUFFIXES = [
   { pattern: /\s+Final\s*$/i, key: 5 },
 ];
 
-// Some types carry the version word at the FRONT instead ("Final Edit").
-// Checked only after no suffix matched, so "AV Script Final" is unaffected.
-const VERSION_PREFIXES = [
-  { pattern: /^Final\s+/i, key: 5 },
-];
-
 const NO_SUFFIX_KEY = 10;
 const UNKNOWN_SUFFIX_KEY = 99;
 
@@ -102,7 +96,6 @@ const UNKNOWN_SUFFIX_KEY = 99;
  *   "Edit V1"              → "Edit"           (override)
  *   "Potential Master"     → "Edit"           (override)
  *   "AV Script V1 + Loom"  → "AV Script"      (suffix strip)
- *   "Final Edit"           → "Edit"           (prefix strip)
  *   "Competitive Analysis"  → "Competitive Analysis" (no suffix)
  */
 export function extractFamilyName(deliverableType: string): string {
@@ -114,11 +107,6 @@ export function extractFamilyName(deliverableType: string): string {
   for (const { pattern } of VERSION_SUFFIXES) {
     if (pattern.test(deliverableType)) {
       return deliverableType.replace(pattern, "").trim();
-    }
-  }
-  for (const { pattern } of VERSION_PREFIXES) {
-    if (pattern.test(deliverableType.trim())) {
-      return deliverableType.trim().replace(pattern, "").trim();
     }
   }
   return deliverableType.trim();
@@ -137,9 +125,6 @@ export function getVersionSortKey(deliverableType: string): number {
   for (const { pattern, key } of VERSION_SUFFIXES) {
     if (pattern.test(deliverableType)) return key;
   }
-  for (const { pattern, key } of VERSION_PREFIXES) {
-    if (pattern.test(deliverableType.trim())) return key;
-  }
   return NO_SUFFIX_KEY;
 }
 
@@ -157,12 +142,9 @@ export function extractVersionSuffix(deliverableType: string): string | null {
   const override = FAMILY_OVERRIDES[deliverableType.trim()];
   if (override) return override.label;
 
-  const trimmed = deliverableType.trim();
-  const family = extractFamilyName(trimmed);
-  if (family === trimmed) return null;
-  // Prefix form ("Final Edit"): the label is the leading word, not the tail.
-  if (trimmed.endsWith(family)) return trimmed.slice(0, trimmed.length - family.length).trim();
-  return trimmed.slice(family.length).trim();
+  const family = extractFamilyName(deliverableType);
+  if (family === deliverableType.trim()) return null;
+  return deliverableType.slice(family.length).trim();
 }
 
 // ── Grouping ───────────────────────────────────────────────────────
