@@ -26,6 +26,8 @@ function tokens(s: string): string[] {
 
 const CONFIDENT_COVERAGE = 0.75; // share of channel tokens found in the project name
 const MIN_HITS = 2;
+// A runner-up this close in score means the pick is a coin flip, not a match.
+const AMBIGUOUS_GAP = 0.1;
 
 export function rankInternalChannels(
   projectName: string,
@@ -43,8 +45,33 @@ export function rankInternalChannels(
     if (hits < MIN_HITS) continue;
     const coverage = hits / ct.length;
     const clientBonus = ct.some((t) => client.has(t)) ? 0.1 : 0;
+    // Tokens that belong to neither the project nor the client usually mean a
+    // sibling project's channel ("marketcrest" for the Wiggam Law project), so
+    // they rule out confidence even at high coverage.
+    const foreign = ct.filter((t) => !proj.has(t) && !client.has(t)).length;
     const score = coverage + clientBonus + hits * 0.01;
-    out.push({ ...c, score, confident: coverage >= CONFIDENT_COVERAGE && clientBonus > 0 });
+    out.push({
+      ...c,
+      score,
+      confident: coverage >= CONFIDENT_COVERAGE && clientBonus > 0 && foreign === 0,
+    });
   }
-  return out.sort((a, b) => b.score - a.score || a.name.length - b.name.length);
+  out.sort(
+    (a, b) => b.score - a.score || a.name.length - b.name.length || a.name.localeCompare(b.name)
+  );
+  // Only the top result can be offered as a match, and not when the runner-up
+  // was equally convincing before demotion.
+  const top = out[0];
+  const second = out[1];
+  if (top && second && second.confident && top.score - second.score < AMBIGUOUS_GAP) {
+    top.confident = false;
+  }
+  for (let i = 1; i < out.length; i++) out[i].confident = false;
+  return out;
+}
+
+/** The channel to suggest, or null when nothing ranks as a confident match. */
+export function pickConfident(ranked: RankedInternalChannel[]): RankedInternalChannel | null {
+  const top = ranked[0];
+  return top && top.confident ? top : null;
 }
