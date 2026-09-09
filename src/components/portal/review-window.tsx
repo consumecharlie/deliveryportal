@@ -31,7 +31,6 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
       ) : (
         <ul className="portal-review-list">
           {items.map((item) => {
-            const pill = item.review.state === "overdue" || item.review.state === "due-today";
             return (
               <li key={item.deliveryId} className="portal-review-row">
                 <div className="portal-review-what">
@@ -48,7 +47,13 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                   </span>
                   <span className="portal-review-project">{item.projectName}</span>
                   <span className="portal-review-due">
-                    {pill ? <StatusPill state={item.review.state} label={item.review.label} /> : item.review.label}
+                    <StatusPill
+                      state={item.review.state}
+                      mode={item.review.mode}
+                      names={[item.deliverableTitle, item.variant]}
+                      label={item.review.label}
+                    />
+                    {item.review.label && <span className="portal-review-due-label">{item.review.label}</span>}
                   </span>
                 </div>
                 <div className="portal-review-actions">
