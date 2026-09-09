@@ -35,9 +35,8 @@ import { Dock, type DockEntry } from "./dock";
 
 const PAD = 24;
 const GAP = 24;
-const ROW_GAP = 36;
-const CASCADE = 24;
 const BOTTOM_STRIP = 132;
+const TWO_COLUMN_MIN = 1100;
 const MAX_CONTENT = 1440;
 const REACH = 80;
 const WIDE_MIN = 900;
@@ -169,8 +168,8 @@ export function Desktop({ token, model }: Props) {
 
   function defaultOpen(id: string): boolean {
     if (id === REVIEW_ID) return true;
-    if (id === UPNEXT_ID || id === FINDER_ID) return !focusMode;
-    if (id === ARCHIVE_ID || id === NOTE_ID) return false;
+    if (id === UPNEXT_ID || id === FINDER_ID || id === ARCHIVE_ID) return !focusMode;
+    if (id === NOTE_ID) return false;
     return true;
   }
   function win(id: string): WinState {
@@ -180,34 +179,43 @@ export function Desktop({ token, model }: Props) {
   const order = mergeOrder(state.order, defaultOrder);
   const zOf = (id: string) => 10 + order.indexOf(id);
 
-  // Default layout on the canvas (desktop mode). Heights come from the windows
-  // themselves, so the Finder sits under the taller of the two top windows and
-  // the project cascade sits under the Finder.
-  // The default layout centers content up to 1440px; the drag zone is the whole canvas.
+  // Default layout: a non-overlapping grid computed from the viewport width
+  // and the windows' measured natural heights (reported before paint). Row 1:
+  // Needs your review (40%) and Up next (60%); row 2: Project Finder (40%) and
+  // Archive (60%); then each project window full width, most recent first.
+  // Under 1100px a single column in the same order. Content centers up to
+  // 1440px; the drag zone is the whole canvas. Persisted positions win.
   const fullW = canvasW ?? 1280;
   const contentW = Math.min(fullW, MAX_CONTENT);
   const offX = Math.max(0, Math.floor((fullW - contentW) / 2));
   const W = contentW - 2 * PAD;
+  const left = PAD + offX;
+  const twoColumn = !focusMode && fullW >= TWO_COLUMN_MIN;
   const h = (id: string) => (win(id).open ? heights[id] ?? 0 : 0);
-  const reviewW = focusMode ? Math.min(W, 640) : Math.round((W - GAP) / 2);
-  const upnextW = W - GAP - reviewW;
-  const finderTop = PAD + (h(REVIEW_ID) > 0 ? h(REVIEW_ID) + GAP : 0);
-  const leftBottom = focusMode ? PAD + h(REVIEW_ID) : finderTop + h(FINDER_ID);
-  const rightBottom = focusMode ? 0 : PAD + h(UPNEXT_ID);
-  const stageTop = Math.max(leftBottom, rightBottom) + ROW_GAP;
-  const n = cascade.length;
+  const leftW = Math.round((W - GAP) * 0.4);
+  const rightW = W - GAP - leftW;
   const noteW = Math.min(420, W);
 
+  const projectIds = [...cascade].reverse().map((p) => projectWindowId(p.listId));
+  const gridRows: string[][] = twoColumn
+    ? [[REVIEW_ID, UPNEXT_ID], [FINDER_ID, ARCHIVE_ID], ...projectIds.map((id) => [id])]
+    : [REVIEW_ID, ...(focusMode ? [] : [UPNEXT_ID, FINDER_ID, ARCHIVE_ID]), ...projectIds].map((id) => [id]);
+  const grid: Record<string, Placement> = {};
+  let cursor = PAD;
+  for (const row of gridRows) {
+    const rowH = Math.max(...row.map(h));
+    if (row.length === 2) {
+      grid[row[0]] = { x: left, y: cursor, w: leftW };
+      grid[row[1]] = { x: left + leftW + GAP, y: cursor, w: rightW };
+    } else {
+      grid[row[0]] = { x: left, y: cursor, w: focusMode && row[0] === REVIEW_ID ? Math.min(W, 640) : W };
+    }
+    if (rowH > 0) cursor += rowH + GAP;
+  }
+
   function defaults(id: string): Placement {
-    const left = PAD + offX;
-    if (id === REVIEW_ID) return { x: left, y: PAD, w: reviewW };
-    if (id === UPNEXT_ID) return { x: left + reviewW + GAP, y: PAD, w: upnextW };
-    if (id === FINDER_ID) return { x: left, y: finderTop, w: reviewW };
-    if (id === ARCHIVE_ID) return { x: left + 48, y: stageTop + 48, w: Math.min(980, W - 48) };
     if (id === NOTE_ID) return { x: offX + W + PAD - noteW, y: PAD + 40, w: noteW };
-    const listId = listIdOfWindow(id);
-    const i = Math.max(0, cascade.findIndex((p) => p.listId === listId));
-    return { x: left + i * CASCADE, y: stageTop + i * CASCADE, w: W - (n - 1) * CASCADE };
+    return grid[id] ?? { x: left, y: cursor, w: W };
   }
 
   function place(id: string): Placement {
@@ -236,7 +244,7 @@ export function Desktop({ token, model }: Props) {
   canvasH += BOTTOM_STRIP;
 
   // Reading order for the staggered entrance pop.
-  const readingOrder = [REVIEW_ID, UPNEXT_ID, FINDER_ID, ...[...cascade].reverse().map((p) => projectWindowId(p.listId)), ARCHIVE_ID, NOTE_ID];
+  const readingOrder = [REVIEW_ID, UPNEXT_ID, FINDER_ID, ARCHIVE_ID, ...projectIds, NOTE_ID];
   const popIndex = (id: string) => (phase === "ready" && !popped && !env.reducedMotion ? Math.max(0, readingOrder.indexOf(id)) : null);
 
   const getBounds = useCallback(() => {
