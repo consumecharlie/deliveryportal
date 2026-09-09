@@ -34,16 +34,42 @@ export type ReviewState =
   | "confirmed"
   | "none"; // nothing to do (older version, or stale)
 
+/** What a link opens, inferred from its host/path. Drives the icon and the host hint. */
+export type LinkKind =
+  | "google-doc"
+  | "google-sheet"
+  | "google-slides"
+  | "google-drive"
+  | "frame"
+  | "loom"
+  | "vimeo"
+  | "youtube"
+  | "box"
+  | "dropbox"
+  | "audio"
+  | "video"
+  | "pdf"
+  | "web";
+
 export interface PortalLink {
   url: string;
-  /** Client-facing label, e.g. "Frame.io", "Google Drive". */
+  /**
+   * Button label. The anchor text this link had in the message we sent
+   * ("Final Post Script", "Audio File Final"), with the project name prefix
+   * stripped; falls back to the host hint when the message did not name it.
+   */
   label: string;
+  /** Short host hint shown under or beside the label, e.g. "Google Doc", "Frame.io", "Audio file". */
+  hint: string;
+  kind: LinkKind;
 }
 
 export interface PortalVersion {
   deliveryId: string;
   /** e.g. "Edit V2" (deliverable type of that send). */
   label: string;
+  /** 1-based position in the deliverable's version list, oldest = 1. */
+  versionNumber: number;
   sentAtMs: number;
   links: PortalLink[];
   /** Sanitized markdown body (render with renderPortalBody). */
@@ -62,6 +88,12 @@ export interface PortalDeliverable {
   history: PortalVersion[];
   review: {
     state: ReviewState;
+    /**
+     * What the client is being asked for, from the paired ClickUp task name:
+     * "approval" when it reads "Confirm ... Approval" (finals), else "feedback".
+     * Falls back to "approval" when the deliverable type contains "Final".
+     */
+    mode: "feedback" | "approval";
     /** "Due Tue, Sep 8", "Suggested by Fri, Sep 11", "Confirmed Jul 12" */
     label: string;
     dueMs: number | null;
