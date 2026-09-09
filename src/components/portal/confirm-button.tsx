@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Button from "./cm-button";
 
 interface Props {
   token: string;
@@ -28,8 +29,8 @@ const UNDO_WARNING =
 
 /**
  * Local state seeds from props once, so call sites key this component on the
- * delivery id plus its status so a confirm made from one instance (the action
- * list) is reflected by the other (the card) after router.refresh().
+ * delivery id plus its status so a confirm made from one instance (the review
+ * window) is reflected by the other (the project window) after router.refresh().
  *
  * The undo prompt is a native <dialog> opened with showModal(): focus moves
  * into it, stays trapped, and Escape closes it.
@@ -40,6 +41,9 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
   const [confirmed, setConfirmed] = useState(initialConfirmed);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Arcade points: a "+100" rises out of the button after a confirm. The key
+  // bumps so a confirm after an undo pops again; animationend clears it.
+  const [points, setPoints] = useState(0);
 
   function openUndo() {
     setError(null);
@@ -73,6 +77,7 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setConfirmed(action === "confirm");
+      if (action === "confirm") setPoints((n) => n + 1);
       if (action === "undo") closeUndo();
       router.refresh();
     } catch {
@@ -99,9 +104,14 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
           )}
         </div>
       ) : (
-        <button type="button" onClick={() => post("confirm")} disabled={busy} className="portal-btn portal-btn-primary">
+        <Button type="button" size="sm" onClick={() => post("confirm")} disabled={busy}>
           {busy ? "Saving" : "All feedback is in"}
-        </button>
+        </Button>
+      )}
+      {points > 0 && (
+        <span key={points} className="portal-points" aria-hidden="true" onAnimationEnd={() => setPoints(0)}>
+          +100
+        </span>
       )}
       {error && (
         <span className="portal-error" role="alert">
