@@ -6,6 +6,7 @@ import type { PortalPageModel, PortalProject } from "@/lib/portal-page-model";
 import {
   ARCHIVE_ID,
   EMPTY_STATE,
+  FINDER_ID,
   NOTE_ID,
   REVIEW_ID,
   UPNEXT_ID,
@@ -24,7 +25,7 @@ import {
 import type { WindowFrameProps } from "./mac-window";
 import { MenuBar } from "./menu-bar";
 import { BootScreen } from "./boot-screen";
-import { ProjectFinder, ARCHIVE_FOLDER } from "./project-finder";
+import { FinderWindow, ARCHIVE_FOLDER } from "./finder-window";
 import { ReviewWindow } from "./review-window";
 import { UpNextWindow } from "./up-next-window";
 import { ProjectWindow } from "./project-window";
@@ -84,6 +85,7 @@ export function Desktop({ token, model }: Props) {
     if (!focusMode) ids.push(UPNEXT_ID);
     for (const p of cascade) ids.push(projectWindowId(p.listId));
     ids.push(ARCHIVE_ID, NOTE_ID);
+    if (!focusMode) ids.push(FINDER_ID);
     return ids;
   }, [focusMode, cascade]);
 
@@ -96,7 +98,6 @@ export function Desktop({ token, model }: Props) {
   const [archiveFocus, setArchiveFocus] = useState<string | null>(null);
   const [popped, setPopped] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const finderRef = useRef<HTMLDivElement>(null);
 
   // First client frame: restore the desktop, read the environment, measure,
   // and decide whether to boot. All in a layout effect so nothing paints early.
@@ -163,7 +164,7 @@ export function Desktop({ token, model }: Props) {
 
   function defaultOpen(id: string): boolean {
     if (id === REVIEW_ID) return true;
-    if (id === UPNEXT_ID) return !focusMode;
+    if (id === UPNEXT_ID || id === FINDER_ID) return !focusMode;
     if (id === ARCHIVE_ID || id === NOTE_ID) return false;
     return true;
   }
@@ -181,16 +182,17 @@ export function Desktop({ token, model }: Props) {
   const h = (id: string) => (win(id).open ? heights[id] ?? 0 : 0);
   const reviewW = focusMode ? Math.min(W, 640) : Math.round((W - GAP) / 2);
   const upnextW = W - GAP - reviewW;
-  const row1Bottom = PAD + Math.max(h(REVIEW_ID), focusMode ? 0 : h(UPNEXT_ID));
-  const finderTop = row1Bottom + ROW_GAP;
-  const finderH = heights.__finder ?? 0;
-  const stageTop = focusMode ? row1Bottom + ROW_GAP : finderTop + finderH + ROW_GAP;
+  const finderTop = PAD + (h(REVIEW_ID) > 0 ? h(REVIEW_ID) + GAP : 0);
+  const leftBottom = focusMode ? PAD + h(REVIEW_ID) : finderTop + h(FINDER_ID);
+  const rightBottom = focusMode ? 0 : PAD + h(UPNEXT_ID);
+  const stageTop = Math.max(leftBottom, rightBottom) + ROW_GAP;
   const n = cascade.length;
   const noteW = Math.min(420, W);
 
   function defaults(id: string): Placement {
     if (id === REVIEW_ID) return { x: PAD, y: PAD, w: reviewW };
     if (id === UPNEXT_ID) return { x: PAD + reviewW + GAP, y: PAD, w: upnextW };
+    if (id === FINDER_ID) return { x: PAD, y: finderTop, w: reviewW };
     if (id === ARCHIVE_ID) return { x: PAD + 48, y: stageTop + 48, w: Math.min(980, W - 48) };
     if (id === NOTE_ID) return { x: W + PAD - noteW, y: PAD + 40, w: noteW };
     const listId = listIdOfWindow(id);
@@ -214,7 +216,7 @@ export function Desktop({ token, model }: Props) {
   }
 
   const openIds = [REVIEW_ID, ...order].filter((id) => win(id).open);
-  let canvasH = finderTop + finderH;
+  let canvasH = 0;
   if (wide) {
     for (const id of openIds) {
       const p = place(id);
@@ -224,7 +226,7 @@ export function Desktop({ token, model }: Props) {
   canvasH += BOTTOM_STRIP;
 
   // Reading order for the staggered entrance pop.
-  const readingOrder = [REVIEW_ID, UPNEXT_ID, ...[...cascade].reverse().map((p) => projectWindowId(p.listId)), ARCHIVE_ID, NOTE_ID];
+  const readingOrder = [REVIEW_ID, UPNEXT_ID, FINDER_ID, ...[...cascade].reverse().map((p) => projectWindowId(p.listId)), ARCHIVE_ID, NOTE_ID];
   const popIndex = (id: string) => (phase === "ready" && !popped && !env.reducedMotion ? Math.max(0, readingOrder.indexOf(id)) : null);
 
   const getBounds = useCallback(() => {
@@ -309,18 +311,6 @@ export function Desktop({ token, model }: Props) {
   const openProjectIds = new Set(cascade.filter((p) => win(projectWindowId(p.listId)).open).map((p) => p.listId));
   const reviewItems = focusMode ? model.attention.filter((a) => a.projectListId === focusListId) : model.attention;
 
-  // Finder height feeds the layout like a window's.
-  useLayoutEffect(() => {
-    const el = finderRef.current;
-    if (!el) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- layout measurement feeds the window positions before paint
-    onMeasure("__finder", el.offsetHeight);
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => onMeasure("__finder", el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [onMeasure, wide, focusMode]);
-
   const rootCls = [
     "portal-desktop",
     phase !== "ready" ? "portal-desktop-pending" : "",
@@ -343,14 +333,16 @@ export function Desktop({ token, model }: Props) {
       <div ref={canvasRef} className="portal-canvas" style={wide ? { height: canvasH } : undefined}>
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
         <img src="/ghost-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-ghost animate-float-slow" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
+        <img src="/cherry-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-cherry animate-float-medium" />
 
         <ReviewWindow {...frame(REVIEW_ID)} token={token} items={reviewItems} />
 
         {!focusMode && win(UPNEXT_ID).open && <UpNextWindow {...frame(UPNEXT_ID)} projects={active} />}
 
-        {!focusMode && (
-          <ProjectFinder
-            ref={finderRef}
+        {!focusMode && win(FINDER_ID).open && (
+          <FinderWindow
+            {...frame(FINDER_ID)}
             projects={active}
             awaiting={awaiting}
             openIds={openProjectIds}
@@ -360,7 +352,6 @@ export function Desktop({ token, model }: Props) {
             archiveCount={archived.length}
             archiveOpen={win(ARCHIVE_ID).open}
             tapOpens={tapOpens}
-            style={wide ? { top: finderTop } : undefined}
           />
         )}
 

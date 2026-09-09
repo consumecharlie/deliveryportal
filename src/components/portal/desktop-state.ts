@@ -23,6 +23,7 @@ export const REVIEW_ID = "review";
 export const UPNEXT_ID = "upnext";
 export const ARCHIVE_ID = "archive";
 export const NOTE_ID = "note";
+export const FINDER_ID = "finder";
 
 export function projectWindowId(listId: string): string {
   return `project:${listId}`;
