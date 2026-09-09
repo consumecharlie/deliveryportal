@@ -466,7 +466,6 @@ export function Desktop({ token, model, sandbox = false }: Props) {
       <MenuBar
         clientName={model.clientName}
         clientLogoUrl={model.clientLogoUrl}
-        clientDomain={model.clientDomain}
         crumb={focusMode && focusProject ? { href: `/portal/${token}`, projectName: focusProject.name } : undefined}
         noteOpen={win(NOTE_ID).open}
         onNote={toggleNote}

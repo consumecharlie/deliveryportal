@@ -6,11 +6,9 @@ import { menuClock } from "./format";
 
 interface Props {
   clientName: string;
-  /** The client's own logo when we have one. */
+  /** The client's wordmark, uploaded in Settings; the name stands in without one. */
   clientLogoUrl?: string | null;
-  /** The client's web domain: a favicon stands in for a missing logo. */
-  clientDomain?: string | null;
-  /** Project page: the name links back to the client desktop and the project name follows. */
+  /** Project page: the lockup links back to the client desktop and the project name follows. */
   crumb?: { href: string; projectName: string };
   noteOpen: boolean;
   onNote: () => void;
@@ -18,25 +16,20 @@ interface Props {
 }
 
 /**
- * The client lockup (the MOGRT Library client-portal header): a 28px logo on
- * a white tile, the client name in EightiesComeback over CLIENT PORTAL in
- * pixel caps. Logo, else the domain's favicon, else a monogram tile.
+ * The client lockup, as on the Motion Studio share page (MOGRT `ClientBrand`):
+ * the client's wordmark as-is (30px tall, 240px max), else the client name in
+ * EightiesComeback, with the tiny pixel caption CLIENT PORTAL directly under.
  */
-function ClientLogo({ name, logoUrl, domain }: { name: string; logoUrl?: string | null; domain?: string | null }) {
-  const [failed, setFailed] = useState(false);
-  const src = logoUrl || (domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null);
-  if (src && !failed) {
-    return (
-      <span className="portal-lockup-tile">
-        {/* eslint-disable-next-line @next/next/no-img-element -- client-provided logo or favicon */}
-        <img src={src} alt="" width={28} height={28} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
-      </span>
-    );
-  }
-  const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "";
+function ClientLockup({ name, logoUrl }: { name: string; logoUrl?: string | null }) {
   return (
-    <span className="portal-lockup-tile portal-lockup-monogram" aria-hidden="true">
-      {initial}
+    <span className="portal-lockup-text">
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the client's uploaded wordmark
+        <img src={logoUrl} alt={name} className="portal-lockup-logo" draggable={false} referrerPolicy="no-referrer" />
+      ) : (
+        <span className="portal-lockup-name">{name}</span>
+      )}
+      <span className="portal-lockup-sub">Client portal</span>
     </span>
   );
 }
@@ -63,16 +56,8 @@ function Clock() {
   );
 }
 
-export function MenuBar({ clientName, clientLogoUrl, clientDomain, crumb, noteOpen, onNote, onTidy }: Props) {
-  const lockup = (
-    <>
-      <ClientLogo name={clientName} logoUrl={clientLogoUrl} domain={clientDomain} />
-      <span className="portal-lockup-text">
-        <span className="portal-lockup-name">{clientName}</span>
-        <span className="portal-lockup-sub">Client portal</span>
-      </span>
-    </>
-  );
+export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, onTidy }: Props) {
+  const lockup = <ClientLockup name={clientName} logoUrl={clientLogoUrl} />;
   return (
     <header className="portal-menu" role="banner">
       <div className="portal-menu-left">
