@@ -12,6 +12,13 @@ import {
   nameTokens,
   deliverableIdentityTokens,
   countsLine,
+  extractLinkTexts,
+  normalizeUrl,
+  linkKind,
+  linkHint,
+  cleanLinkText,
+  reviewMode,
+  reviewLabel,
   PHASE_ONLY_WORDS,
 } from "@/lib/portal-labels";
 
@@ -205,5 +212,99 @@ describe("linkLabel", () => {
   it("falls back to the stored label for unknown or missing variables", () => {
     expect(linkLabel("somethingElse", "Project plan")).toBe("Project plan");
     expect(linkLabel(null, "Extra link")).toBe("Extra link");
+  });
+});
+
+describe("links: anchor texts, kinds, hints, clean labels", () => {
+  const DOC = "https://docs.google.com/document/d/1AbC/edit";
+  const MP3 = "https://drive.google.com/file/d/1XyZ/view";
+  const message = [
+    "Hi there,",
+    "",
+    `- [Final Post Script](${DOC})`,
+    `- [CallRail Wiggam Law Virtual Testimonial \u2013 Audio File Final](${MP3}).`,
+    "- <https://app.frame.io/reviews/abc|Review the cut>",
+    "![poster](https://img.example.com/p.png)",
+  ].join("\n");
+
+  it("extractLinkTexts reads markdown and Slack links, keyed by normalized URL, skipping images", () => {
+    const texts = extractLinkTexts(message);
+    expect(texts.get(DOC)).toBe("Final Post Script");
+    expect(texts.get(MP3)).toBe("CallRail Wiggam Law Virtual Testimonial \u2013 Audio File Final");
+    expect(texts.get("https://app.frame.io/reviews/abc")).toBe("Review the cut");
+    expect(texts.has("https://img.example.com/p.png")).toBe(false);
+    expect(extractLinkTexts("**[Bold](https://x.test/a/)**").get("https://x.test/a")).toBe("Bold");
+  });
+
+  it("normalizeUrl trims punctuation and a trailing slash", () => {
+    expect(normalizeUrl(" https://x.test/a/). ")).toBe("https://x.test/a");
+    expect(normalizeUrl("https://x.test/a?b=1")).toBe("https://x.test/a?b=1");
+  });
+
+  it("linkKind by host and path", () => {
+    expect(linkKind(DOC)).toBe("google-doc");
+    expect(linkKind("https://docs.google.com/spreadsheets/d/1/edit")).toBe("google-sheet");
+    expect(linkKind("https://docs.google.com/presentation/d/1/edit")).toBe("google-slides");
+    expect(linkKind(MP3)).toBe("google-drive");
+    expect(linkKind("https://app.frame.io/reviews/abc")).toBe("frame");
+    expect(linkKind("https://f.io/abc")).toBe("frame");
+    expect(linkKind("https://www.loom.com/share/abc")).toBe("loom");
+    expect(linkKind("https://vimeo.com/123")).toBe("vimeo");
+    expect(linkKind("https://youtu.be/abc")).toBe("youtube");
+    expect(linkKind("https://www.youtube.com/watch?v=abc")).toBe("youtube");
+    expect(linkKind("https://consume.box.com/s/abc")).toBe("box");
+    expect(linkKind("https://www.dropbox.com/s/abc/file.mp4")).toBe("dropbox");
+    expect(linkKind("https://cdn.example.com/mix.MP3")).toBe("audio");
+    expect(linkKind("https://cdn.example.com/vo.aiff")).toBe("audio");
+    expect(linkKind("https://cdn.example.com/cut.mov")).toBe("video");
+    expect(linkKind("https://cdn.example.com/deck.pdf")).toBe("pdf");
+    expect(linkKind("https://example.com/page")).toBe("web");
+    expect(linkKind("not a url")).toBe("web");
+  });
+
+  it("linkHint names every kind", () => {
+    expect(linkHint("google-doc")).toBe("Google Doc");
+    expect(linkHint("google-drive")).toBe("Google Drive");
+    expect(linkHint("frame")).toBe("Frame.io");
+    expect(linkHint("audio")).toBe("Audio file");
+    expect(linkHint("web")).toBe("Link");
+  });
+
+  it("cleanLinkText strips the project name and separator, and drops hint-only text", () => {
+    const project = "CallRail Wiggam Law Virtual Testimonial";
+    expect(cleanLinkText(`${project} \u2013 Audio File Final`, project)).toBe("Audio File Final");
+    expect(cleanLinkText(`${project} - Audio  File Final`, project)).toBe("Audio File Final");
+    expect(cleanLinkText(`${project}: Final Cut`, project)).toBe("Final Cut");
+    expect(cleanLinkText("Final Post Script", project)).toBe("Final Post Script");
+    expect(cleanLinkText(project, project)).toBeNull();
+    expect(cleanLinkText("  ", project)).toBeNull();
+    expect(cleanLinkText(null, project)).toBeNull();
+    expect(cleanLinkText("google doc", project, "Google Doc")).toBeNull();
+  });
+});
+
+describe("review wording", () => {
+  it("reviewMode from the task name, else from the type", () => {
+    expect(reviewMode("Confirm Edit Feedback or Approval", "Edit V2")).toBe("approval");
+    expect(reviewMode("Confirm Video Edit01 Feedback Received", "Final Delivery")).toBe("feedback");
+    expect(reviewMode(null, "Final Delivery")).toBe("approval");
+    expect(reviewMode(null, "Post Script Final")).toBe("approval");
+    expect(reviewMode(null, "Finalize Script")).toBe("feedback");
+    expect(reviewMode(undefined, "Edit V1")).toBe("feedback");
+  });
+
+  it("reviewLabel by state and mode", () => {
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Tue, Sep 8" })).toBe("Feedback needed, due Tue, Sep 8");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Tue, Sep 8, 5:00 PM ET" })).toBe("Approval needed, due Tue, Sep 8, 5:00 PM ET");
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Fri, Sep 11", dueIsEstimate: true })).toBe("Feedback by Fri, Sep 11 (suggested)");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Fri, Sep 11", dueIsEstimate: true })).toBe("Approval by Fri, Sep 11 (suggested)");
+    expect(reviewLabel({ state: "due-today", mode: "approval", dueLabel: "Thu, Sep 3" })).toBe("Due today");
+    expect(reviewLabel({ state: "due-today", mode: "feedback", dueLabel: "Thu, Sep 3, 12:00 PM ET" })).toBe("Due today, 12:00 PM ET");
+    expect(reviewLabel({ state: "overdue", mode: "approval", dueLabel: "Tue, Sep 1" })).toBe("Past due, was Tue, Sep 1");
+    expect(reviewLabel({ state: "confirmed", mode: "feedback", confirmedLabel: "Jun 6" })).toBe("Feedback received Jun 6");
+    expect(reviewLabel({ state: "confirmed", mode: "feedback" })).toBe("Feedback received");
+    expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: "Jun 6" })).toBe("Approved Jun 6");
+    expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: null })).toBe("Approved");
+    expect(reviewLabel({ state: "none", mode: "feedback" })).toBe("Delivered");
   });
 });

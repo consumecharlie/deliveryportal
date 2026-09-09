@@ -166,12 +166,51 @@ describe("buildPortalPage: projects and deliverables", () => {
     expect(loc.deliverables[1]).toMatchObject({ title: "LOC19: Intuit", variant: "Snippets Edit01" });
   });
 
+  it("numbers versions oldest first, latest = history.length + 1", () => {
+    const video = loc.deliverables[2];
+    expect(video.latest.versionNumber).toBe(2);
+    expect(video.history.map((v) => v.versionNumber)).toEqual([1]);
+    expect(loc.deliverables[0].latest.versionNumber).toBe(1);
+  });
+
+  it("labels links from the anchor text in the message, minus the project name, with host hints", () => {
+    const DOC = "https://docs.google.com/document/d/1AbC/edit";
+    const MP3 = "https://drive.google.com/file/d/1XyZ/view";
+    const project = "CallRail Wiggam Law Virtual Testimonial";
+    const rows = [
+      row({
+        id: "m1",
+        projectListId: "L2",
+        projectName: project,
+        deliverableType: "Post Script Final",
+        emailContent: `Hi,\n- [Final Post Script](${DOC})\n- [${project} \u2013 Audio File Final](${MP3})\n- [${project} \u2013 Frame.io](${FRAME.url})`,
+        links: [
+          { url: DOC, label: "googleDeliverableLink", variableName: "googleDeliverableLink" },
+          { url: MP3, label: "Audio", variableName: null },
+          FRAME,
+          { url: "https://example.com/brief", label: "Brief", variableName: null },
+        ],
+        feedbackWindows: "",
+        sentAt: new Date("2026-09-01T14:00:00Z"),
+      }),
+    ];
+    const p = build({ rows, live: {}, confirmations: new Map() });
+    expect(p.projects[0].deliverables[0].latest.links).toEqual([
+      { url: DOC, label: "Final Post Script", hint: "Google Doc", kind: "google-doc" },
+      { url: MP3, label: "Audio File Final", hint: "Google Drive", kind: "google-drive" },
+      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
+      { url: "https://example.com/brief", label: "Brief", hint: "Link", kind: "web" },
+    ]);
+    // No task, type says Final: approval wording.
+    expect(p.projects[0].deliverables[0].review).toMatchObject({ mode: "approval", label: "Approval by Thu, Sep 3 (suggested)" });
+  });
+
   it("renders client-safe bodies and labelled links", () => {
     const ep21 = loc.deliverables[0];
     expect(ep21.latest.body).toBe("Hi Whitney, here it is");
     expect(ep21.latest.links).toEqual([
-      { url: LOOM.url, label: "Loom walkthrough" },
-      { url: FRAME.url, label: "Frame.io review" },
+      { url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" },
+      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
     ]);
     expect(ep21.latest.sentAtMs).toBe(Date.parse("2026-07-30T14:00:00Z"));
   });
@@ -213,7 +252,8 @@ describe("buildPortalPage: review state", () => {
   it("awaiting with a live deadline", () => {
     expect(loc.deliverables[0].review).toEqual({
       state: "awaiting",
-      label: "Due Tue, Sep 8",
+      mode: "feedback",
+      label: "Feedback needed, due Tue, Sep 8",
       dueMs: day("2026-09-08"),
       dueIsEstimate: false,
       confirmedAtMs: null,
@@ -224,7 +264,8 @@ describe("buildPortalPage: review state", () => {
   it("confirmed by the client (undo allowed) with the confirmation date", () => {
     expect(loc.deliverables[1].review).toEqual({
       state: "confirmed",
-      label: "Confirmed Jun 6",
+      mode: "feedback",
+      label: "Feedback received Jun 6",
       dueMs: null,
       dueIsEstimate: false,
       confirmedAtMs: Date.parse("2026-06-06T18:00:00Z"),
@@ -233,7 +274,7 @@ describe("buildPortalPage: review state", () => {
   });
 
   it("confirmed through ClickUp only (no row): no date, no undo", () => {
-    expect(loc.deliverables[2].review).toMatchObject({ state: "confirmed", label: "Confirmed", confirmedAtMs: null, canUndo: false });
+    expect(loc.deliverables[2].review).toMatchObject({ state: "confirmed", mode: "feedback", label: "Feedback received", confirmedAtMs: null, canUndo: false });
     const p = build({ live: { ...LIVE, L3: { ...LIVE.L3, archived: false } } });
     expect(p.projects.find((x) => x.listId === "L3")!.deliverables[0].review.state).toBe("confirmed");
   });
@@ -242,7 +283,8 @@ describe("buildPortalPage: review state", () => {
     const callrail = page.projects.find((p) => p.listId === "L2")!;
     expect(callrail.deliverables[0].review).toMatchObject({
       state: "awaiting",
-      label: "Suggested by Thu, Sep 3",
+      mode: "feedback",
+      label: "Feedback by Thu, Sep 3 (suggested)",
       dueIsEstimate: true,
       dueMs: day("2026-09-03"),
     });
@@ -250,7 +292,24 @@ describe("buildPortalPage: review state", () => {
 
   it("an old delivery with no feedback task has nothing to do", () => {
     const adhoc = page.projects.find((p) => p.name === "One-off")!;
-    expect(adhoc.deliverables[0].review).toMatchObject({ state: "none", label: "", canUndo: false });
+    expect(adhoc.deliverables[0].review).toMatchObject({ state: "none", mode: "feedback", label: "Delivered", canUndo: false });
+  });
+
+  it("takes the review mode from the paired task name", () => {
+    const l1 = live({
+      ...LIVE.L1,
+      feedbackByParent: {
+        ...LIVE.L1.feedbackByParent,
+        P21: [fd({ taskId: "F1", name: "Confirm Edit Feedback or Approval", dueMs: day("2026-09-08"), parentTaskId: "P21" })],
+      },
+    });
+    const p = build({ live: { ...LIVE, L1: l1 } });
+    expect(p.projects.find((x) => x.listId === "L1")!.deliverables[0].review).toMatchObject({
+      state: "awaiting",
+      mode: "approval",
+      label: "Approval needed, due Tue, Sep 8",
+    });
+    expect(p.attention[0].review.label).toBe("Approval needed, due Tue, Sep 8");
   });
 
   it("pairs feedback by parent first, so sibling episodes with the same type do not share one task", () => {
@@ -275,7 +334,7 @@ describe("buildPortalPage: review state", () => {
     const byId = Object.fromEntries(p.projects.find((x) => x.listId === "L1")!.deliverables.map((d) => [d.latest.deliveryId, d.review]));
     expect(byId.e21).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
     expect(byId.e22).toMatchObject({ state: "confirmed" });
-    expect(byId.e23).toMatchObject({ state: "awaiting", label: "Due Wed, Sep 16" });
+    expect(byId.e23).toMatchObject({ state: "awaiting", label: "Feedback needed, due Wed, Sep 16" });
     expect(byId.e24).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
     // The LOC19 video (Edit V2) pairs with its parent's closed Edit V2 task.
     expect(byId.v2).toMatchObject({ state: "confirmed" });
@@ -302,9 +361,9 @@ describe("buildPortalPage: review state", () => {
     });
     const byId = Object.fromEntries(p.projects[0].deliverables.map((d) => [d.latest.deliveryId, d.review]));
     expect(byId.v25).toMatchObject({ state: "confirmed" });
-    expect(byId.s25).toMatchObject({ state: "awaiting", label: "Due Thu, Sep 10" });
-    expect(byId.v26).toMatchObject({ state: "awaiting", label: "Due Tue, Sep 8" });
-    expect(byId.s26).toMatchObject({ state: "awaiting", label: "Due Thu, Sep 10" });
+    expect(byId.s25).toMatchObject({ state: "awaiting", mode: "feedback", label: "Feedback needed, due Thu, Sep 10" });
+    expect(byId.v26).toMatchObject({ state: "awaiting", label: "Feedback needed, due Tue, Sep 8" });
+    expect(byId.s26).toMatchObject({ state: "awaiting", label: "Feedback needed, due Thu, Sep 10" });
     expect(p.attention.map((a) => a.deliveryId)).toEqual(["v26", "s25", "s26"]);
   });
 
@@ -312,7 +371,7 @@ describe("buildPortalPage: review state", () => {
     const p = build({ live: { ...LIVE, L2: { ...LIVE.L2, archived: true } } });
     const callrail = p.projects.find((x) => x.listId === "L2")!;
     expect(callrail.phase).toBe("completed");
-    expect(callrail.deliverables[0].review).toEqual({ state: "none", label: "", dueMs: null, dueIsEstimate: false, confirmedAtMs: null, canUndo: false });
+    expect(callrail.deliverables[0].review).toEqual({ state: "none", mode: "feedback", label: "Delivered", dueMs: null, dueIsEstimate: false, confirmedAtMs: null, canUndo: false });
     expect(p.attention.map((a) => a.deliveryId)).toEqual(["e21"]);
     expect(callrail.milestones.map((m) => m.state)).toEqual(["delivered", "up-next"]);
   });
@@ -332,17 +391,17 @@ describe("toReview labels", () => {
   const task = (dueMs: number) => fd({ taskId: "F", dueMs });
 
   it("overdue: 'Past due, was ...'", () => {
-    const r = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-01")), nowMs: NOW }));
+    const r = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-01")), nowMs: NOW }), "feedback");
     expect(r).toMatchObject({ state: "overdue", label: "Past due, was Tue, Sep 1", dueMs: day("2026-09-01") });
   });
 
   it("due today, with and without a time", () => {
-    expect(toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-03")), nowMs: NOW }))).toMatchObject({ state: "due-today", label: "Due today" });
-    expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-03T16:00:00Z")), nowMs: NOW }))).toMatchObject({ state: "due-today", label: "Due today, 12:00 PM ET" });
+    expect(toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-03")), nowMs: NOW }), "approval")).toMatchObject({ state: "due-today", label: "Due today" });
+    expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-03T16:00:00Z")), nowMs: NOW }), "feedback")).toMatchObject({ state: "due-today", label: "Due today, 12:00 PM ET" });
   });
 
   it("a timed future deadline keeps the time", () => {
-    expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-08T21:00:00Z")), nowMs: NOW })).label).toBe("Due Tue, Sep 8, 5:00 PM ET");
+    expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-08T21:00:00Z")), nowMs: NOW }), "approval").label).toBe("Approval needed, due Tue, Sep 8, 5:00 PM ET");
   });
 });
 
@@ -464,7 +523,7 @@ describe("buildPortalPage: attention and focus", () => {
     const page = build();
     // c1's Sep 3 date is an estimate, so e21's real Sep 8 deadline comes first.
     expect(page.attention.map((a) => a.deliveryId)).toEqual(["e21", "c1"]);
-    expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, label: "Suggested by Thu, Sep 3" });
+    expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, label: "Feedback by Thu, Sep 3 (suggested)" });
     expect(page.attention[0]).toEqual({
       deliveryId: "e21",
       deliverableTitle: "Leaders of Code - Ep #21",
@@ -472,9 +531,9 @@ describe("buildPortalPage: attention and focus", () => {
       projectName: "Leaders of Code Podcast",
       projectListId: "L1",
       review: expect.objectContaining({ state: "awaiting" }),
-      primaryLink: { url: FRAME.url, label: "Frame.io review" },
+      primaryLink: { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
     });
-    expect(page.attention[1].primaryLink).toEqual({ url: FRAME.url, label: "Frame.io review" });
+    expect(page.attention[1].primaryLink).toEqual({ url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" });
   });
 
   it("orders real deadlines by date, then estimates oldest first", () => {
@@ -502,8 +561,8 @@ describe("buildPortalPage: attention and focus", () => {
     ];
     const page = build({ rows, live: {}, confirmations: new Map() });
     const byId = Object.fromEntries(page.attention.map((a) => [a.deliveryId, a.primaryLink]));
-    expect(byId.x).toEqual({ url: LOOM.url, label: "Loom walkthrough" });
-    expect(byId.y).toEqual({ url: DRIVE.url, label: "Google Drive" });
+    expect(byId.x).toEqual({ url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" });
+    expect(byId.y).toEqual({ url: DRIVE.url, label: "Google Drive", hint: "Google Drive", kind: "google-drive" });
     expect(byId.z).toBeNull();
   });
 

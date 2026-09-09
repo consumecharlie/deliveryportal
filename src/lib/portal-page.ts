@@ -21,6 +21,14 @@ import {
   informativeParentName,
   stripVersionTokens,
   countsLine,
+  extractLinkTexts,
+  normalizeUrl,
+  linkKind,
+  linkHint,
+  cleanLinkText,
+  reviewMode,
+  reviewLabel,
+  type ReviewMode,
 } from "@/lib/portal-labels";
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
 import { pickReviewLink } from "@/lib/portal-view-model";
@@ -83,61 +91,74 @@ function sameText(a: string | null | undefined, b: string | null | undefined): b
   return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 }
 
-function toLink(l: TimelineLink): PortalLink {
-  return { url: l.url, label: linkLabel(l.variableName, l.label) };
+/**
+ * A delivery link as a button: labelled by the anchor text it had in the
+ * message we sent (project name prefix removed), else by the host hint, else
+ * by the template variable; typed by host/path.
+ */
+export function toLink(l: TimelineLink, anchorTexts: Map<string, string>, projectName: string): PortalLink {
+  const kind = linkKind(l.url);
+  const hint = linkHint(kind);
+  const fromMessage = cleanLinkText(anchorTexts.get(normalizeUrl(l.url)), projectName, hint);
+  const fallback = kind !== "web" ? hint : linkLabel(l.variableName, l.label) || hint;
+  return { url: l.url, label: fromMessage ?? fallback, hint, kind };
 }
 
-function toVersion(row: PortalPageRow, names: MentionNames): PortalVersion {
+function toVersion(row: PortalPageRow, versionNumber: number, names: MentionNames): PortalVersion {
+  const anchorTexts = extractLinkTexts(row.emailContent || row.slackContent || "");
   return {
     deliveryId: row.id,
     label: row.deliverableType,
+    versionNumber,
     sentAtMs: row.sentAt.getTime(),
-    links: row.links.map(toLink),
+    links: row.links.map((l) => toLink(l, anchorTexts, row.projectName)),
     body: clientBody(row, names),
   };
 }
 
-const NO_REVIEW: PortalDeliverable["review"] = Object.freeze({
-  state: "none",
-  label: "",
-  dueMs: null,
-  dueIsEstimate: false,
-  confirmedAtMs: null,
-  canUndo: false,
-}) as PortalDeliverable["review"];
+function noReview(mode: ReviewMode): PortalDeliverable["review"] {
+  return {
+    state: "none",
+    mode,
+    label: reviewLabel({ state: "none", mode }),
+    dueMs: null,
+    dueIsEstimate: false,
+    confirmedAtMs: null,
+    canUndo: false,
+  };
+}
 
 /**
  * Map a feedback status onto the portal's review block. An estimated date
  * (our default window, not a deadline anyone set) is a suggestion, so it
  * stays "awaiting" and never escalates to due-today / overdue.
  */
-export function toReview(s: FeedbackStatus): PortalDeliverable["review"] {
-  const canUndo = s.confirmedAt !== null;
+export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable["review"] {
+  if (s.kind === "none") return noReview(mode);
   if (s.kind === "confirmed") {
+    const confirmedAtMs = s.confirmedAt?.getTime() ?? null;
     return {
       state: "confirmed",
-      label: s.confirmedAt ? `Confirmed ${shortDate(s.confirmedAt.getTime())}` : "Confirmed",
+      mode,
+      label: reviewLabel({ state: "confirmed", mode, confirmedLabel: confirmedAtMs ? shortDate(confirmedAtMs) : null }),
       dueMs: null,
       dueIsEstimate: false,
-      confirmedAtMs: s.confirmedAt?.getTime() ?? null,
-      canUndo,
+      confirmedAtMs,
+      canUndo: s.confirmedAt !== null,
     };
   }
-  if (s.kind === "none") return NO_REVIEW;
   let state: ReviewState = "awaiting";
-  let label = `Due ${s.dueLabel}`;
-  if (s.dueIsEstimate) {
-    label = `Suggested by ${s.dueLabel}`;
-  } else if (s.state === "overdue") {
-    state = "overdue";
-    label = `Past due, was ${s.dueLabel}`;
-  } else if (s.state === "due-today") {
-    state = "due-today";
-    // Keep the time when one was set: "Tue, Sep 8, 12:00 PM ET" -> "Due today, 12:00 PM ET".
-    const time = s.dueLabel.split(", ").slice(2).join(", ");
-    label = time ? `Due today, ${time}` : "Due today";
-  }
-  return { state, label, dueMs: s.dueMs, dueIsEstimate: s.dueIsEstimate, confirmedAtMs: null, canUndo: false };
+  if (!s.dueIsEstimate && s.state === "overdue") state = "overdue";
+  else if (!s.dueIsEstimate && s.state === "due-today") state = "due-today";
+  return {
+    state,
+    mode,
+    label: reviewLabel({ state, mode, dueLabel: s.dueLabel, dueIsEstimate: s.dueIsEstimate }),
+    dueMs: s.dueMs,
+    dueIsEstimate: s.dueIsEstimate,
+    confirmedAtMs: null,
+    canUndo: false,
+  };
 }
 
 interface DeliverableDraft {
@@ -170,8 +191,13 @@ function buildDeliverable(
   primaryLinks: Map<string, PortalLink | null>
 ): PortalDeliverable {
   const latest = draft.versions[0];
+  const total = draft.versions.length;
+  const versions = draft.versions.map((v, i) => toVersion(v, total - i, names));
   const primary = pickReviewLink(latest.links);
-  primaryLinks.set(latest.id, primary ? toLink(primary) : null);
+  primaryLinks.set(
+    latest.id,
+    primary ? versions[0].links.find((l) => l.url === primary.url) ?? null : null
+  );
 
   // A parent that names the deliverable ("LOC19: Intuit") is the title and
   // the share task's variant is the second line. A missing or phase-only
@@ -193,29 +219,32 @@ function buildDeliverable(
   }
 
   // An archived project never needs review.
+  const task = pairFeedbackTask(live, {
+    parentTaskId: latest.parentTaskId,
+    deliverableType: latest.deliverableType,
+    shareTaskName: latest.shareTaskName,
+    sentAtMs: latest.sentAt.getTime(),
+  });
+  const mode = reviewMode(task?.name, latest.deliverableType);
   const review = live?.archived
-    ? NO_REVIEW
+    ? noReview(mode)
     : toReview(
         decideFeedbackStatus({
-          task: pairFeedbackTask(live, {
-            parentTaskId: latest.parentTaskId,
-            deliverableType: latest.deliverableType,
-            shareTaskName: latest.shareTaskName,
-            sentAtMs: latest.sentAt.getTime(),
-          }),
+          task,
           confirmation: input.confirmations.get(latest.id) ?? null,
           sentAt: latest.sentAt,
           feedbackWindows: latest.feedbackWindows,
           nowMs: input.nowMs,
-        })
+        }),
+        mode
       );
 
   return {
     key: draft.key,
     title,
     variant,
-    latest: toVersion(latest, names),
-    history: draft.versions.slice(1).map((v) => toVersion(v, names)),
+    latest: versions[0],
+    history: versions.slice(1),
     review,
   };
 }

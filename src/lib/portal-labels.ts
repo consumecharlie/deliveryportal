@@ -6,6 +6,7 @@
  * #21"). These helpers turn those internal names into what a client reads.
  */
 import { extractFamilyName } from "@/lib/template-families";
+import type { LinkKind } from "@/lib/portal-page-model";
 
 const DEPARTMENT_PREFIX = /^(?:post-production|pre-production|pre-pro|design|production)\s*[-|:]\s*/i;
 const SHARE_PREFIX = /^share\s+/i;
@@ -188,4 +189,156 @@ const LINK_LABELS: Record<string, string> = {
 /** Client-facing label for a delivery link, by template variable name; the stored label otherwise. */
 export function linkLabel(variableName: string | null | undefined, storedLabel: string): string {
   return (variableName && LINK_LABELS[variableName]) || storedLabel;
+}
+
+// ── Links ──────────────────────────────────────────────────────────
+
+/** Comparable form of a URL: trimmed, trailing punctuation and slash removed. */
+export function normalizeUrl(url: string): string {
+  return url.trim().replace(/[).,;:!?]+$/, "").replace(/\/+$/, "");
+}
+
+function cleanAnchor(text: string): string {
+  return collapse(text.replace(/^[*_]+|[*_]+$/g, ""));
+}
+
+/**
+ * Anchor text per URL in a message body: markdown `[text](url)` and Slack
+ * `<url|text>` forms. The first text seen for a URL wins.
+ */
+export function extractLinkTexts(markdown: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const put = (url: string, text: string) => {
+    const key = normalizeUrl(url);
+    const clean = cleanAnchor(text);
+    if (key && clean && !out.has(key)) out.set(key, clean);
+  };
+  for (const m of markdown.matchAll(/(?<!!)\[([^\]]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) put(m[2], m[1]);
+  for (const m of markdown.matchAll(/<((?:https?:\/\/|mailto:)[^|>\s]+)\|([^>]+)>/g)) put(m[1], m[2]);
+  return out;
+}
+
+const HOST_KINDS: Array<[RegExp, LinkKind]> = [
+  [/(^|\.)drive\.google\.com$/, "google-drive"],
+  [/(^|\.)frame\.io$/, "frame"],
+  [/^f\.io$/, "frame"],
+  [/(^|\.)loom\.com$/, "loom"],
+  [/(^|\.)vimeo\.com$/, "vimeo"],
+  [/(^|\.)youtube\.com$/, "youtube"],
+  [/^youtu\.be$/, "youtube"],
+  [/(^|\.)box\.com$/, "box"],
+  [/(^|\.)dropbox\.com$/, "dropbox"],
+];
+
+/** What a link opens, from its host and path. */
+export function linkKind(url: string): LinkKind {
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return "web";
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  const path = parsed.pathname.toLowerCase();
+  if (host === "docs.google.com") {
+    if (path.startsWith("/document")) return "google-doc";
+    if (path.startsWith("/spreadsheets")) return "google-sheet";
+    if (path.startsWith("/presentation")) return "google-slides";
+    return "google-drive";
+  }
+  for (const [re, kind] of HOST_KINDS) if (re.test(host)) return kind;
+  if (/\.(mp3|wav|m4a|aiff?)$/.test(path)) return "audio";
+  if (/\.(mp4|mov)$/.test(path)) return "video";
+  if (/\.pdf$/.test(path)) return "pdf";
+  return "web";
+}
+
+const LINK_HINTS: Record<LinkKind, string> = {
+  "google-doc": "Google Doc",
+  "google-sheet": "Google Sheet",
+  "google-slides": "Google Slides",
+  "google-drive": "Google Drive",
+  frame: "Frame.io",
+  loom: "Loom",
+  vimeo: "Vimeo",
+  youtube: "YouTube",
+  box: "Box",
+  dropbox: "Dropbox",
+  audio: "Audio file",
+  video: "Video file",
+  pdf: "PDF",
+  web: "Link",
+};
+
+export function linkHint(kind: LinkKind): string {
+  return LINK_HINTS[kind];
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Anchor text as a button label: the project name prefix (and the dash or
+ * colon after it) removed, whitespace collapsed. Null when nothing is left or
+ * when it only repeats the host hint.
+ */
+export function cleanLinkText(text: string | null | undefined, projectName: string, hint?: string): string | null {
+  let t = collapse(text ?? "");
+  if (!t) return null;
+  const project = collapse(projectName);
+  if (project) {
+    const re = new RegExp(`^${escapeRegExp(project)}\\s*(?:[-\u2013\u2014:|]\\s*)?`, "i");
+    t = collapse(t.replace(re, ""));
+  }
+  if (!t) return null;
+  if (hint && t.toLowerCase() === hint.toLowerCase()) return null;
+  return t;
+}
+
+// ── Review wording ─────────────────────────────────────────────────
+
+export type ReviewMode = "feedback" | "approval";
+
+/**
+ * What the client is being asked for: "approval" when the paired ClickUp
+ * task reads "Confirm ... Approval", else "feedback". Without a task, a
+ * deliverable type containing "Final" asks for approval.
+ */
+export function reviewMode(taskName: string | null | undefined, deliverableType: string): ReviewMode {
+  if (taskName) return /approv/i.test(taskName) ? "approval" : "feedback";
+  return /\bfinal\b/i.test(deliverableType) ? "approval" : "feedback";
+}
+
+export interface ReviewLabelInput {
+  state: "awaiting" | "due-today" | "overdue" | "confirmed" | "none";
+  mode: ReviewMode;
+  /** "Tue, Sep 8" (+ ", 12:00 PM ET" when a time was set). */
+  dueLabel?: string;
+  dueIsEstimate?: boolean;
+  /** "Jun 6", when the confirmation date is known. */
+  confirmedLabel?: string | null;
+}
+
+/** The one line the UI shows for a deliverable's review state. */
+export function reviewLabel(input: ReviewLabelInput): string {
+  const word = input.mode === "approval" ? "Approval" : "Feedback";
+  const due = input.dueLabel ?? "";
+  switch (input.state) {
+    case "none":
+      return "Delivered";
+    case "confirmed":
+      if (input.mode === "approval") return input.confirmedLabel ? `Approved ${input.confirmedLabel}` : "Approved";
+      return input.confirmedLabel ? `Feedback received ${input.confirmedLabel}` : "Feedback received";
+    case "overdue":
+      return `Past due, was ${due}`;
+    case "due-today": {
+      // Keep the time when one was set: "Tue, Sep 8, 12:00 PM ET" -> "Due today, 12:00 PM ET".
+      const time = due.split(", ").slice(2).join(", ");
+      return time ? `Due today, ${time}` : "Due today";
+    }
+    case "awaiting":
+      if (input.dueIsEstimate) return `${word} by ${due} (suggested)`;
+      return `${word} needed, due ${due}`;
+  }
 }
