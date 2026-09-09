@@ -15,3 +15,30 @@ export function shortDate(ms: number, nowMs: number = Date.now()): string {
     ...(withYear ? { year: "numeric" } : {}),
   });
 }
+
+/** "SEP 9": the pixel-caps date for the Up next window. */
+export function pixelDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" }).toUpperCase();
+}
+
+/** Eastern calendar day, for grouping milestones that share a date. */
+export function easternDayKey(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: TZ });
+}
+
+/** "Tue 4:12 PM", Eastern, for the menu bar clock. */
+export function menuClock(ms: number = Date.now()): string {
+  return new Date(ms).toLocaleString("en-US", {
+    timeZone: TZ,
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** Cut a label to `max` characters with a single ellipsis; never splits a surrogate pair. */
+export function truncate(text: string, max: number): string {
+  const chars = Array.from(text);
+  if (chars.length <= max) return text;
+  return chars.slice(0, Math.max(1, max - 1)).join("").trimEnd() + "…";
+}
