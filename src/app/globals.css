@@ -1247,47 +1247,33 @@
   color: #4d5959;
 }
 
-/* Archive window body */
-.portal-archive-h {
-  margin: 0;
-  font-family: var(--font-eighties), "Montserrat", sans-serif;
-  font-weight: 800;
-  font-size: 22px;
-  line-height: 1.1;
-}
-.portal-archive-lede {
-  margin: 4px 0 0;
-  font-size: 14px;
+/* Finder breadcrumb */
+.portal-fw-crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 12px;
+  font-size: 13px;
   color: #4d5959;
 }
-.portal-archive-folders {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin: 16px 0 0 -8px;
-}
-.portal-archive-hint {
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: #6f7f7f;
-}
-.portal-back {
+.portal-fw-crumb-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 16px -2px;
-  padding: 4px 8px 4px 2px;
+  margin: 0 0 0 -2px;
+  padding: 3px 6px 3px 2px;
   border: 0;
   border-radius: 4px;
   background: none;
   font: inherit;
-  font-size: 13px;
   font-weight: 600;
   color: #4d5959;
   cursor: pointer;
 }
-.portal-back::before { content: "\2190"; color: #6f7f7f; }
-.portal-back:hover { color: #151919; background: #eef5f1; }
+.portal-fw-crumb-link::before { content: "\2190"; color: #6f7f7f; }
+.portal-fw-crumb-link:hover { color: #151919; background: #eef5f1; }
+.portal-fw-crumb-sep { color: #bbd2cf; }
+.portal-fw-crumb-here { font-weight: 600; color: #151919; }
 
 /* Roadmap rail */
 .portal-rail-wrap {

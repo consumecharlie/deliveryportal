@@ -6,7 +6,7 @@ import { DeliverablesTable } from "./deliverables-table";
 
 /**
  * One project as the viewer shows it: the name and summary heading, the
- * roadmap rail while anything is ahead (archived projects have none), and
+ * roadmap rail while anything is ahead (completed projects have none), and
  * the deliverables table.
  */
 export function ProjectBody({

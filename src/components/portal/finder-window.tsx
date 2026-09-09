@@ -6,19 +6,22 @@ import { FINDER_ID } from "./desktop-state";
 import { FolderIcon } from "./folder-icon";
 import { hasRoadAhead } from "./roadmap-rail";
 
-export const ARCHIVE_FOLDER = "archive";
+export const COMPLETED_FOLDER = "completed";
+export type FinderView = "root" | "completed";
 
 interface Props extends WindowFrameProps {
   projects: PortalProject[];
+  completed: PortalProject[];
   /** Items awaiting review per project listId. */
   awaiting: Record<string, number>;
+  /** Projects open as viewer tabs (their folders show as open). */
   openIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  /** Folder id: a project listId or ARCHIVE_FOLDER. */
-  onOpen: (id: string) => void;
-  archiveCount: number;
-  archiveOpen: boolean;
+  /** Opens a project (in progress or completed) as a viewer tab. */
+  onOpenProject: (listId: string) => void;
+  view: FinderView;
+  onViewChange: (view: FinderView) => void;
   /** Touch: a single tap opens (there is no double-tap convention). */
   tapOpens: boolean;
 }
@@ -68,22 +71,36 @@ function Folder({ id, label, variant, open, selected, badge, tapOpens, onSelect,
 }
 
 /**
- * PROJECT FINDER as a window: a grid of folders, one per in-progress project
- * plus ARCHIVE last. Single click selects (green outline), double-click, Enter
- * or a tap opens the project window. Labels wrap, never truncate.
+ * PROJECT FINDER: a file browser. The root shows a folder per in-progress
+ * project plus COMPLETED PROJECTS; opening that navigates the body into the
+ * completed folder (breadcrumb with a back link). Opening any project folder
+ * adds it as a tab in the Project Viewer. Single click selects, double-click,
+ * Enter or a tap opens.
  */
 export function FinderWindow({
   projects,
+  completed,
   awaiting,
   openIds,
   selectedId,
   onSelect,
-  onOpen,
-  archiveCount,
-  archiveOpen,
+  onOpenProject,
+  view,
+  onViewChange,
   tapOpens,
   ...frame
 }: Props) {
+  function open(id: string) {
+    if (id === COMPLETED_FOLDER) {
+      onSelect(null);
+      onViewChange("completed");
+    } else {
+      onOpenProject(id);
+    }
+  }
+  const list = view === "completed" ? completed : projects;
+  const empty = list.length === 0 && (view === "completed" || completed.length === 0);
+
   return (
     <MacWindow {...frame} id={FINDER_ID} title="Project Finder" canClose className="portal-window-finder">
       <div
@@ -92,13 +109,39 @@ export function FinderWindow({
           if (e.target === e.currentTarget) onSelect(null);
         }}
       >
-        {projects.length === 0 && archiveCount === 0 ? (
-          <p className="portal-quiet">Nothing has been shared here yet. Deliverables will appear as soon as we send them.</p>
+        <nav className="portal-fw-crumb" aria-label="Location">
+          {view === "completed" ? (
+            <>
+              <button
+                type="button"
+                className="portal-fw-crumb-link"
+                onClick={() => {
+                  onSelect(null);
+                  onViewChange("root");
+                }}
+              >
+                All projects
+              </button>
+              <span className="portal-fw-crumb-sep" aria-hidden="true">
+                /
+              </span>
+              <span className="portal-fw-crumb-here">Completed projects</span>
+            </>
+          ) : (
+            <span className="portal-fw-crumb-here">All projects</span>
+          )}
+        </nav>
+        {empty ? (
+          <p className="portal-quiet">
+            {view === "completed"
+              ? "No completed projects yet."
+              : "Nothing has been shared here yet. Deliverables will appear as soon as we send them."}
+          </p>
         ) : (
-          <div className="portal-fw-grid" role="group" aria-label="Projects">
-            {projects.map((p) => {
+          <div className="portal-fw-grid" role="group" aria-label={view === "completed" ? "Completed projects" : "Projects"}>
+            {list.map((p) => {
               const count = awaiting[p.listId] ?? 0;
-              const full = count > 0 || hasRoadAhead(p.milestones);
+              const full = view === "root" && (count > 0 || hasRoadAhead(p.milestones));
               return (
                 <Folder
                   key={p.listId}
@@ -110,20 +153,20 @@ export function FinderWindow({
                   badge={count}
                   tapOpens={tapOpens}
                   onSelect={onSelect}
-                  onOpen={onOpen}
+                  onOpen={open}
                 />
               );
             })}
-            {archiveCount > 0 && (
+            {view === "root" && completed.length > 0 && (
               <Folder
-                id={ARCHIVE_FOLDER}
-                label={`Archive (${archiveCount})`}
+                id={COMPLETED_FOLDER}
+                label={`Completed projects (${completed.length})`}
                 variant="flat"
-                open={archiveOpen}
-                selected={selectedId === ARCHIVE_FOLDER}
+                open={false}
+                selected={selectedId === COMPLETED_FOLDER}
                 tapOpens={tapOpens}
                 onSelect={onSelect}
-                onOpen={onOpen}
+                onOpen={open}
               />
             )}
           </div>

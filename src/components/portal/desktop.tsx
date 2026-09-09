@@ -2,21 +2,19 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { PortalPageModel, PortalProject } from "@/lib/portal-page-model";
+import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
-  ARCHIVE_ID,
   EMPTY_STATE,
   FINDER_ID,
   NOTE_ID,
   REVIEW_ID,
   UPNEXT_ID,
+  VIEWER_ID,
   bootStorageKey,
   desktopStorageKey,
-  listIdOfWindow,
   loadDesktopState,
   mergeOrder,
   patchWindow,
-  projectWindowId,
   raiseWindow,
   saveDesktopState,
   type DesktopState,
@@ -25,13 +23,15 @@ import {
 import type { WindowFrameProps } from "./mac-window";
 import { MenuBar } from "./menu-bar";
 import { BootScreen } from "./boot-screen";
-import { FinderWindow, ARCHIVE_FOLDER } from "./finder-window";
+import { FinderWindow, type FinderView } from "./finder-window";
 import { ReviewWindow } from "./review-window";
 import { UpNextWindow } from "./up-next-window";
-import { ProjectWindow } from "./project-window";
-import { ArchiveWindow } from "./archive-window";
+import { ViewerWindow } from "./viewer-window";
 import { NoteWindow } from "./note-window";
 import { Dock, type DockEntry } from "./dock";
+
+/** Dock shortcut: the Finder navigated into Completed projects. */
+const COMPLETED_DOCK_ID = "completed";
 
 const PAD = 24;
 const GAP = 24;
@@ -59,8 +59,9 @@ type Phase = "pending" | "boot" | "ready";
 
 /**
  * The client's desktop: menu bar, 62px grid, the window manager (open state,
- * z-order, drag positions persisted per token), the Project Finder, and the
- * windows. Under 900px the windows stack in the brief's order and nothing drags.
+ * z-order, drag positions and viewer tabs persisted per token), the Project
+ * Finder, the Project Viewer and the other windows. Under 900px the windows
+ * stack in the brief's order and nothing drags.
  */
 export function Desktop({ token, model }: Props) {
   const router = useRouter();
@@ -69,13 +70,13 @@ export function Desktop({ token, model }: Props) {
   const storageKey = desktopStorageKey(token, focusListId);
 
   const active = useMemo(() => model.projects.filter((p) => p.phase === "in-progress"), [model.projects]);
-  const archived = useMemo(() => model.projects.filter((p) => p.phase === "completed"), [model.projects]);
+  const completed = useMemo(() => model.projects.filter((p) => p.phase === "completed"), [model.projects]);
   const focusProject = focusMode ? model.projects.find((p) => p.listId === focusListId) ?? null : null;
 
-  /** Project windows that exist on this desktop, oldest activity first (cascade order). */
-  const cascade: PortalProject[] = useMemo(() => {
-    if (focusMode) return focusProject ? [focusProject] : [];
-    return [...active].sort((a, b) => a.lastActivityMs - b.lastActivityMs);
+  /** Default viewer tabs: every in-progress project, most recent activity first (and active). */
+  const defaultTabs = useMemo(() => {
+    if (focusMode) return focusProject ? [focusProject.listId] : [];
+    return [...active].sort((a, b) => b.lastActivityMs - a.lastActivityMs).map((p) => p.listId);
   }, [focusMode, focusProject, active]);
 
   const awaiting = useMemo(() => {
@@ -87,12 +88,11 @@ export function Desktop({ token, model }: Props) {
   const defaultOrder = useMemo(() => {
     const ids: string[] = [];
     if (!focusMode) ids.push(UPNEXT_ID);
-    for (const p of cascade) ids.push(projectWindowId(p.listId));
-    ids.push(ARCHIVE_ID, NOTE_ID);
+    ids.push(VIEWER_ID, NOTE_ID);
     if (!focusMode) ids.push(FINDER_ID);
     ids.push(REVIEW_ID);
     return ids;
-  }, [focusMode, cascade]);
+  }, [focusMode]);
 
   const [state, setState] = useState<DesktopState>(EMPTY_STATE);
   const [phase, setPhase] = useState<Phase>("pending");
@@ -100,15 +100,14 @@ export function Desktop({ token, model }: Props) {
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [env, setEnv] = useState<{ reducedMotion: boolean; coarse: boolean }>({ reducedMotion: false, coarse: false });
   const [selected, setSelected] = useState<string | null>(null);
-  const [archiveFocus, setArchiveFocus] = useState<string | null>(null);
+  const [finderView, setFinderView] = useState<FinderView>("root");
   const [popped, setPopped] = useState(false);
-  /** Project windows opened at some point this session keep a dock item after closing. */
-  const [everOpened, setEverOpened] = useState<string[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // First client frame: restore the desktop, read the environment, measure,
   // and decide whether to boot. All in a layout effect so nothing paints early.
   useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only state must be read after hydration
     setState(loadDesktopState(storageKey));
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
@@ -168,11 +167,16 @@ export function Desktop({ token, model }: Props) {
   const draggable = wide && !env.reducedMotion && !env.coarse;
   const tapOpens = env.coarse;
 
+  const knownIds = useMemo(() => new Set(model.projects.map((p) => p.listId)), [model.projects]);
+  /** Viewer tabs: the client's list when set, else the defaults; unknown projects dropped. */
+  const tabs = (state.tabs ?? defaultTabs).filter((id) => knownIds.has(id));
+  const activeTab = state.activeTab && tabs.includes(state.activeTab) ? state.activeTab : tabs[0] ?? null;
+
   function defaultOpen(id: string): boolean {
     if (id === REVIEW_ID) return true;
-    if (id === UPNEXT_ID || id === FINDER_ID || id === ARCHIVE_ID) return !focusMode;
-    if (id === NOTE_ID) return false;
-    return true;
+    if (id === UPNEXT_ID || id === FINDER_ID) return !focusMode;
+    if (id === VIEWER_ID) return tabs.length > 0;
+    return false;
   }
   function win(id: string): WinState {
     return { open: defaultOpen(id), minimized: false, zoomed: false, x: null, y: null, ...state.windows[id] };
@@ -183,8 +187,8 @@ export function Desktop({ token, model }: Props) {
 
   // Default layout: a non-overlapping grid computed from the viewport width
   // and the windows' measured natural heights (reported before paint). Row 1:
-  // Needs your review (40%) and Up next (60%); row 2: Project Finder (40%) and
-  // Archive (60%); then each project window full width, most recent first.
+  // Needs your review (40%) and Up next (60%); row 2: Project Finder (40%),
+  // the right column left to Up next; then the Project Viewer full width.
   // Under 1100px a single column in the same order. Content centers up to
   // 1440px; the drag zone is the whole canvas. Persisted positions win.
   const fullW = canvasW ?? 1280;
@@ -198,21 +202,32 @@ export function Desktop({ token, model }: Props) {
   const rightW = W - GAP - leftW;
   const noteW = Math.min(420, W);
 
-  const projectIds = [...cascade].reverse().map((p) => projectWindowId(p.listId));
-  const gridRows: string[][] = twoColumn
-    ? [[REVIEW_ID, UPNEXT_ID], [FINDER_ID, ARCHIVE_ID], ...projectIds.map((id) => [id])]
-    : [REVIEW_ID, ...(focusMode ? [] : [UPNEXT_ID, FINDER_ID, ARCHIVE_ID]), ...projectIds].map((id) => [id]);
+  // Rows: pairs fill the two columns; a single id with `narrow` sits in the
+  // left column only (the right column stays free for a taller Up next).
+  type GridRow = { ids: string[]; narrow?: boolean };
+  const gridRows: GridRow[] = twoColumn
+    ? [{ ids: [REVIEW_ID, UPNEXT_ID] }, { ids: [FINDER_ID], narrow: true }, { ids: [VIEWER_ID] }]
+    : [REVIEW_ID, ...(focusMode ? [] : [UPNEXT_ID, FINDER_ID]), VIEWER_ID].map((id) => ({ ids: [id] }));
   const grid: Record<string, Placement> = {};
   let cursor = TOP_GUTTER;
+  let rightBottom = 0;
   for (const row of gridRows) {
-    const rowH = Math.max(...row.map(h));
-    if (row.length === 2) {
-      grid[row[0]] = { x: left, y: cursor, w: leftW };
-      grid[row[1]] = { x: left + leftW + GAP, y: cursor, w: rightW };
+    const rowH = Math.max(...row.ids.map(h));
+    if (row.ids.length === 2) {
+      grid[row.ids[0]] = { x: left, y: cursor, w: leftW };
+      grid[row.ids[1]] = { x: left + leftW + GAP, y: cursor, w: rightW };
+      rightBottom = cursor + h(row.ids[1]);
+      if (h(row.ids[0]) > 0) cursor += h(row.ids[0]) + GAP;
+      else if (rowH > 0) cursor += rowH + GAP;
+    } else if (row.narrow) {
+      grid[row.ids[0]] = { x: left, y: cursor, w: leftW };
+      if (rowH > 0) cursor += rowH + GAP;
+      // Full-width rows start under whichever column runs longer.
+      if (rightBottom > 0) cursor = Math.max(cursor, rightBottom + GAP);
     } else {
-      grid[row[0]] = { x: left, y: cursor, w: focusMode && row[0] === REVIEW_ID ? Math.min(W, 640) : W };
+      grid[row.ids[0]] = { x: left, y: cursor, w: focusMode && row.ids[0] === REVIEW_ID ? Math.min(W, 640) : W };
+      if (rowH > 0) cursor += rowH + GAP;
     }
-    if (rowH > 0) cursor += rowH + GAP;
   }
 
   function defaults(id: string): Placement {
@@ -246,7 +261,7 @@ export function Desktop({ token, model }: Props) {
   canvasH += BOTTOM_STRIP;
 
   // Reading order for the staggered entrance pop.
-  const readingOrder = [REVIEW_ID, UPNEXT_ID, FINDER_ID, ARCHIVE_ID, ...projectIds, NOTE_ID];
+  const readingOrder = [REVIEW_ID, UPNEXT_ID, FINDER_ID, VIEWER_ID, NOTE_ID];
   const popIndex = (id: string) => (phase === "ready" && !popped && !env.reducedMotion ? Math.max(0, readingOrder.indexOf(id)) : null);
 
   const getBounds = useCallback(() => {
@@ -256,7 +271,7 @@ export function Desktop({ token, model }: Props) {
 
   const close = useCallback(
     (id: string) => {
-      if (focusMode && listIdOfWindow(id)) {
+      if (focusMode && id === VIEWER_ID) {
         router.push(`/portal/${token}`);
         return;
       }
@@ -290,24 +305,58 @@ export function Desktop({ token, model }: Props) {
     else openWindow(NOTE_ID);
   }
   const tidyUp = useCallback(() => {
-    setArchiveFocus(null);
+    setFinderView("root");
     setSelected(null);
-    setEverOpened([]);
     commit(() => EMPTY_STATE);
   }, [commit]);
 
-  // Remember every project window that has been open this session.
-  useEffect(() => {
-    const openNow = cascade.filter((p) => win(projectWindowId(p.listId)).open).map((p) => p.listId);
-    setEverOpened((prev) => {
-      const add = openNow.filter((id) => !prev.includes(id));
-      return add.length ? [...prev, ...add] : prev;
+  /** Open a project as a viewer tab (activating an existing one) and raise the viewer. */
+  function openProject(listId: string) {
+    setSelected(listId);
+    commit((s) => {
+      const cur = (s.tabs ?? defaultTabs).filter((id) => knownIds.has(id));
+      const next = cur.includes(listId) ? cur : [...cur, listId];
+      const opened = patchWindow({ ...s, tabs: next, activeTab: listId }, VIEWER_ID, { open: true, minimized: false });
+      return raiseWindow(opened, VIEWER_ID, defaultOrder);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- win() derives from state
-  }, [state, cascade]);
+  }
+  function activateTab(listId: string) {
+    commit((s) => ({ ...s, activeTab: listId }));
+  }
+  /** Close a tab; the neighbor takes over; closing the last tab closes the viewer. */
+  function closeTab(listId: string) {
+    if (focusMode) {
+      router.push(`/portal/${token}`);
+      return;
+    }
+    commit((s) => {
+      const cur = (s.tabs ?? defaultTabs).filter((id) => knownIds.has(id));
+      const i = cur.indexOf(listId);
+      const next = cur.filter((id) => id !== listId);
+      const wasActive = (s.activeTab && cur.includes(s.activeTab) ? s.activeTab : cur[0]) === listId;
+      const activeNext = wasActive ? next[Math.min(i, next.length - 1)] ?? null : s.activeTab ?? null;
+      const withTabs: DesktopState = { ...s, tabs: next, activeTab: activeNext };
+      return next.length === 0 ? patchWindow(withTabs, VIEWER_ID, { open: false }) : withTabs;
+    });
+  }
+  /** The Completed projects shortcut: the Finder, navigated into that folder. */
+  function openCompleted() {
+    setFinderView("completed");
+    setSelected(null);
+    openWindow(FINDER_ID);
+  }
 
   /** Dock click: closed opens at its last or default spot, minimized restores, open raises, top minimizes. */
   function activate(id: string) {
+    if (id === COMPLETED_DOCK_ID) {
+      openCompleted();
+      if (!wide) {
+        window.setTimeout(() => {
+          document.querySelector(`[data-window="${FINDER_ID}"]`)?.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
+        }, 60);
+      }
+      return;
+    }
     const s = win(id);
     if (!wide) {
       commit((st) => patchWindow(st, id, { open: true, minimized: false }));
@@ -317,7 +366,6 @@ export function Desktop({ token, model }: Props) {
       return;
     }
     if (!s.open) {
-      if (id === ARCHIVE_ID) setArchiveFocus(null);
       openWindow(id);
       return;
     }
@@ -335,29 +383,22 @@ export function Desktop({ token, model }: Props) {
   };
   const dockEntries: DockEntry[] = [{ id: REVIEW_ID, label: "Needs your review", icon: "review", state: dockState(REVIEW_ID) }];
   if (!focusMode) {
+    const finder = win(FINDER_ID);
     dockEntries.push(
       { id: UPNEXT_ID, label: "Up next", icon: "upnext", state: dockState(UPNEXT_ID) },
       { id: FINDER_ID, label: "Project Finder", icon: "finder", state: dockState(FINDER_ID) },
-      { id: ARCHIVE_ID, label: "Archive", icon: "archive", state: dockState(ARCHIVE_ID) }
+      {
+        id: COMPLETED_DOCK_ID,
+        label: "Completed projects",
+        icon: "completed",
+        state: finder.open && finderView === "completed" ? (finder.minimized ? "minimized" : "open") : "closed",
+      }
     );
   }
-  dockEntries.push({ id: NOTE_ID, label: "Notes", icon: "note", state: dockState(NOTE_ID) });
-  for (const p of [...cascade].reverse()) {
-    const id = projectWindowId(p.listId);
-    if (win(id).open || everOpened.includes(p.listId)) {
-      dockEntries.push({ id, label: p.name, icon: "project", state: dockState(id) });
-    }
-  }
-
-  function openFolder(id: string) {
-    setSelected(id);
-    if (id === ARCHIVE_FOLDER) {
-      setArchiveFocus(null);
-      openWindow(ARCHIVE_ID);
-    } else {
-      openWindow(projectWindowId(id));
-    }
-  }
+  dockEntries.push(
+    { id: VIEWER_ID, label: "Project Viewer", icon: "viewer", state: dockState(VIEWER_ID) },
+    { id: NOTE_ID, label: "Notes", icon: "note", state: dockState(NOTE_ID) }
+  );
 
   const frame = (id: string): WindowFrameProps => {
     const s = win(id);
@@ -382,7 +423,7 @@ export function Desktop({ token, model }: Props) {
     };
   };
 
-  const openProjectIds = new Set(cascade.filter((p) => win(projectWindowId(p.listId)).open).map((p) => p.listId));
+  const openProjectIds = new Set(win(VIEWER_ID).open ? tabs : []);
   const reviewItems = focusMode ? model.attention.filter((a) => a.projectListId === focusListId) : model.attention;
 
   const rootCls = [
@@ -418,32 +459,28 @@ export function Desktop({ token, model }: Props) {
           <FinderWindow
             {...frame(FINDER_ID)}
             projects={active}
+            completed={completed}
             awaiting={awaiting}
             openIds={openProjectIds}
             selectedId={selected}
             onSelect={setSelected}
-            onOpen={openFolder}
-            archiveCount={archived.length}
-            archiveOpen={win(ARCHIVE_ID).open}
+            onOpenProject={openProject}
+            view={finderView}
+            onViewChange={setFinderView}
             tapOpens={tapOpens}
           />
         )}
 
-        {cascade.map(
-          (p) =>
-            win(projectWindowId(p.listId)).open && (
-              <ProjectWindow key={p.listId} {...frame(projectWindowId(p.listId))} token={token} project={p} defaultOpenRows={focusMode} />
-            )
-        )}
-
-        {!focusMode && win(ARCHIVE_ID).open && (
-          <ArchiveWindow
-            {...frame(ARCHIVE_ID)}
+        {win(VIEWER_ID).open && tabs.length > 0 && (
+          <ViewerWindow
+            {...frame(VIEWER_ID)}
             token={token}
-            projects={archived}
-            focusListId={archiveFocus}
-            onFocus={setArchiveFocus}
-            tapOpens={tapOpens}
+            projects={model.projects}
+            tabs={tabs}
+            activeTab={activeTab}
+            onActivateTab={activateTab}
+            onCloseTab={closeTab}
+            defaultOpenRows={focusMode}
           />
         )}
 
