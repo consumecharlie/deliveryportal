@@ -138,7 +138,10 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
           }
         }}
       >
-        v{selected.number}
+        <span className="portal-vchip-label">v{selected.number}</span>
+        <svg className="portal-vchip-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+          <path d="M2.5 4.5l3.5 3.5 3.5-3.5" />
+        </svg>
       </button>
       {open &&
         typeof document !== "undefined" &&

@@ -989,29 +989,39 @@
   color: #508e61;
 }
 
-/* Version chip (Frame.io-style version control) */
+/* Version chip (Frame.io-style version control): a rounded-rectangle control,
+   never a pill (pills are status only) */
 .portal-vchip {
   display: inline-flex;
   align-items: center;
-  height: 18px;
+  gap: 6px;
+  height: 28px;
   margin: 0 0 0 8px;
-  padding: 1px 7px 0;
-  border: 0;
-  border-radius: 999px;
-  background: #e5eee8;
+  padding: 0 10px;
+  border: 1.5px solid #151919;
+  border-radius: 6px;
+  background: #fff;
   color: #151919;
   font-family: var(--font-pixel), monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  vertical-align: 2px;
+  vertical-align: middle;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.12s ease;
 }
+.portal-vchip-label { padding-top: 1px; }
+.portal-vchip-chev {
+  display: block;
+  flex: none;
+  transition: transform 0.16s ease;
+}
 .portal-vchip:hover,
-.portal-vchip[aria-expanded="true"] { background: #d3e3db; }
-.portal-vchip { white-space: nowrap; }
+.portal-vchip[aria-expanded="true"] { background: #e5eee8; }
+.portal-vchip[aria-expanded="true"] .portal-vchip-chev { transform: rotate(180deg); }
+.portal-vchip:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
 
 /* Capsule context menu (ported from the MOGRT Library .cmx system) */
 .cmx-menu {
@@ -1858,6 +1868,7 @@ textarea.portal-input { resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .portal-expand,
   .portal-chevron,
+  .portal-vchip-chev,
   .portal-btn,
   .portal-tl,
   .cm-btn { transition: none; }
