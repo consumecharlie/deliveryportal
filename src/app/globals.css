@@ -491,28 +491,23 @@
   gap: 22px;
   padding: 16px 16px 120px;
 }
-.portal-desk-cherry {
-  position: absolute;
-  right: 28px;
-  bottom: 34px;
-  width: 48px;
-  height: 48px;
-  z-index: 1;
-  pointer-events: none;
-  user-select: none;
-  mix-blend-mode: screen;
-}
+/* Floaters: the ghost top-left and the cherry top-right, just inside the
+   viewport under the menu bar; clipped to the disc so the asset's baked-in
+   selection handles do not show. */
+.portal-desk-cherry,
 .portal-desk-ghost {
   position: absolute;
-  left: 28px;
-  bottom: 30px;
-  width: 56px;
-  height: 56px;
+  top: 10px;
+  width: 52px;
+  height: 52px;
   z-index: 1;
   pointer-events: none;
   user-select: none;
   mix-blend-mode: screen;
+  clip-path: circle(35% at 50% 50%);
 }
+.portal-desk-cherry { right: 10px; }
+.portal-desk-ghost { left: 10px; }
 
 /* Dock: the floating capsule dock, one item per window */
 .portal-dock {
