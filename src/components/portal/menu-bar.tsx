@@ -13,6 +13,8 @@ interface Props {
   noteOpen: boolean;
   onNote: () => void;
   onTidy: () => void;
+  /** Sandbox: the PREVIEW chip, nothing here is shared with clients yet. */
+  preview?: boolean;
 }
 
 /**
@@ -56,7 +58,7 @@ function Clock() {
   );
 }
 
-export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, onTidy }: Props) {
+export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, onTidy, preview = false }: Props) {
   const lockup = <ClientLockup name={clientName} logoUrl={clientLogoUrl} />;
   return (
     <header className="portal-menu" role="banner">
@@ -78,6 +80,15 @@ export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, on
         )}
       </div>
       <div className="portal-menu-right">
+        {preview && (
+          <span
+            className="portal-menu-preview"
+            title="This portal is in preview and not yet shared with clients."
+            aria-label="Preview: this portal is in preview and not yet shared with clients."
+          >
+            Preview
+          </span>
+        )}
         <span className="portal-menu-powered">Powered by Consume Media</span>
         <button type="button" className="portal-menu-item portal-menu-tidy" onClick={onTidy}>
           Tidy up

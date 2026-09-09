@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
@@ -47,26 +47,10 @@ const BOOT_MS = 1400;
 interface Props {
   token: string;
   model: PortalPageModel;
-  /** Sandbox (PORTAL_SANDBOX=1): show the PREVIEW ribbon; nothing here is shared with clients yet. */
+  /** Sandbox (PORTAL_SANDBOX=1): show the PREVIEW chip in the menu bar; nothing here is shared with clients yet. */
   sandbox?: boolean;
 }
 
-const PREVIEW_RIBBON_STYLE: CSSProperties = {
-  position: "fixed",
-  top: 56,
-  right: 12,
-  zIndex: 2001,
-  padding: "4px 10px",
-  borderRadius: 4,
-  background: "#DBEF00",
-  color: "#151919",
-  fontSize: 10,
-  letterSpacing: "0.15em",
-  textTransform: "uppercase",
-  lineHeight: 1.4,
-  pointerEvents: "auto",
-  boxShadow: "0 1px 0 rgba(21, 25, 25, 0.15)",
-};
 
 interface Placement {
   x: number;
@@ -470,17 +454,8 @@ export function Desktop({ token, model, sandbox = false }: Props) {
         noteOpen={win(NOTE_ID).open}
         onNote={toggleNote}
         onTidy={tidyUp}
+        preview={sandbox}
       />
-      {sandbox && (
-        <span
-          className="portal-pixel-caption"
-          style={PREVIEW_RIBBON_STYLE}
-          title="This portal is in preview and not yet shared with clients."
-          aria-label="Preview: this portal is in preview and not yet shared with clients."
-        >
-          Preview
-        </span>
-      )}
 
       <div ref={canvasRef} className="portal-canvas" style={wide ? { height: canvasH } : undefined}>
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}

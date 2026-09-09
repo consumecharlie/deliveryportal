@@ -454,6 +454,22 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+.portal-menu-preview {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-right: 10px;
+  padding: 1px 8px 0;
+  border-radius: 4px;
+  background: #dbef00;
+  color: #151919;
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .portal-menu-powered {
   margin-right: 8px;
   font-size: 11px;
@@ -1924,7 +1940,23 @@ textarea.portal-input { resize: vertical; }
 @media (max-width: 899px) {
   .portal-menu { padding: 0 10px 0 12px; gap: 10px; }
   .portal-menu-left { gap: 10px; }
-  .portal-menu-powered { display: none; }
+  .portal-menu-preview {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-right: 10px;
+  padding: 1px 8px 0;
+  border-radius: 4px;
+  background: #dbef00;
+  color: #151919;
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.portal-menu-powered { display: none; }
   .portal-menu-item { padding: 5px 7px; font-size: 12px; }
   .portal-menu-clock { margin-left: 4px; min-width: 0; }
   .portal-lockup-name { font-size: 18px; }
