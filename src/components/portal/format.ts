@@ -42,3 +42,12 @@ export function truncate(text: string, max: number): string {
   if (chars.length <= max) return text;
   return chars.slice(0, Math.max(1, max - 1)).join("").trimEnd() + "…";
 }
+
+/**
+ * The tag a version wears in the version control: "FINAL" when its label
+ * contains the whole word "Final" (any case), else "V<n>". Numbering never
+ * skips: a final after V2 still leaves V1, V2, FINAL.
+ */
+export function versionTag(label: string, versionNumber: number): string {
+  return /\bfinal\b/i.test(label) ? "FINAL" : `V${versionNumber}`;
+}

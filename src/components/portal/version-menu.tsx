@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { shortDate } from "./format";
+import { shortDate, versionTag } from "./format";
 
 export interface VersionOption {
   id: string;
@@ -34,6 +34,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
   const menuId = useId();
   const enabled = versions.length > 1;
   const selected = versions.find((v) => v.id === selectedId) ?? versions[0];
+  const tagOf = (v: VersionOption) => versionTag(v.label, v.number);
 
   function close(refocus = false) {
     setOpen(false);
@@ -129,7 +130,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-label={`Version ${selected.number} of ${versions.length}, choose a version`}
+        aria-label={`Version ${tagOf(selected)} of ${versions.length}, choose a version`}
         onClick={toggle}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" && !open) {
@@ -138,7 +139,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
           }
         }}
       >
-        <span className="portal-vchip-label">v{selected.number}</span>
+        <span className="portal-vchip-label">{tagOf(selected)}</span>
         <svg className="portal-vchip-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
           <path d="M2.5 4.5l3.5 3.5 3.5-3.5" />
         </svg>
@@ -172,7 +173,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
                     close(true);
                   }}
                 >
-                  <span className={`cmx-chip${isSel ? " green" : ""}`}>v{v.number}</span>
+                  <span className={`cmx-chip${isSel ? " green" : ""}${tagOf(v) === "FINAL" ? " cmx-chip-final" : ""}`}>{tagOf(v)}</span>
                   <span className="cmx-label">{v.label}</span>
                   <span className="portal-vmenu-date">{shortDate(v.sentAtMs)}</span>
                   <span className="portal-vmenu-check" aria-hidden="true">
