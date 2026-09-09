@@ -6,6 +6,7 @@ import { ConfirmButton } from "./confirm-button";
 import { StatusPill } from "./status-pill";
 import { ViewLink } from "./view-link";
 import { REVIEW_ID } from "./desktop-state";
+import { openReviewLabel } from "./link-button";
 
 interface Props extends WindowFrameProps {
   token: string;
@@ -60,7 +61,7 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                       rel="noopener noreferrer"
                       className="cm-btn cm-btn--secondary cm-btn--sm"
                     >
-                      Open review
+                      {openReviewLabel(item.primaryLink)}
                     </ViewLink>
                   )}
                   <ConfirmButton

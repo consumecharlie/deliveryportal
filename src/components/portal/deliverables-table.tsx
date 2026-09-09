@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { PortalDeliverable, PortalVersion } from "@/lib/portal-page-model";
+import type { PortalDeliverable } from "@/lib/portal-page-model";
 import { renderPortalBody } from "@/lib/portal-render";
 import { sendPortalView } from "@/lib/portal-view-beacon";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { StatusPill } from "./status-pill";
-import { ViewLink } from "./view-link";
+import { LinkButtons } from "./link-button";
 import { shortDate } from "./format";
 
 interface Props {
@@ -14,27 +14,6 @@ interface Props {
   deliverables: PortalDeliverable[];
   /** Project page: every row starts expanded so all versions are listed. */
   defaultOpen?: boolean;
-}
-
-function LinkButtons({ token, version, small }: { token: string; version: PortalVersion; small?: boolean }) {
-  if (version.links.length === 0) return <span className="portal-muted">&ndash;</span>;
-  return (
-    <span className="portal-links">
-      {version.links.map((l) => (
-        <ViewLink
-          key={`${l.label}:${l.url}`}
-          token={token}
-          deliveryId={version.deliveryId}
-          href={l.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`portal-btn portal-btn-secondary${small ? " portal-btn-sm" : ""}`}
-        >
-          {l.label}
-        </ViewLink>
-      ))}
-    </span>
-  );
 }
 
 function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; defaultOpen: boolean }) {
@@ -70,7 +49,7 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
           <span>{shortDate(d.latest.sentAtMs)}</span>
         </div>
         <div className="portal-td portal-td-links">
-          <LinkButtons token={token} version={d.latest} />
+          <LinkButtons token={token} deliveryId={d.latest.deliveryId} links={d.latest.links} />
         </div>
         <div className="portal-td portal-td-status">
           <StatusPill state={review.state} label={review.label} />
@@ -108,7 +87,7 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
                     <li key={v.deliveryId} id={`d-${v.deliveryId}`} className="portal-version">
                       <span className="portal-version-label">{v.label}</span>
                       <span className="portal-version-date">{shortDate(v.sentAtMs)}</span>
-                      <LinkButtons token={token} version={v} small />
+                      <LinkButtons token={token} deliveryId={v.deliveryId} links={v.links} small />
                     </li>
                   ))}
                 </ul>

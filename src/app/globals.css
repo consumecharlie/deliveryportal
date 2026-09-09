@@ -1229,6 +1229,41 @@ a.portal-rail-link:hover .portal-rail-label {
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
+/* Link buttons: kind icon, label, host hint on a second line */
+.portal-linkbtn {
+  align-items: center;
+  gap: 8px;
+  padding: 0.375rem 0.75rem 0.375rem 0.625rem;
+  text-align: left;
+}
+.portal-linkbtn-icon {
+  flex: none;
+  color: #4d5959;
+}
+.portal-linkbtn-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.portal-linkbtn-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.portal-linkbtn-hint {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 13px;
+  color: #6f7f7f;
+  white-space: nowrap;
+}
+.portal-linkbtn-single { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.portal-btn-sm.portal-linkbtn { padding: 0.25rem 0.625rem 0.25rem 0.5rem; gap: 6px; }
+.portal-btn-sm .portal-linkbtn-label { font-size: 0.8125rem; line-height: 1rem; }
 .portal-link-btn {
   padding: 0;
   border: 0;
