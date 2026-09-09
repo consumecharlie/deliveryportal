@@ -16,30 +16,40 @@ interface Props {
  * yellow text), feedback received (light green), approved (solid green),
  * delivered (quiet gray).
  */
-export function StatusPill({ state, mode, names = [] }: Props) {
-  const m = reviewMode({ mode }, ...names);
-  let text: string;
-  let cls: string;
+export function pillText(state: ReviewState, mode: ReviewMode): string {
   switch (state) {
     case "awaiting":
-      text = m === "approval" ? "Approval needed" : "Feedback needed";
-      cls = "portal-pill-needed";
-      break;
+      return mode === "approval" ? "Approval needed" : "Feedback needed";
     case "due-today":
-      text = "Due today";
-      cls = "portal-pill-due-today";
-      break;
+      return "Due today";
     case "overdue":
-      text = "Past due";
-      cls = "portal-pill-overdue";
-      break;
+      return "Past due";
     case "confirmed":
-      text = m === "approval" ? "Approved" : "Feedback received";
-      cls = m === "approval" ? "portal-pill-approved" : "portal-pill-received";
-      break;
+      return mode === "approval" ? "Approved" : "Feedback received";
     default:
-      text = "Delivered";
-      cls = "portal-pill-delivered";
+      return "Delivered";
   }
-  return <span className={`portal-pill ${cls}`}>{text}</span>;
+}
+
+/** The full review label when it adds something (a date) beyond the pill's word; else null. */
+export function pillNote(state: ReviewState, mode: ReviewMode, label: string): string | null {
+  if (state === "none" || !label) return null;
+  return label.trim().toLowerCase() === pillText(state, mode).toLowerCase() ? null : label;
+}
+
+export function StatusPill({ state, mode, names = [] }: Props) {
+  const m = reviewMode({ mode }, ...names);
+  const cls =
+    state === "awaiting"
+      ? "portal-pill-needed"
+      : state === "due-today"
+        ? "portal-pill-due-today"
+        : state === "overdue"
+          ? "portal-pill-overdue"
+          : state === "confirmed"
+            ? m === "approval"
+              ? "portal-pill-approved"
+              : "portal-pill-received"
+            : "portal-pill-delivered";
+  return <span className={`portal-pill ${cls}`}>{pillText(state, m)}</span>;
 }

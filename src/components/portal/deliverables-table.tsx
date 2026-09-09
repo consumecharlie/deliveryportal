@@ -5,10 +5,10 @@ import type { PortalDeliverable } from "@/lib/portal-page-model";
 import { renderPortalBody } from "@/lib/portal-render";
 import { sendPortalView } from "@/lib/portal-view-beacon";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
-import { StatusPill } from "./status-pill";
+import { StatusPill, pillNote } from "./status-pill";
 import { LinkButtons } from "./link-button";
 import { VersionMenu } from "./version-menu";
-import { allVersions, versionNumber } from "./link-meta";
+import { allVersions, reviewMode, versionNumber } from "./link-meta";
 import { shortDate } from "./format";
 
 interface Props {
@@ -30,7 +30,7 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
   const { review } = d;
   const actionable = review.state === "awaiting" || review.state === "due-today" || review.state === "overdue";
   const showConfirm = actionable || (review.state === "confirmed" && review.canUndo);
-  const dueNote = review.state !== "none" && review.label ? review.label : null;
+  const dueNote = pillNote(review.state, reviewMode(review, d.title, d.variant, d.latest.label), review.label);
 
   function toggle() {
     if (!open) sendPortalView(token, current.deliveryId);

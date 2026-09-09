@@ -3,7 +3,8 @@
 import type { PortalAttentionItem } from "@/lib/portal-page-model";
 import { MacWindow, type WindowFrameProps } from "./mac-window";
 import { ConfirmButton } from "./confirm-button";
-import { StatusPill } from "./status-pill";
+import { StatusPill, pillNote } from "./status-pill";
+import { reviewMode } from "./link-meta";
 import { ViewLink } from "./view-link";
 import { REVIEW_ID } from "./desktop-state";
 import { openReviewLabel } from "./link-button";
@@ -53,7 +54,10 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                       names={[item.deliverableTitle, item.variant]}
                       label={item.review.label}
                     />
-                    {item.review.label && <span className="portal-review-due-label">{item.review.label}</span>}
+                    {(() => {
+                      const note = pillNote(item.review.state, reviewMode(item.review, item.deliverableTitle, item.variant), item.review.label);
+                      return note ? <span className="portal-review-due-label">{note}</span> : null;
+                    })()}
                   </span>
                 </div>
                 <div className="portal-review-actions">
