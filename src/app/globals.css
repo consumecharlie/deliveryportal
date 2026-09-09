@@ -1161,6 +1161,71 @@
   color: #6f7f7f;
 }
 
+/* Project Viewer: Finder-style tabs under the title bar */
+.portal-window-viewer .portal-window-body { padding-top: 0; }
+.portal-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 0 -20px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid #bbd2cf;
+  background: #f1f7f4;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  white-space: nowrap;
+}
+.portal-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 2px solid transparent;
+  background: #e5eee8;
+  color: #4d5959;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.portal-tab:hover { background: #dbe7e0; }
+.portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: -2px; }
+.portal-tab-active,
+.portal-tab-active:hover {
+  background: #fff;
+  color: #151919;
+  font-weight: 600;
+  border-bottom-color: #6ac387;
+}
+.portal-tab-label {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portal-tab-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #6f7f7f;
+  cursor: pointer;
+}
+.portal-tab-x:hover { background: rgba(21, 25, 25, 0.1); color: #151919; }
+.portal-viewer-panel { padding-top: 20px; }
+
 /* Project window body */
 .portal-project { min-width: 0; }
 .portal-project-head {

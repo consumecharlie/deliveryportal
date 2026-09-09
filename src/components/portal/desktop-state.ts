@@ -15,8 +15,12 @@ export interface WinState {
 export interface DesktopState {
   v: 1;
   windows: Record<string, Partial<WinState>>;
-  /** Bottom to top. The review window is never in here: it is always on top. */
+  /** Bottom to top. */
   order: string[];
+  /** Project Viewer tabs (project listIds) in the order they were opened; undefined = defaults. */
+  tabs?: string[];
+  /** The active viewer tab, when the client chose one. */
+  activeTab?: string | null;
 }
 
 export const REVIEW_ID = "review";
@@ -24,6 +28,7 @@ export const UPNEXT_ID = "upnext";
 export const ARCHIVE_ID = "archive";
 export const NOTE_ID = "note";
 export const FINDER_ID = "finder";
+export const VIEWER_ID = "viewer";
 
 export function projectWindowId(listId: string): string {
   return `project:${listId}`;
@@ -51,7 +56,13 @@ export function loadDesktopState(key: string): DesktopState {
     if (!parsed || parsed.v !== 1 || typeof parsed.windows !== "object" || !Array.isArray(parsed.order)) {
       return EMPTY_STATE;
     }
-    return { v: 1, windows: parsed.windows ?? {}, order: parsed.order.filter((s) => typeof s === "string") };
+    return {
+      v: 1,
+      windows: parsed.windows ?? {},
+      order: parsed.order.filter((s) => typeof s === "string"),
+      tabs: Array.isArray(parsed.tabs) ? parsed.tabs.filter((s) => typeof s === "string") : undefined,
+      activeTab: typeof parsed.activeTab === "string" ? parsed.activeTab : undefined,
+    };
   } catch {
     return EMPTY_STATE;
   }
@@ -59,7 +70,7 @@ export function loadDesktopState(key: string): DesktopState {
 
 export function saveDesktopState(key: string, state: DesktopState): void {
   try {
-    if (state.order.length === 0 && Object.keys(state.windows).length === 0) {
+    if (state.order.length === 0 && Object.keys(state.windows).length === 0 && state.tabs === undefined) {
       window.localStorage.removeItem(key);
     } else {
       window.localStorage.setItem(key, JSON.stringify(state));
