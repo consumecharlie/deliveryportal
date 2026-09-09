@@ -56,6 +56,8 @@ export interface PortalPageRow extends TimelineDelivery {
 export interface BuildPortalPageInput {
   token: string;
   clientName: string;
+  clientLogoUrl?: string | null;
+  clientDomain?: string | null;
   /** When set, only that project's section is returned (counts stay client-wide). */
   focusListId: string | null;
   nowMs: number;
@@ -86,6 +88,27 @@ export function shortDateWithYear(ms: number): string {
 }
 
 const ATTENTION_STATES: ReadonlySet<ReviewState> = new Set(["awaiting", "due-today", "overdue"]);
+
+const OUR_DOMAINS: ReadonlySet<string> = new Set(["consume-media.com"]);
+
+/**
+ * The client's email domain: from the most recent delivery whose primary
+ * recipient is not one of ours. Lowercase; null when no delivery qualifies.
+ */
+export function deriveClientDomain(
+  rows: Array<{ primaryEmail?: string | null; sentAt: Date }>
+): string | null {
+  const sorted = [...rows].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+  for (const r of sorted) {
+    const email = (r.primaryEmail ?? "").trim().toLowerCase();
+    const at = email.lastIndexOf("@");
+    if (at < 0 || at === email.length - 1) continue;
+    const domain = email.slice(at + 1);
+    if (!domain.includes(".") || OUR_DOMAINS.has(domain)) continue;
+    return domain;
+  }
+  return null;
+}
 
 function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
   return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
@@ -421,6 +444,8 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
   return {
     token: input.token,
     clientName: input.clientName,
+    clientLogoUrl: input.clientLogoUrl ?? null,
+    clientDomain: input.clientDomain ?? null,
     counts,
     countsLabel: countsLine(counts),
     attention,

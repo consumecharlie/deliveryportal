@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, Eye, Link2, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Eye, ImageIcon, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -41,6 +42,7 @@ interface PortalLink {
   createdAt: string;
   lastViewedAt: string | null;
   viewCount: number;
+  logoUrl: string | null;
 }
 
 interface ProjectSummary {
@@ -99,6 +101,8 @@ export function ClientPortalSection() {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingAction>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [logoFor, setLogoFor] = useState<string | null>(null);
+  const [logoDraft, setLogoDraft] = useState("");
 
   const linksQuery = useQuery<{ links: PortalLink[] }>({
     queryKey: ["settings", "portal-access"],
@@ -173,6 +177,38 @@ export function ClientPortalSection() {
       setPending(null);
     },
   });
+
+  const logoMutation = useMutation({
+    mutationFn: async (input: { row: ClientRow; logoUrl: string | null }) => {
+      const res = await fetch("/api/settings/portal-access", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientFolderId: input.row.folderId,
+          clientName: input.row.name,
+          logoUrl: input.logoUrl,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Failed to save logo");
+      }
+      return input;
+    },
+    onSuccess: (input) => {
+      queryClient.invalidateQueries({ queryKey: ["settings", "portal-access"] });
+      toast.success(input.logoUrl ? `Logo set for ${input.row.name}` : `Logo cleared for ${input.row.name}`);
+      setLogoFor(null);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to save logo");
+    },
+  });
+
+  function openLogoEditor(row: ClientRow) {
+    setLogoDraft(row.link?.logoUrl ?? "");
+    setLogoFor(row.folderId);
+  }
 
   const rows = useMemo<ClientRow[]>(() => {
     const links = linksQuery.data?.links ?? [];
@@ -250,6 +286,7 @@ export function ClientPortalSection() {
             <TableHeader>
               <TableRow>
                 <TableHead>Client</TableHead>
+                <TableHead>Logo</TableHead>
                 <TableHead>Portal link</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Last viewed</TableHead>
@@ -262,6 +299,72 @@ export function ClientPortalSection() {
                 return (
                   <TableRow key={row.folderId}>
                     <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell>
+                      <Popover
+                        open={logoFor === row.folderId}
+                        onOpenChange={(open) => {
+                          if (open) openLogoEditor(row);
+                          else if (!logoMutation.isPending) setLogoFor(null);
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          {link?.logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={link.logoUrl}
+                              alt={`${row.name} logo`}
+                              className="h-6 w-6 rounded object-contain bg-muted"
+                            />
+                          ) : (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-muted text-muted-foreground">
+                              <ImageIcon className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                              {link?.logoUrl ? "Change" : "Set logo"}
+                            </Button>
+                          </PopoverTrigger>
+                        </span>
+                        <PopoverContent align="start" className="w-80 p-3">
+                          <form
+                            className="space-y-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              logoMutation.mutate({ row, logoUrl: logoDraft.trim() || null });
+                            }}
+                          >
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Logo URL for {row.name}
+                            </p>
+                            <Input
+                              type="url"
+                              placeholder="https://..."
+                              value={logoDraft}
+                              onChange={(e) => setLogoDraft(e.target.value)}
+                              autoFocus
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Any https image URL. Leave blank to remove the logo.
+                            </p>
+                            <div className="flex justify-end gap-1.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={logoMutation.isPending}
+                                onClick={() => setLogoFor(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button type="submit" size="sm" disabled={logoMutation.isPending}>
+                                {logoMutation.isPending ? "Saving…" : "Save"}
+                              </Button>
+                            </div>
+                          </form>
+                        </PopoverContent>
+                      </Popover>
+                    </TableCell>
                     <TableCell>
                       {link ? (
                         <span className="inline-flex items-center gap-1.5">

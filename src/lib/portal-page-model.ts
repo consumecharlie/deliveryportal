@@ -130,6 +130,10 @@ export interface PortalAttentionItem {
 export interface PortalPageModel {
   token: string;
   clientName: string;
+  /** Client logo for the header (ClientPreference.logoUrl), when one is set. */
+  clientLogoUrl: string | null;
+  /** Email domain of the newest delivery's primary recipient (not consume-media.com), lowercase. */
+  clientDomain: string | null;
   counts: { inProgress: number; completed: number };
   /** The line under the client name ("2 projects in progress, 1 completed"); "" when nothing to count. */
   countsLabel?: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPortalPage, toReview, type PortalPageRow, type BuildPortalPageInput } from "@/lib/portal-page";
+import { buildPortalPage, toReview, deriveClientDomain, type PortalPageRow, type BuildPortalPageInput } from "@/lib/portal-page";
 import { decideFeedbackStatus, type ConfirmationRow } from "@/lib/portal-status";
 import type { LivePayload, LiveMilestone, LiveFeedbackTask } from "@/lib/portal-live";
 import { LIVE_PAYLOAD_VERSION } from "@/lib/portal-live";
@@ -138,6 +138,11 @@ describe("buildPortalPage: projects and deliverables", () => {
   it("carries the token and client name and sorts in-progress (by activity) before completed", () => {
     expect(page.token).toBe("tok");
     expect(page.clientName).toBe("Stack Overflow");
+    expect(page.clientLogoUrl).toBeNull();
+    expect(page.clientDomain).toBeNull();
+    const branded = build({ clientLogoUrl: "https://cdn.example.com/logo.png", clientDomain: "stackoverflow.com" });
+    expect(branded.clientLogoUrl).toBe("https://cdn.example.com/logo.png");
+    expect(branded.clientDomain).toBe("stackoverflow.com");
     expect(page.projects.map((p) => p.name)).toEqual([
       "CallRail Wiggam Law Virtual Testimonial",
       "Leaders of Code Podcast",
@@ -581,5 +586,32 @@ describe("buildPortalPage: attention and focus", () => {
 
   it("a focus on an unknown list yields no projects", () => {
     expect(build({ focusListId: "nope" }).projects).toEqual([]);
+  });
+});
+
+describe("deriveClientDomain", () => {
+  const at = (iso: string) => new Date(iso);
+  it("takes the newest delivery's primary recipient domain, lowercased", () => {
+    expect(
+      deriveClientDomain([
+        { primaryEmail: "old@Intuit.com", sentAt: at("2026-05-01") },
+        { primaryEmail: "Dana@StackOverflow.com", sentAt: at("2026-08-01") },
+      ])
+    ).toBe("stackoverflow.com");
+  });
+  it("skips blank, malformed and consume-media.com addresses", () => {
+    expect(
+      deriveClientDomain([
+        { primaryEmail: "michael@consume-media.com", sentAt: at("2026-09-01") },
+        { primaryEmail: "", sentAt: at("2026-08-20") },
+        { primaryEmail: "not-an-email", sentAt: at("2026-08-15") },
+        { primaryEmail: null, sentAt: at("2026-08-10") },
+        { primaryEmail: "pm@client.co", sentAt: at("2026-08-01") },
+      ])
+    ).toBe("client.co");
+  });
+  it("returns null when nothing qualifies", () => {
+    expect(deriveClientDomain([])).toBeNull();
+    expect(deriveClientDomain([{ primaryEmail: "x@consume-media.com", sentAt: at("2026-09-01") }])).toBeNull();
   });
 });

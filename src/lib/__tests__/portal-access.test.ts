@@ -4,6 +4,7 @@ import {
   createOrRotateAccess,
   buildPortalUrl,
   maskPortalToken,
+  parseLogoUrl,
 } from "@/lib/portal-access";
 import { getAppBaseUrl } from "@/lib/app-base-url";
 
@@ -154,5 +155,21 @@ describe("getAppBaseUrl", () => {
 
   it("returns an empty string with no env, no request and no window", () => {
     expect(getAppBaseUrl()).toBe("");
+  });
+});
+
+describe("parseLogoUrl", () => {
+  it("accepts https URLs and clears on null or blank", () => {
+    expect(parseLogoUrl("https://cdn.example.com/logo.png")).toEqual({ ok: true, value: "https://cdn.example.com/logo.png" });
+    expect(parseLogoUrl("  https://cdn.example.com/logo.svg  ")).toEqual({ ok: true, value: "https://cdn.example.com/logo.svg" });
+    expect(parseLogoUrl(null)).toEqual({ ok: true, value: null });
+    expect(parseLogoUrl(undefined)).toEqual({ ok: true, value: null });
+    expect(parseLogoUrl("   ")).toEqual({ ok: true, value: null });
+  });
+  it("rejects http, non-URLs and non-strings", () => {
+    expect(parseLogoUrl("http://cdn.example.com/logo.png").ok).toBe(false);
+    expect(parseLogoUrl("javascript:alert(1)").ok).toBe(false);
+    expect(parseLogoUrl("logo.png").ok).toBe(false);
+    expect(parseLogoUrl(42).ok).toBe(false);
   });
 });

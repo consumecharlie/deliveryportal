@@ -125,6 +125,8 @@ model ClientPreference {
   /** Optional relabel for the "Google Deliverable Link" review-link field
    *  (e.g. "Box Link" for KeyBank). Null = keep the default label. */
   deliverableLinkLabel String?
+  /** Client logo shown in the portal header; any https image URL. */
+  logoUrl              String?
   updatedBy            String
   updatedAt            DateTime @updatedAt
 

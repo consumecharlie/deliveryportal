@@ -64,3 +64,22 @@ export function maskPortalToken(token: string): string {
   if (token.length <= 8) return `…/portal/${token}`;
   return `…/portal/${token.slice(0, 4)}…${token.slice(-4)}`;
 }
+
+/**
+ * Validate a client logo URL for the portal header: an https URL, or null to
+ * clear it. Returns `{ ok: false }` for anything else (http, blank strings
+ * count as clearing).
+ */
+export function parseLogoUrl(input: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (input === null || input === undefined) return { ok: true, value: null };
+  if (typeof input !== "string") return { ok: false, error: "logoUrl must be a string or null" };
+  const trimmed = input.trim();
+  if (!trimmed) return { ok: true, value: null };
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return { ok: false, error: "logoUrl must be an https URL" };
+    return { ok: true, value: url.toString() };
+  } catch {
+    return { ok: false, error: "logoUrl must be a valid https URL" };
+  }
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserEmail } from "@/lib/get-session-user";
-import { createOrRotateAccess } from "@/lib/portal-access";
+import { createOrRotateAccess, parseLogoUrl } from "@/lib/portal-access";
 
 export interface PortalAccessSummary {
   id: string;
@@ -12,6 +12,8 @@ export interface PortalAccessSummary {
   createdAt: string;
   lastViewedAt: string | null;
   viewCount: number;
+  /** Client logo for the portal header (ClientPreference.logoUrl). */
+  logoUrl: string | null;
 }
 
 /**
@@ -35,6 +37,14 @@ export async function GET() {
         })
       : [];
     const byAccess = new Map(stats.map((s) => [s.accessId, s]));
+    const folderIds = Array.from(new Set(rows.map((r) => r.clientFolderId)));
+    const prefs = folderIds.length
+      ? await prisma.clientPreference.findMany({
+          where: { clientFolderId: { in: folderIds } },
+          select: { clientFolderId: true, logoUrl: true },
+        })
+      : [];
+    const logoByFolder = new Map(prefs.map((p) => [p.clientFolderId, p.logoUrl ?? null]));
 
     const links: PortalAccessSummary[] = rows.map((r) => {
       const s = byAccess.get(r.id);
@@ -47,6 +57,7 @@ export async function GET() {
         createdAt: r.createdAt.toISOString(),
         lastViewedAt: s?._max.viewedAt?.toISOString() ?? null,
         viewCount: s?._count._all ?? 0,
+        logoUrl: logoByFolder.get(r.clientFolderId) ?? null,
       };
     });
     return NextResponse.json({ links });
@@ -91,6 +102,7 @@ export async function POST(req: Request) {
       createdAt: row.createdAt.toISOString(),
       lastViewedAt: null,
       viewCount: 0,
+      logoUrl: null,
     };
     return NextResponse.json({ link });
   } catch (error) {
@@ -99,6 +111,52 @@ export async function POST(req: Request) {
       { error: "Failed to create portal link" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * PATCH /api/settings/portal-access  { clientFolderId, clientName, logoUrl | null }
+ *
+ * Set or clear the client logo shown in the portal header. Upserts the
+ * client's ClientPreference row (with defaults when none exists yet).
+ */
+export async function PATCH(req: Request) {
+  try {
+    const body = (await req.json().catch(() => ({}))) as {
+      clientFolderId?: string;
+      clientName?: string;
+      logoUrl?: unknown;
+    };
+    const clientFolderId = String(body.clientFolderId ?? "").trim();
+    const clientName = String(body.clientName ?? "").trim();
+    if (!clientFolderId || !clientName) {
+      return NextResponse.json(
+        { error: "clientFolderId and clientName are required" },
+        { status: 400 }
+      );
+    }
+    const parsed = parseLogoUrl(body.logoUrl);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const updatedBy = await getSessionUserEmail();
+    const row = await prisma.clientPreference.upsert({
+      where: { clientFolderId },
+      create: {
+        clientFolderId,
+        clientName,
+        enabled: true,
+        warningMessage: "",
+        restrictions: [],
+        customBlockedDomains: [],
+        logoUrl: parsed.value,
+        updatedBy,
+      },
+      update: { logoUrl: parsed.value, updatedBy },
+      select: { clientFolderId: true, logoUrl: true },
+    });
+    return NextResponse.json({ clientFolderId: row.clientFolderId, logoUrl: row.logoUrl ?? null });
+  } catch (error) {
+    console.error("Failed to update portal logo:", error);
+    return NextResponse.json({ error: "Failed to update logo" }, { status: 500 });
   }
 }
 

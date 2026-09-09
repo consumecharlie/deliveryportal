@@ -13,7 +13,7 @@ import {
   type MentionNames,
 } from "@/lib/portal-timeline";
 import { getLiveFeedbackMany, pairFeedbackTask } from "@/lib/portal-live";
-import { buildPortalPage, type PortalPageRow } from "@/lib/portal-page";
+import { buildPortalPage, deriveClientDomain, type PortalPageRow } from "@/lib/portal-page";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
   decideFeedbackStatus,
@@ -80,7 +80,10 @@ async function latestConfirmations(deliveryIds: string[]) {
  * The token's deliveries (always scoped by clientFolderId), newest first,
  * shaped for the pure builders. `onlyListId` is a filter inside the folder.
  */
-async function selectDeliveries(access: PortalAccessInfo, onlyListId?: string): Promise<PortalPageRow[]> {
+async function selectDeliveries(
+  access: PortalAccessInfo,
+  onlyListId?: string
+): Promise<Array<PortalPageRow & { primaryEmail: string }>> {
   const rows = await prisma.delivery.findMany({
     where: {
       clientFolderId: access.clientFolderId,
@@ -92,6 +95,7 @@ async function selectDeliveries(access: PortalAccessInfo, onlyListId?: string): 
   return rows.map((r) => ({
     id: r.id,
     taskId: r.taskId,
+    primaryEmail: r.primaryEmail,
     projectListId: r.projectListId,
     projectName: r.projectName,
     deliverableType: r.deliverableType,
@@ -123,13 +127,18 @@ export async function loadPortalPage(
 ): Promise<PortalPageModel> {
   const rows = await selectDeliveries(access);
   const current = dropReplaced(rows);
-  const [confirmations, live] = await Promise.all([
+  const [confirmations, live, preference] = await Promise.all([
     latestConfirmations(current.map((r) => r.id)),
     getLiveFeedbackMany(current.map((r) => r.projectListId ?? "")),
+    prisma.clientPreference
+      .findUnique({ where: { clientFolderId: access.clientFolderId }, select: { logoUrl: true } })
+      .catch(() => null),
   ]);
   return buildPortalPage({
     token: access.token,
     clientName: access.clientName,
+    clientLogoUrl: preference?.logoUrl ?? null,
+    clientDomain: deriveClientDomain(rows),
     focusListId: focusListId ?? null,
     nowMs: Date.now(),
     rows,
