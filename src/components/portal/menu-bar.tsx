@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PacMark } from "./pac-mark";
 import { menuClock } from "./format";
 
 interface Props {
   clientName: string;
-  /** Project page: a breadcrumb back to the client desktop, then the project name. */
+  /** The client's own logo when we have one. */
+  clientLogoUrl?: string | null;
+  /** The client's web domain: a favicon stands in for a missing logo. */
+  clientDomain?: string | null;
+  /** Project page: the name links back to the client desktop and the project name follows. */
   crumb?: { href: string; projectName: string };
   noteOpen: boolean;
   onNote: () => void;
@@ -15,22 +18,25 @@ interface Props {
 }
 
 /**
- * "Consume OS" in the CharlieOS lockup style: a rounded sans wordmark and
- * the "OS" in green pixel blocks (the OS glyph is the exact path from
- * brand-assets/CharlieOS.svg).
+ * The client lockup (the MOGRT Library client-portal header): a 28px logo on
+ * a white tile, the client name in EightiesComeback over CLIENT PORTAL in
+ * pixel caps. Logo, else the domain's favicon, else a monogram tile.
  */
-function ConsumeOsMark() {
-  return (
-    <span className="portal-os-mark" aria-label="Consume OS">
-      <span className="portal-os-word" aria-hidden="true">
-        Consume
+function ClientLogo({ name, logoUrl, domain }: { name: string; logoUrl?: string | null; domain?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const src = logoUrl || (domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null);
+  if (src && !failed) {
+    return (
+      <span className="portal-lockup-tile">
+        {/* eslint-disable-next-line @next/next/no-img-element -- client-provided logo or favicon */}
+        <img src={src} alt="" width={28} height={28} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
       </span>
-      <svg className="portal-os-glyph" viewBox="141 15 51 30" aria-hidden="true" focusable="false">
-        <path
-          d="M141 18.018H143.998V15.0201H161.986V18.018H164.984V42.002H161.986V45H143.998V42.002H141V18.018ZM146.996 39.004H158.988V21.016H146.996V39.004ZM167.994 18.018H170.992V15.0201H188.98V18.018H191.978V24.014H185.982V21.016H173.99V27.012H188.98V30.01H191.978V42.002H188.98V45H170.992V42.002H167.994V36.006H173.99V39.004H185.982V33.008H170.992V30.01H167.994V18.018Z"
-          fill="#6AC387"
-        />
-      </svg>
+    );
+  }
+  const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "";
+  return (
+    <span className="portal-lockup-tile portal-lockup-monogram" aria-hidden="true">
+      {initial}
     </span>
   );
 }
@@ -57,30 +63,37 @@ function Clock() {
   );
 }
 
-export function MenuBar({ clientName, crumb, noteOpen, onNote, onTidy }: Props) {
+export function MenuBar({ clientName, clientLogoUrl, clientDomain, crumb, noteOpen, onNote, onTidy }: Props) {
+  const lockup = (
+    <>
+      <ClientLogo name={clientName} logoUrl={clientLogoUrl} domain={clientDomain} />
+      <span className="portal-lockup-text">
+        <span className="portal-lockup-name">{clientName}</span>
+        <span className="portal-lockup-sub">Client portal</span>
+      </span>
+    </>
+  );
   return (
     <header className="portal-menu" role="banner">
       <div className="portal-menu-left">
-        <PacMark size={16} color="#DBEF00" className="portal-menu-pac" />
-        <ConsumeOsMark />
-        <span className="portal-menu-sep" aria-hidden="true" />
         {crumb ? (
           <nav aria-label="Breadcrumb" className="portal-menu-crumb">
-            <Link href={crumb.href} className="portal-menu-client portal-menu-client-link">
-              {clientName}
+            <Link href={crumb.href} className="portal-lockup portal-lockup-link" title="Back to all projects">
+              {lockup}
             </Link>
             <span className="portal-menu-crumb-sep" aria-hidden="true">
               /
             </span>
-            <span className="portal-menu-client portal-menu-project" title={crumb.projectName}>
+            <span className="portal-menu-project" title={crumb.projectName}>
               {crumb.projectName}
             </span>
           </nav>
         ) : (
-          <span className="portal-menu-client">{clientName}</span>
+          <div className="portal-lockup">{lockup}</div>
         )}
       </div>
       <div className="portal-menu-right">
+        <span className="portal-menu-powered">Powered by Consume Media</span>
         <button type="button" className="portal-menu-item portal-menu-tidy" onClick={onTidy}>
           Tidy up
         </button>
