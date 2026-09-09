@@ -569,7 +569,7 @@
   --dock-base: 64px;
   position: relative;
   width: var(--dock-base);
-  /* 4px under the ring: the dot sits 8px below the icon's bottom edge. */
+  /* 4px under the ring: the icon ends 8px above the slot's bottom, where the dot sits. */
   height: calc(var(--dock-base) + 4px);
   margin: 0;
   padding: 0;
@@ -606,7 +606,7 @@
 .portal-dock-dot {
   position: absolute;
   left: 50%;
-  bottom: 2px;
+  bottom: 0;
   width: 4px;
   height: 4px;
   margin-left: -2px;
