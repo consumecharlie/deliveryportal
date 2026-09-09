@@ -19,6 +19,7 @@ import { resolveShareIdentity } from "@/lib/delivery-identity";
 import { mergeTemplate, convertToSlackFormat } from "@/lib/template-merge";
 import type { DeliveryFormState, MergedContent, SendPayload } from "@/lib/types";
 import { getSessionUserEmail } from "@/lib/get-session-user";
+import { interpretN8nResponse, type N8nSendStatus } from "@/lib/n8n-result";
 
 interface SendRequestBody {
   formState: DeliveryFormState;
@@ -313,6 +314,13 @@ export async function POST(
 
     // ── 4. Call n8n webhook ──
 
+    // What n8n reported back. Recorded on the Delivery row so a send that never
+    // produced a Gmail draft can be SEEN rather than silently trusted: on
+    // 2026-09-09 an expired Gmail credential let two client deliveries log as
+    // Sent with no draft ever created. See src/lib/n8n-result.ts.
+    let n8nStatus: N8nSendStatus | null = null;
+    let n8nDetail: string | undefined;
+
     const n8nWebhookUrl = process.env.N8N_PORTAL_WEBHOOK_URL;
     if (!n8nWebhookUrl) {
       // If webhook not configured yet, just log and continue
@@ -330,6 +338,19 @@ export async function POST(
       if (!n8nRes.ok) {
         const errText = await n8nRes.text().catch(() => "");
         throw new Error(`n8n webhook failed: ${n8nRes.status} ${errText}`);
+      }
+
+      // While the workflow's webhook responds on receipt this reads "pending",
+      // which is honest: the outcome genuinely is not known yet. Once the
+      // webhook responds when the last node finishes, it reports the real one.
+      const body = await n8nRes.json().catch(() => null);
+      const result = interpretN8nResponse(body, postToSlack);
+      n8nStatus = result.status;
+      n8nDetail = result.detail;
+      if (result.status === "failed") {
+        console.error(
+          `n8n reported a failed send for task ${taskId}: ${result.detail ?? "no detail"}`
+        );
       }
     }
 
@@ -366,6 +387,7 @@ export async function POST(
             ccEmails: ccEmails || null,
             slackChannel: slackChannelId || null,
             slackChannelName: taskMeta?.slackChannelName || null,
+            n8nStatus: n8nDetail ? `${n8nStatus}: ${n8nDetail}`.slice(0, 500) : n8nStatus,
             emailSubject: emailSubject,
             emailContent: emailContent,
             slackContent: slackContent || null,

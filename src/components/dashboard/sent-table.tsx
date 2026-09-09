@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SLACK_EMOJI_MAP } from "@/lib/template-merge";
+import { isFailedSend } from "@/lib/n8n-result";
 import { DepartmentBadge } from "./department-badge";
 import { Avatar } from "./assignee-filter";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
@@ -512,7 +513,9 @@ export function SentTable() {
           </TableHeader>
           <TableBody>
             {deliveries.map((delivery) => {
-              const hadError = delivery.n8nStatus === "error";
+              // n8nStatus records what n8n actually reported. Before 2026-09-09
+              // nothing ever wrote it, so this indicator could never fire.
+              const hadError = isFailedSend(delivery.n8nStatus);
               return (
                 <TableRow
                   key={delivery.id}
@@ -522,10 +525,15 @@ export function SentTable() {
                   <TableCell className={`${cellClass} font-medium`}>
                     <span className="flex items-center gap-2">
                       {hadError && (
-                        <AlertCircle
-                          className="h-3.5 w-3.5 text-destructive shrink-0"
-                          aria-label="Send error"
-                        />
+                        <span
+                          className="flex shrink-0"
+                          title={delivery.n8nStatus ?? "Send error"}
+                        >
+                          <AlertCircle
+                            className="h-3.5 w-3.5 text-destructive"
+                            aria-label="Send error"
+                          />
+                        </span>
                       )}
                       {delivery.clientName || "-"}
                     </span>
