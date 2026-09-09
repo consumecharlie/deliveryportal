@@ -28,6 +28,8 @@ export interface MacWindowProps {
   draggable: boolean;
   /** Reading-order index for the staggered entrance pop; null renders without a pop. */
   popIndex: number | null;
+  /** Top of the z-order: gets the stronger shadow. */
+  isTop?: boolean;
   onClose: (id: string) => void;
   onMinimize: (id: string) => void;
   onZoom: (id: string) => void;
@@ -58,6 +60,7 @@ export function MacWindow(props: MacWindowProps) {
     canClose,
     draggable,
     popIndex,
+    isTop = false,
     onClose,
     onMinimize,
     onZoom,
@@ -144,6 +147,7 @@ export function MacWindow(props: MacWindowProps) {
     zoomed ? "portal-window-zoomed" : "",
     popIndex !== null ? "portal-window-pop" : "",
     draggable ? "portal-window-draggable" : "",
+    isTop ? "portal-window-top" : "",
     className ?? "",
   ]
     .filter(Boolean)

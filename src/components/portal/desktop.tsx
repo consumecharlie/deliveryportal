@@ -361,6 +361,7 @@ export function Desktop({ token, model }: Props) {
       zoomed: s.zoomed,
       draggable,
       popIndex: popIndex(id),
+      isTop: order[order.length - 1] === id,
       onClose: close,
       onMinimize: minimize,
       onZoom: zoom,
