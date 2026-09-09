@@ -615,18 +615,23 @@
    the icon rises above the bar; the dot stays on the base baseline. */
 .portal-dock-bar-magnify .portal-dock-item {
   width: calc(var(--dock-base) * var(--dock-s, 1));
-  transition: width 90ms ease-out;
+  transition: none;
 }
 .portal-dock-bar-magnify .portal-dock-ring {
   transform: scale(var(--dock-s, 1));
   transform-origin: bottom center;
-  transition: transform 90ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
 }
 .portal-dock-bar-magnify .portal-dock-item-pop .portal-dock-ring { animation: none; }
 .portal-dock-bar-magnify .portal-dock-tip {
   bottom: calc(100% + 12px + (var(--dock-s, 1) - 1) * var(--dock-base));
-  transition: bottom 90ms ease-out;
 }
+/* Ease only on pointer enter (from rest) and leave (back to rest); movement is frame-synchronous */
+.portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-item { transition: width 120ms ease-out; }
+.portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-ring {
+  transition: transform 120ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
+}
+.portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-tip { transition: bottom 120ms ease-out; }
 .portal-dock-stacked {
   left: 0;
   right: 0;
