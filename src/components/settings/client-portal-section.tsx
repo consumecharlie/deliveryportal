@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Copy, Eye, ImageIcon, Link2, RefreshCw, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
+import { Copy, Eye, ImageIcon, ImagePlus, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { buildPortalUrl, maskPortalToken } from "@/lib/portal-access";
+import { LOGO_CONTENT_TYPES, LOGO_MAX_BYTES, logoBlobPathname, cacheBustedLogoUrl } from "@/lib/client-logo";
 import { getAppBaseUrl } from "@/lib/app-base-url";
 
 interface PortalLink {
@@ -103,6 +105,11 @@ export function ClientPortalSection() {
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [logoFor, setLogoFor] = useState<string | null>(null);
   const [logoDraft, setLogoDraft] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const linksQuery = useQuery<{ links: PortalLink[] }>({
     queryKey: ["settings", "portal-access"],
@@ -197,17 +204,70 @@ export function ClientPortalSection() {
     },
     onSuccess: (input) => {
       queryClient.invalidateQueries({ queryKey: ["settings", "portal-access"] });
-      toast.success(input.logoUrl ? `Logo set for ${input.row.name}` : `Logo cleared for ${input.row.name}`);
-      setLogoFor(null);
+      toast.success(input.logoUrl ? `Logo set for ${input.row.name}` : `Logo removed for ${input.row.name}`);
+      closeLogoEditor();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to save logo");
     },
   });
 
+  function pickLogoFile(file: File | null) {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    if (!file) {
+      setLogoFile(null);
+      setLogoPreview(null);
+      return;
+    }
+    if (!LOGO_CONTENT_TYPES[file.type]) {
+      toast.error("Logo must be a PNG, JPG, SVG or WebP image");
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      toast.error("Logo must be under 2 MB");
+      return;
+    }
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  }
+
   function openLogoEditor(row: ClientRow) {
     setLogoDraft(row.link?.logoUrl ?? "");
+    pickLogoFile(null);
+    setDragOver(false);
     setLogoFor(row.folderId);
+  }
+
+  function closeLogoEditor() {
+    pickLogoFile(null);
+    setLogoFor(null);
+  }
+
+  async function uploadLogo(row: ClientRow) {
+    if (!logoFile) return;
+    const pathname = logoBlobPathname(row.folderId, logoFile.type);
+    if (!pathname) {
+      toast.error("Logo must be a PNG, JPG, SVG or WebP image");
+      return;
+    }
+    setUploading(true);
+    try {
+      const blob = await upload(pathname, logoFile, {
+        access: "public",
+        handleUploadUrl: "/api/settings/client-logo",
+        contentType: logoFile.type,
+        clientPayload: JSON.stringify({
+          clientFolderId: row.folderId,
+          contentType: logoFile.type,
+          size: logoFile.size,
+        }),
+      });
+      await logoMutation.mutateAsync({ row, logoUrl: cacheBustedLogoUrl(blob.url, Date.now()) });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload that logo");
+    } finally {
+      setUploading(false);
+    }
   }
 
   const rows = useMemo<ClientRow[]>(() => {
@@ -304,7 +364,7 @@ export function ClientPortalSection() {
                         open={logoFor === row.folderId}
                         onOpenChange={(open) => {
                           if (open) openLogoEditor(row);
-                          else if (!logoMutation.isPending) setLogoFor(null);
+                          else if (!logoMutation.isPending && !uploading) closeLogoEditor();
                         }}
                       >
                         <span className="inline-flex items-center gap-2">
@@ -326,42 +386,128 @@ export function ClientPortalSection() {
                             </Button>
                           </PopoverTrigger>
                         </span>
-                        <PopoverContent align="start" className="w-80 p-3">
+                        <PopoverContent align="start" className="w-80 space-y-3 p-3">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Logo for {row.name}
+                          </p>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept={Object.keys(LOGO_CONTENT_TYPES).join(",")}
+                            className="hidden"
+                            onChange={(e) => {
+                              pickLogoFile(e.target.files?.[0] ?? null);
+                              e.target.value = "";
+                            }}
+                          />
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className={`flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm ${
+                              dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+                            }`}
+                            onClick={() => fileInputRef.current?.click()}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                fileInputRef.current?.click();
+                              }
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDragOver(true);
+                            }}
+                            onDragLeave={() => setDragOver(false)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOver(false);
+                              pickLogoFile(e.dataTransfer.files?.[0] ?? null);
+                            }}
+                          >
+                            {logoPreview ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={logoPreview} alt="Logo preview" className="h-10 w-10 rounded bg-muted object-contain" />
+                            ) : (
+                              <span className="inline-flex h-10 w-10 items-center justify-center rounded bg-muted text-muted-foreground">
+                                <ImagePlus className="h-4 w-4" />
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1">
+                              {logoFile ? (
+                                <span className="block truncate">{logoFile.name}</span>
+                              ) : (
+                                <span className="block">{dragOver ? "Drop to select" : "Drop a logo here, or choose a file"}</span>
+                              )}
+                              <span className="block text-xs text-muted-foreground">PNG, JPG, SVG or WebP, under 2 MB</span>
+                            </span>
+                          </div>
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={uploading}
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              Choose file
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={!logoFile || uploading || logoMutation.isPending}
+                              onClick={() => void uploadLogo(row)}
+                            >
+                              {uploading ? "Uploading…" : "Upload"}
+                            </Button>
+                          </div>
                           <form
-                            className="space-y-2"
+                            className="space-y-1.5 border-t pt-3"
                             onSubmit={(e) => {
                               e.preventDefault();
                               logoMutation.mutate({ row, logoUrl: logoDraft.trim() || null });
                             }}
                           >
-                            <p className="text-xs font-medium text-muted-foreground">
-                              Logo URL for {row.name}
-                            </p>
-                            <Input
-                              type="url"
-                              placeholder="https://..."
-                              value={logoDraft}
-                              onChange={(e) => setLogoDraft(e.target.value)}
-                              autoFocus
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Any https image URL. Leave blank to remove the logo.
-                            </p>
-                            <div className="flex justify-end gap-1.5">
+                            <p className="text-xs text-muted-foreground">Or paste an image URL</p>
+                            <div className="flex gap-1.5">
+                              <Input
+                                type="url"
+                                placeholder="https://..."
+                                value={logoDraft}
+                                onChange={(e) => setLogoDraft(e.target.value)}
+                              />
                               <Button
-                                type="button"
+                                type="submit"
                                 variant="outline"
                                 size="sm"
-                                disabled={logoMutation.isPending}
-                                onClick={() => setLogoFor(null)}
+                                className="h-9"
+                                disabled={!logoDraft.trim() || logoMutation.isPending || uploading}
                               >
-                                Cancel
-                              </Button>
-                              <Button type="submit" size="sm" disabled={logoMutation.isPending}>
-                                {logoMutation.isPending ? "Saving…" : "Save"}
+                                Save
                               </Button>
                             </div>
                           </form>
+                          <div className="flex items-center justify-between border-t pt-3">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              disabled={!link?.logoUrl || logoMutation.isPending || uploading}
+                              onClick={() => logoMutation.mutate({ row, logoUrl: null })}
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              Remove
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={logoMutation.isPending || uploading}
+                              onClick={closeLogoEditor}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
                         </PopoverContent>
                       </Popover>
                     </TableCell>
