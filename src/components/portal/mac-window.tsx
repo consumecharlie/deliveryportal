@@ -42,6 +42,7 @@ export interface MacWindowProps {
 }
 
 const BAR_HEIGHT = 30;
+const REACH = 80;
 
 export function MacWindow(props: MacWindowProps) {
   const {
@@ -107,7 +108,8 @@ export function MacWindow(props: MacWindowProps) {
     let nx = d.x + (e.clientX - d.startX);
     let ny = d.y + (e.clientY - d.startY);
     if (bounds) {
-      nx = Math.max(0, Math.min(bounds.width - w, nx));
+      // Clamp only so the title bar stays reachable: 80px of it must remain inside.
+      nx = Math.max(-(w - REACH), Math.min(bounds.width - REACH, nx));
       ny = Math.max(0, Math.min(Math.max(0, bounds.height - BAR_HEIGHT), ny));
     }
     d.moved = true;

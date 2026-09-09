@@ -479,8 +479,7 @@
   flex: 1 0 auto;
   min-height: calc(100vh - 34px);
   width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
+  overflow: hidden;
   background-image:
     linear-gradient(to right, rgba(207, 238, 220, 0.06) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(207, 238, 220, 0.06) 1px, transparent 1px);

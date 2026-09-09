@@ -37,6 +37,8 @@ const GAP = 24;
 const ROW_GAP = 36;
 const CASCADE = 24;
 const BOTTOM_STRIP = 132;
+const MAX_CONTENT = 1440;
+const REACH = 80;
 const WIDE_MIN = 900;
 const BOOT_MS = 1400;
 
@@ -86,6 +88,7 @@ export function Desktop({ token, model }: Props) {
     for (const p of cascade) ids.push(projectWindowId(p.listId));
     ids.push(ARCHIVE_ID, NOTE_ID);
     if (!focusMode) ids.push(FINDER_ID);
+    ids.push(REVIEW_ID);
     return ids;
   }, [focusMode, cascade]);
 
@@ -173,12 +176,16 @@ export function Desktop({ token, model }: Props) {
   }
 
   const order = mergeOrder(state.order, defaultOrder);
-  const zOf = (id: string) => (id === REVIEW_ID ? 900 : 10 + order.indexOf(id));
+  const zOf = (id: string) => 10 + order.indexOf(id);
 
   // Default layout on the canvas (desktop mode). Heights come from the windows
   // themselves, so the Finder sits under the taller of the two top windows and
   // the project cascade sits under the Finder.
-  const W = (canvasW ?? 1280) - 2 * PAD;
+  // The default layout centers content up to 1440px; the drag zone is the whole canvas.
+  const fullW = canvasW ?? 1280;
+  const contentW = Math.min(fullW, MAX_CONTENT);
+  const offX = Math.max(0, Math.floor((fullW - contentW) / 2));
+  const W = contentW - 2 * PAD;
   const h = (id: string) => (win(id).open ? heights[id] ?? 0 : 0);
   const reviewW = focusMode ? Math.min(W, 640) : Math.round((W - GAP) / 2);
   const upnextW = W - GAP - reviewW;
@@ -190,14 +197,15 @@ export function Desktop({ token, model }: Props) {
   const noteW = Math.min(420, W);
 
   function defaults(id: string): Placement {
-    if (id === REVIEW_ID) return { x: PAD, y: PAD, w: reviewW };
-    if (id === UPNEXT_ID) return { x: PAD + reviewW + GAP, y: PAD, w: upnextW };
-    if (id === FINDER_ID) return { x: PAD, y: finderTop, w: reviewW };
-    if (id === ARCHIVE_ID) return { x: PAD + 48, y: stageTop + 48, w: Math.min(980, W - 48) };
-    if (id === NOTE_ID) return { x: W + PAD - noteW, y: PAD + 40, w: noteW };
+    const left = PAD + offX;
+    if (id === REVIEW_ID) return { x: left, y: PAD, w: reviewW };
+    if (id === UPNEXT_ID) return { x: left + reviewW + GAP, y: PAD, w: upnextW };
+    if (id === FINDER_ID) return { x: left, y: finderTop, w: reviewW };
+    if (id === ARCHIVE_ID) return { x: left + 48, y: stageTop + 48, w: Math.min(980, W - 48) };
+    if (id === NOTE_ID) return { x: offX + W + PAD - noteW, y: PAD + 40, w: noteW };
     const listId = listIdOfWindow(id);
     const i = Math.max(0, cascade.findIndex((p) => p.listId === listId));
-    return { x: PAD + i * CASCADE, y: stageTop + i * CASCADE, w: W - (n - 1) * CASCADE };
+    return { x: left + i * CASCADE, y: stageTop + i * CASCADE, w: W - (n - 1) * CASCADE };
   }
 
   function place(id: string): Placement {
@@ -207,15 +215,15 @@ export function Desktop({ token, model }: Props) {
     let y = s.y ?? d.y;
     let w = d.w;
     if (s.zoomed) {
-      x = PAD;
+      x = PAD + offX;
       w = W;
     }
-    x = Math.max(0, Math.min((canvasW ?? W) - Math.min(w, 160), x));
+    x = Math.max(-(w - REACH), Math.min(fullW - REACH, x));
     y = Math.max(0, y);
     return { x, y, w };
   }
 
-  const openIds = [REVIEW_ID, ...order].filter((id) => win(id).open);
+  const openIds = order.filter((id) => win(id).open);
   let canvasH = 0;
   if (wide) {
     for (const id of openIds) {
@@ -249,7 +257,6 @@ export function Desktop({ token, model }: Props) {
   const move = useCallback((id: string, x: number, y: number) => commit((s) => patchWindow(s, id, { x, y })), [commit]);
   const raise = useCallback(
     (id: string) => {
-      if (id === REVIEW_ID) return;
       setState((s) => {
         const cur = mergeOrder(s.order, defaultOrder);
         if (cur[cur.length - 1] === id) return s;
