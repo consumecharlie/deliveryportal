@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type DockIcon = "review" | "upnext" | "finder" | "archive" | "note" | "project";
 export type DockState = "open" | "minimized" | "closed";
@@ -43,7 +43,12 @@ interface Props {
   /** Phones: a full-width row of the app icons only. */
   stacked: boolean;
   reducedMotion: boolean;
+  /** Fine pointer, motion allowed: macOS-style magnification on hover. */
+  magnify: boolean;
 }
+
+const MAG_MAX = 0.6;
+const MAG_REACH = 2.5;
 
 const ICON_SRC: Record<Exclude<DockIcon, "project">, string> = {
   review: "/icons/bell-notification.svg",
@@ -58,9 +63,31 @@ const ICON_SRC: Record<Exclude<DockIcon, "project">, string> = {
  * application window plus one folder per project window opened this session.
  * A 4px dot under each icon: solid green open, hollow minimized, none closed.
  */
-export function Dock({ entries, onActivate, stacked, reducedMotion }: Props) {
+export function Dock({ entries, onActivate, stacked, reducedMotion, magnify }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   const [popId, setPopId] = useState<string | null>(null);
+  const [scales, setScales] = useState<Record<string, number>>({});
+  const barRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Magnification: each item scales by its horizontal distance from the
+  // cursor, a bell curve over 2.5 item widths. Layout widths never change;
+  // only transforms, anchored at the bottom, so items overflow upward.
+  function onPointerMove(e: React.PointerEvent) {
+    if (!magnify || e.pointerType !== "mouse") return;
+    const bar = barRef.current;
+    if (!bar) return;
+    const barLeft = bar.getBoundingClientRect().left;
+    const next: Record<string, number> = {};
+    for (const [id, el] of Object.entries(itemRefs.current)) {
+      if (!el) continue;
+      const w = el.offsetWidth;
+      const center = barLeft + el.offsetLeft + w / 2;
+      const d = Math.abs(e.clientX - center) / (MAG_REACH * w);
+      next[id] = 1 + MAG_MAX * Math.max(0, 1 - d * d);
+    }
+    setScales(next);
+  }
 
   useEffect(() => {
     if (!popId) return;
@@ -74,12 +101,22 @@ export function Dock({ entries, onActivate, stacked, reducedMotion }: Props) {
 
   return (
     <nav className={`portal-dock${stacked ? " portal-dock-stacked" : ""}`} aria-label="Windows">
-      <div className="portal-dock-bar" onMouseLeave={() => setHover(null)}>
+      <div
+        ref={barRef}
+        className={`portal-dock-bar${magnify ? " portal-dock-bar-magnify" : ""}`}
+        onPointerMove={onPointerMove}
+        onPointerLeave={() => setScales({})}
+        onMouseLeave={() => setHover(null)}
+      >
         {shown.map((e) => (
           <button
             key={e.id}
+            ref={(el) => {
+              itemRefs.current[e.id] = el;
+            }}
             type="button"
             className={`portal-dock-item${popId === e.id && !reducedMotion ? " portal-dock-item-pop" : ""}`}
+            style={magnify ? ({ "--dock-s": scales[e.id] ?? 1 } as React.CSSProperties) : undefined}
             data-state={e.state}
             aria-label={`${e.label}${e.state === "open" ? ", open" : e.state === "minimized" ? ", minimized" : ""}`}
             onMouseEnter={() => setHover(e.id)}

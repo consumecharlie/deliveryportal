@@ -448,7 +448,7 @@ export function Desktop({ token, model }: Props) {
         {win(NOTE_ID).open && <NoteWindow {...frame(NOTE_ID)} token={token} listId={focusListId ?? undefined} />}
       </div>
 
-      {phase === "ready" && <Dock entries={dockEntries} onActivate={activate} stacked={!wide} reducedMotion={env.reducedMotion} />}
+      {phase === "ready" && <Dock entries={dockEntries} onActivate={activate} stacked={!wide} reducedMotion={env.reducedMotion} magnify={draggable} />}
 
       {phase === "boot" && <BootScreen />}
     </div>
