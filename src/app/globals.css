@@ -547,6 +547,8 @@
   color: #fafffd;
   cursor: pointer;
 }
+/* The ring is only the scaling wrapper now: no border, no fill; the badge icon
+   fills the slot at 52px inside the 64px base so the capsule keeps its shape. */
 .portal-dock-ring {
   width: var(--dock-base);
   height: var(--dock-base);
@@ -555,17 +557,15 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: filter 0.14s ease;
 }
 .portal-dock-item:hover .portal-dock-ring,
-.portal-dock-item:focus-visible .portal-dock-ring {
-  border-color: rgba(106, 195, 135, 0.5);
-  background: rgba(106, 195, 135, 0.18);
-}
+.portal-dock-item:focus-visible .portal-dock-ring { filter: brightness(1.12); }
+.portal-dock-item:focus-visible { outline: 2px solid #6ac387; outline-offset: -2px; border-radius: 999px; }
 .portal-dock-icon {
   display: block;
+  width: 52px;
+  height: 52px;
   margin-top: -4px;
   pointer-events: none;
 }
@@ -620,7 +620,7 @@
 .portal-dock-bar-magnify .portal-dock-ring {
   transform: scale(var(--dock-s, 1));
   transform-origin: bottom center;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: filter 0.14s ease;
 }
 .portal-dock-bar-magnify .portal-dock-item-pop .portal-dock-ring { animation: none; }
 .portal-dock-bar-magnify .portal-dock-tip {
@@ -629,7 +629,7 @@
 /* Ease only on pointer enter (from rest) and leave (back to rest); movement is frame-synchronous */
 .portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-item { transition: width 120ms ease-out; }
 .portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-ring {
-  transition: transform 120ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
+  transition: transform 120ms ease-out, filter 0.14s ease;
 }
 .portal-dock-bar-magnify.portal-dock-bar-easing .portal-dock-tip { transition: bottom 120ms ease-out; }
 .portal-dock-stacked {
@@ -654,7 +654,7 @@
   box-shadow: none;
 }
 .portal-dock-stacked .portal-dock-item { --dock-base: 52px; }
-.portal-dock-stacked .portal-dock-icon { width: 32px; height: 32px; }
+.portal-dock-stacked .portal-dock-icon { width: 40px; height: 40px; }
 
 /* Window chrome */
 .portal-window {

@@ -159,7 +159,7 @@ export function Dock({ entries, onActivate, stacked, reducedMotion, magnify }: P
 
   const shown = stacked ? entries.filter((e) => e.icon !== "project") : entries;
   const projectIds = shown.filter((e) => e.icon === "project").map((e) => e.id);
-  const ICON = 40;
+  const ICON = 52;
 
   return (
     <nav className={`portal-dock${stacked ? " portal-dock-stacked" : ""}`} aria-label="Windows">
