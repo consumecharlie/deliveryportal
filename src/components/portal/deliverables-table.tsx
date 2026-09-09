@@ -7,6 +7,8 @@ import { sendPortalView } from "@/lib/portal-view-beacon";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { StatusPill } from "./status-pill";
 import { LinkButtons } from "./link-button";
+import { VersionMenu } from "./version-menu";
+import { allVersions, versionNumber } from "./link-meta";
 import { shortDate } from "./format";
 
 interface Props {
@@ -18,41 +20,60 @@ interface Props {
 
 function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
-  const html = useMemo(() => renderPortalBody(d.latest.body), [d.latest.body]);
+  const versions = useMemo(() => allVersions(d), [d]);
+  const [selectedId, setSelectedId] = useState(d.latest.deliveryId);
+  const current = versions.find((v) => v.deliveryId === selectedId) ?? d.latest;
+  const currentNumber = versionNumber(d, current);
+  const isLatest = current.deliveryId === d.latest.deliveryId;
+  const html = useMemo(() => renderPortalBody(current.body), [current.body]);
   const panelId = `d-${d.latest.deliveryId}-details`;
   const { review } = d;
   const actionable = review.state === "awaiting" || review.state === "due-today" || review.state === "overdue";
   const showConfirm = actionable || (review.state === "confirmed" && review.canUndo);
-  const dueNote =
-    review.state === "awaiting" || review.state === "overdue" ? review.label : null;
+  const dueNote = review.state !== "none" && review.label ? review.label : null;
 
   function toggle() {
-    if (!open) sendPortalView(token, d.latest.deliveryId);
+    if (!open) sendPortalView(token, current.deliveryId);
     setOpen((o) => !o);
+  }
+
+  function select(id: string) {
+    setSelectedId(id);
+    if (open) sendPortalView(token, id);
   }
 
   return (
     <li id={`d-${d.latest.deliveryId}`} className={`portal-tr${open ? " portal-tr-open" : ""}`}>
+      {/* Anchors so the roadmap rail can still point at earlier versions. */}
+      {d.history.map((v) => (
+        <span key={v.deliveryId} id={`d-${v.deliveryId}`} className="portal-anchor" aria-hidden="true" />
+      ))}
       <div className="portal-row">
         <div className="portal-td portal-td-title">
-          <span className="portal-row-title">{d.title}</span>
-          {(d.variant || d.history.length > 0) && (
-            <span className="portal-row-variant">
-              {[d.variant, d.history.length > 0 ? `version ${d.history.length + 1} of ${d.history.length + 1}` : null]
-                .filter(Boolean)
-                .join(", ")}
+          <span className="portal-row-title">
+            {d.title}
+            <VersionMenu
+              versions={versions.map((v) => ({ id: v.deliveryId, number: versionNumber(d, v), label: v.label, sentAtMs: v.sentAtMs }))}
+              selectedId={current.deliveryId}
+              onSelect={select}
+            />
+          </span>
+          {d.variant && <span className="portal-row-variant">{d.variant}</span>}
+          {!isLatest && (
+            <span className="portal-viewing">
+              Viewing v{currentNumber} of {versions.length}, sent {shortDate(current.sentAtMs)}
             </span>
           )}
         </div>
         <div className="portal-td portal-td-shared">
           <span className="portal-td-label">Shared</span>
-          <span>{shortDate(d.latest.sentAtMs)}</span>
+          <span>{shortDate(current.sentAtMs)}</span>
         </div>
         <div className="portal-td portal-td-links">
-          <LinkButtons token={token} deliveryId={d.latest.deliveryId} links={d.latest.links} />
+          <LinkButtons token={token} deliveryId={current.deliveryId} links={current.links} />
         </div>
         <div className="portal-td portal-td-status">
-          <StatusPill state={review.state} label={review.label} />
+          <StatusPill state={review.state} mode={review.mode} names={[d.title, d.variant, d.latest.label]} label={review.label} />
           {dueNote && <span className="portal-due-note">{dueNote}</span>}
         </div>
         <div className="portal-td portal-td-toggle">
@@ -72,25 +93,12 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
       <div id={panelId} className={`portal-expand${open ? " portal-expand-open" : ""}`} inert={!open}>
         <div className="portal-expand-inner">
           <div className="portal-details">
-            {d.latest.body && (
+            {current.body && (
               <div className="portal-details-block">
-                <h4 className="portal-details-h">The message we sent</h4>
+                <h4 className="portal-details-h">
+                  {isLatest ? "The message we sent" : `The message we sent with v${currentNumber}`}
+                </h4>
                 <div className="portal-body" dangerouslySetInnerHTML={{ __html: html }} />
-              </div>
-            )}
-
-            {d.history.length > 0 && (
-              <div className="portal-details-block">
-                <h4 className="portal-details-h">Earlier versions</h4>
-                <ul className="portal-versions">
-                  {d.history.map((v) => (
-                    <li key={v.deliveryId} id={`d-${v.deliveryId}`} className="portal-version">
-                      <span className="portal-version-label">{v.label}</span>
-                      <span className="portal-version-date">{shortDate(v.sentAtMs)}</span>
-                      <LinkButtons token={token} deliveryId={v.deliveryId} links={v.links} small />
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
 

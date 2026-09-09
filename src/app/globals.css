@@ -769,10 +769,13 @@
 .portal-review-due {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   margin-top: 6px;
   font-size: 14px;
   color: #151919;
 }
+.portal-review-due-label { font-size: 13px; color: #4d5959; }
 .portal-review-actions {
   display: flex;
   flex-direction: column;
@@ -858,6 +861,139 @@
   color: #6f7f7f;
   margin-top: 2px;
 }
+.portal-anchor { display: block; height: 0; }
+.portal-viewing {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #508e61;
+}
+
+/* Version chip (Frame.io-style version control) */
+.portal-vchip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin: 0 0 0 8px;
+  padding: 1px 7px 0;
+  border: 0;
+  border-radius: 999px;
+  background: #e5eee8;
+  color: #151919;
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.portal-vchip:hover,
+.portal-vchip[aria-expanded="true"] { background: #d3e3db; }
+
+/* Capsule context menu (ported from the MOGRT Library .cmx system) */
+.cmx-menu {
+  --cmx-mat: rgba(38, 44, 44, 0.72);
+  --cmx-hairline: rgba(255, 255, 255, 0.09);
+  --cmx-hairline-2: rgba(255, 255, 255, 0.06);
+  --cmx-ink: #fafffd;
+  --cmx-ink-2: #aebbb8;
+  --cmx-ink-3: #7e8b8a;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  font-family: var(--font-montserrat), "Montserrat", system-ui, sans-serif;
+  color: var(--cmx-ink);
+  background: var(--cmx-mat);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+  backdrop-filter: blur(34px) saturate(180%);
+  border: 1px solid var(--cmx-hairline);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 18px 50px -12px rgba(0, 0, 0, 0.66),
+    0 6px 16px -8px rgba(0, 0, 0, 0.5);
+}
+.cmx-pop {
+  animation: cmxPop 0.16s var(--ease-out);
+  transform-origin: top left;
+}
+@keyframes cmxPop {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.cmx-cap {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid var(--cmx-hairline-2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--cmx-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 7px 22px 7px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition:
+    background 0.14s var(--ease-out),
+    transform 0.14s var(--ease-out),
+    border-color 0.14s var(--ease-out);
+}
+.cmx-cap:hover,
+.cmx-cap:focus-visible { background: rgba(255, 255, 255, 0.1); transform: translateX(2px); }
+.cmx-cap:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
+.cmx-cap:active { transform: scale(0.985); }
+.cmx-chip {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--cmx-ink-2);
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out);
+}
+.cmx-chip.green { background: #6ac387; color: #11271a; }
+.cmx-label { flex: 1; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cmx-mcap {
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6ac387;
+  padding: 4px 10px 7px;
+}
+.portal-vmenu {
+  position: fixed;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border-radius: 22px;
+}
+.portal-vmenu-date {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--cmx-ink-3);
+}
+.portal-vmenu-check {
+  flex: none;
+  width: 14px;
+  display: inline-flex;
+  color: #6ac387;
+}
 
 /* Status pills: the only rounded-full elements in the windows */
 .portal-pill {
@@ -872,10 +1008,12 @@
   white-space: nowrap;
   color: #151919;
 }
-.portal-pill-awaiting { background: #c5ffd8; }
-.portal-pill-due-today { background: #fff; box-shadow: inset 0 0 0 2px #dbef00; }
-.portal-pill-overdue { background: #dbef00; }
-.portal-pill-confirmed { background: #e5eee8; color: #4d5959; }
+.portal-pill-needed { background: rgba(219, 239, 0, 0.35); color: #151919; }
+.portal-pill-due-today { background: #dbef00; color: #151919; }
+.portal-pill-overdue { background: #151919; color: #dbef00; }
+.portal-pill-received { background: #c5ffd8; color: #24422e; }
+.portal-pill-approved { background: #6ac387; color: #151919; }
+.portal-pill-delivered { background: #e5eee8; color: #4d5959; }
 .portal-due-note {
   display: block;
   margin-top: 4px;
@@ -1147,6 +1285,7 @@ a.portal-rail-link:hover .portal-rail-label {
   padding: 16px 6px 6px 0;
   border-top: 1px solid #bbd2cf;
 }
+.portal-details-block:first-child.portal-details-confirm { border-top: 0; padding-top: 4px; }
 
 /* Disclosure control + animated expand */
 .portal-disclosure-btn {
