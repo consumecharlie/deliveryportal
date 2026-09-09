@@ -610,6 +610,32 @@ describe("deriveClientDomain", () => {
       ])
     ).toBe("client.co");
   });
+  it("falls back to the cc list when the primary recipient is blank (Slack sends)", () => {
+    expect(
+      deriveClientDomain([
+        { primaryEmail: "", ccEmails: "michael@consume-media.com, Pat@CallRail.com; ops@callrail.com", sentAt: at("2026-09-01") },
+        { primaryEmail: "old@intuit.com", sentAt: at("2026-05-01") },
+      ])
+    ).toBe("callrail.com");
+  });
+  it("falls back to older deliveries when the newest ones have no usable address", () => {
+    expect(
+      deriveClientDomain([
+        { primaryEmail: "", ccEmails: null, sentAt: at("2026-09-01") },
+        { primaryEmail: "", ccEmails: "michael@consume-media.com", sentAt: at("2026-08-20") },
+        { primaryEmail: "lead@stackoverflow.com", sentAt: at("2026-06-01") },
+      ])
+    ).toBe("stackoverflow.com");
+  });
+  it("skips personal mailbox domains so a contractor's Gmail never wins", () => {
+    expect(
+      deriveClientDomain([
+        { primaryEmail: "editor@gmail.com", ccEmails: "someone@yahoo.com, x@outlook.com, y@hotmail.com, z@icloud.com", sentAt: at("2026-09-01") },
+        { primaryEmail: "cmo@acme.io", sentAt: at("2026-08-01") },
+      ])
+    ).toBe("acme.io");
+    expect(deriveClientDomain([{ primaryEmail: "editor@gmail.com", sentAt: at("2026-09-01") }])).toBeNull();
+  });
   it("returns null when nothing qualifies", () => {
     expect(deriveClientDomain([])).toBeNull();
     expect(deriveClientDomain([{ primaryEmail: "x@consume-media.com", sentAt: at("2026-09-01") }])).toBeNull();

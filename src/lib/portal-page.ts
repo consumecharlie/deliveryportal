@@ -89,23 +89,41 @@ export function shortDateWithYear(ms: number): string {
 
 const ATTENTION_STATES: ReadonlySet<ReviewState> = new Set(["awaiting", "due-today", "overdue"]);
 
-const OUR_DOMAINS: ReadonlySet<string> = new Set(["consume-media.com"]);
+/** Domains that never identify the client: ours, and personal mailboxes a contractor might use. */
+const SKIPPED_DOMAINS: ReadonlySet<string> = new Set([
+  "consume-media.com",
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "icloud.com",
+]);
+
+function emailDomain(raw: string): string | null {
+  const email = raw.trim().toLowerCase().replace(/^<|>$/g, "");
+  const at = email.lastIndexOf("@");
+  if (at < 0 || at === email.length - 1) return null;
+  const domain = email.slice(at + 1);
+  if (!domain.includes(".") || SKIPPED_DOMAINS.has(domain)) return null;
+  return domain;
+}
 
 /**
- * The client's email domain: from the most recent delivery whose primary
- * recipient is not one of ours. Lowercase; null when no delivery qualifies.
+ * The client's email domain: scanning deliveries newest first, the first
+ * address (primary recipient, then cc list) that is not ours or a personal
+ * mailbox. Slack sends have no recipients, so older deliveries count too.
+ * Lowercase; null when nothing qualifies.
  */
 export function deriveClientDomain(
-  rows: Array<{ primaryEmail?: string | null; sentAt: Date }>
+  rows: Array<{ primaryEmail?: string | null; ccEmails?: string | null; sentAt: Date }>
 ): string | null {
   const sorted = [...rows].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
   for (const r of sorted) {
-    const email = (r.primaryEmail ?? "").trim().toLowerCase();
-    const at = email.lastIndexOf("@");
-    if (at < 0 || at === email.length - 1) continue;
-    const domain = email.slice(at + 1);
-    if (!domain.includes(".") || OUR_DOMAINS.has(domain)) continue;
-    return domain;
+    const candidates = [r.primaryEmail ?? "", ...(r.ccEmails ?? "").split(/[,;]/)];
+    for (const c of candidates) {
+      const domain = emailDomain(c);
+      if (domain) return domain;
+    }
   }
   return null;
 }

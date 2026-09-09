@@ -83,7 +83,7 @@ async function latestConfirmations(deliveryIds: string[]) {
 async function selectDeliveries(
   access: PortalAccessInfo,
   onlyListId?: string
-): Promise<Array<PortalPageRow & { primaryEmail: string }>> {
+): Promise<Array<PortalPageRow & { primaryEmail: string; ccEmails: string | null }>> {
   const rows = await prisma.delivery.findMany({
     where: {
       clientFolderId: access.clientFolderId,
@@ -96,6 +96,7 @@ async function selectDeliveries(
     id: r.id,
     taskId: r.taskId,
     primaryEmail: r.primaryEmail,
+    ccEmails: r.ccEmails,
     projectListId: r.projectListId,
     projectName: r.projectName,
     deliverableType: r.deliverableType,
