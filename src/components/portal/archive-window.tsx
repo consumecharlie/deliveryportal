@@ -5,7 +5,6 @@ import { MacWindow, type WindowFrameProps } from "./mac-window";
 import { ARCHIVE_ID } from "./desktop-state";
 import { FolderIcon } from "./folder-icon";
 import { ProjectBody } from "./project-window";
-import { truncate } from "./format";
 
 interface Props extends WindowFrameProps {
   token: string;
@@ -42,7 +41,7 @@ export function ArchiveWindow({ token, projects, focusListId, onFocus, tapOpens,
               <button
                 key={p.listId}
                 type="button"
-                className="portal-folder portal-folder-light"
+                className="portal-fw-folder"
                 title={p.name}
                 onClick={() => tapOpens && onFocus(p.listId)}
                 onDoubleClick={() => onFocus(p.listId)}
@@ -53,10 +52,10 @@ export function ArchiveWindow({ token, projects, focusListId, onFocus, tapOpens,
                   }
                 }}
               >
-                <span className="portal-folder-art">
-                  <FolderIcon variant="flat" width={56} />
+                <span className="portal-fw-art">
+                  <FolderIcon variant="flat" width={72} />
                 </span>
-                <span className="portal-folder-label">{truncate(p.name, 28)}</span>
+                <span className="portal-fw-label">{p.name}</span>
               </button>
             ))}
           </div>

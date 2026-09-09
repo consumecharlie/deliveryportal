@@ -36,6 +36,8 @@ import { Dock, type DockEntry } from "./dock";
 const PAD = 24;
 const GAP = 24;
 const BOTTOM_STRIP = 132;
+/** Top gutter: the 44px floaters sit fully above the first row. */
+const TOP_GUTTER = 60;
 const TWO_COLUMN_MIN = 1100;
 const MAX_CONTENT = 1440;
 const REACH = 80;
@@ -201,7 +203,7 @@ export function Desktop({ token, model }: Props) {
     ? [[REVIEW_ID, UPNEXT_ID], [FINDER_ID, ARCHIVE_ID], ...projectIds.map((id) => [id])]
     : [REVIEW_ID, ...(focusMode ? [] : [UPNEXT_ID, FINDER_ID, ARCHIVE_ID]), ...projectIds].map((id) => [id]);
   const grid: Record<string, Placement> = {};
-  let cursor = PAD;
+  let cursor = TOP_GUTTER;
   for (const row of gridRows) {
     const rowH = Math.max(...row.map(h));
     if (row.length === 2) {
@@ -214,7 +216,7 @@ export function Desktop({ token, model }: Props) {
   }
 
   function defaults(id: string): Placement {
-    if (id === NOTE_ID) return { x: offX + W + PAD - noteW, y: PAD + 40, w: noteW };
+    if (id === NOTE_ID) return { x: offX + W + PAD - noteW, y: TOP_GUTTER + 40, w: noteW };
     return grid[id] ?? { x: left, y: cursor, w: W };
   }
 

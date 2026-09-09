@@ -497,17 +497,17 @@
 .portal-desk-cherry,
 .portal-desk-ghost {
   position: absolute;
-  top: 10px;
-  width: 52px;
-  height: 52px;
+  top: 8px;
+  width: 44px;
+  height: 44px;
   z-index: 1;
   pointer-events: none;
   user-select: none;
   mix-blend-mode: screen;
   clip-path: circle(35% at 50% 50%);
 }
-.portal-desk-cherry { right: 10px; }
-.portal-desk-ghost { left: 10px; }
+.portal-desk-cherry { right: 16px; }
+.portal-desk-ghost { left: 16px; }
 
 /* Dock: the floating capsule dock, one item per window */
 .portal-dock {
