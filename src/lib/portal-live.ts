@@ -25,6 +25,7 @@ import {
   versionMarkers,
   nameTokens,
   deliverableIdentityTokens,
+  emailDomain,
 } from "@/lib/portal-labels";
 import type { Prisma } from "@prisma/client";
 import type { ClickUpTask } from "@/lib/types";
@@ -66,9 +67,11 @@ export interface LivePayload {
   /** The list's due date (project wrap date). */
   wrapsUpMs: number | null;
   archived: boolean;
+  /** Email domains of the list's Project Contact tasks (lowercase, deduped, ours and personal ones excluded). */
+  contactDomains: string[];
 }
 
-export const LIVE_PAYLOAD_VERSION = 3;
+export const LIVE_PAYLOAD_VERSION = 4;
 
 export const EMPTY_LIVE_PAYLOAD: LivePayload = Object.freeze({
   version: LIVE_PAYLOAD_VERSION,
@@ -77,6 +80,7 @@ export const EMPTY_LIVE_PAYLOAD: LivePayload = Object.freeze({
   milestones: [],
   wrapsUpMs: null,
   archived: false,
+  contactDomains: [],
 }) as LivePayload;
 
 const TTL_MS = 5 * 60_000;
@@ -288,6 +292,20 @@ export function selectMilestones(tasks: ClickUpTask[]): LiveMilestone[] {
 }
 
 /**
+ * Pure: the client email domains on a list's Project Contact tasks, in
+ * first-seen order, deduped, without ours or personal mailbox domains.
+ */
+export function selectContactDomains(tasks: ClickUpTask[]): string[] {
+  const out: string[] = [];
+  for (const t of tasks) {
+    if (!taskTypeIs(t, "Project Contact", PROJECT_TASK_TYPES.PROJECT_CONTACT)) continue;
+    const domain = emailDomain(extractCustomFieldValue(t.custom_fields ?? [], CUSTOM_FIELDS.CONTACT_EMAIL));
+    if (domain && !out.includes(domain)) out.push(domain);
+  }
+  return out;
+}
+
+/**
  * Run `fn` over `items` with at most `width` in flight. Results keep the
  * input order; a rejection is captured, never thrown.
  */
@@ -330,6 +348,7 @@ function rowData(row: CacheRow): LivePayload | null {
     milestones: d.milestones ?? [],
     wrapsUpMs: d.wrapsUpMs ?? null,
     archived: Boolean(d.archived),
+    contactDomains: d.contactDomains ?? [],
   };
 }
 
@@ -379,7 +398,7 @@ async function fetchAndStore(listId: string): Promise<LivePayload> {
   // Closed tasks are included on purpose: a completed Feedback Deadline task
   // is how the team marks feedback as received, and completed share tasks are
   // the delivered part of the roadmap.
-  const [fd, dd, list] = await Promise.all([
+  const [fd, dd, contacts, list] = await Promise.all([
     getListTasksByDropdownField(
       listId,
       CUSTOM_FIELDS.PROJECT_TASK_TYPE,
@@ -390,6 +409,12 @@ async function fetchAndStore(listId: string): Promise<LivePayload> {
       listId,
       CUSTOM_FIELDS.PROJECT_TASK_TYPE,
       PROJECT_TASK_TYPES.DELIVERY_DEADLINE,
+      true
+    ),
+    getListTasksByDropdownField(
+      listId,
+      CUSTOM_FIELDS.PROJECT_TASK_TYPE,
+      PROJECT_TASK_TYPES.PROJECT_CONTACT,
       true
     ),
     getList(listId),
@@ -403,6 +428,7 @@ async function fetchAndStore(listId: string): Promise<LivePayload> {
     milestones,
     wrapsUpMs: msOrNull(list.due_date),
     archived: Boolean(list.archived),
+    contactDomains: selectContactDomains(contacts.tasks),
   };
   try {
     const key = cacheKey(listId);

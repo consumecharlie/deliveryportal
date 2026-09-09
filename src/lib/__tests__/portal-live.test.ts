@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   selectFeedbackTasks,
   selectFeedbackByParent,
+  selectContactDomains,
   pairFeedbackTask,
   selectMilestones,
   runPool,
@@ -37,6 +38,7 @@ import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
 import type { ClickUpTask } from "@/lib/types";
 
 const TYPE_OPTIONS = [
+  { id: PROJECT_TASK_TYPES.PROJECT_CONTACT, name: "Project Contact", orderindex: 0 },
   { id: PROJECT_TASK_TYPES.FEEDBACK_DEADLINE, name: "Feedback Deadline", orderindex: 3 },
   { id: PROJECT_TASK_TYPES.DELIVERY_DEADLINE, name: "Delivery Deadline", orderindex: 4 },
 ];
@@ -55,6 +57,7 @@ function t(over: {
   statusType?: string;
   parent?: string | null;
   dateClosed?: string | null;
+  email?: string | null;
 }): ClickUpTask {
   return {
     id: over.id,
@@ -66,6 +69,7 @@ function t(over: {
     custom_fields: [
       { id: CUSTOM_FIELDS.PROJECT_TASK_TYPE, name: "Project Task Type", type: "drop_down", type_config: { options: TYPE_OPTIONS }, value: over.taskType === undefined ? 3 : over.taskType },
       { id: CUSTOM_FIELDS.DELIVERABLE_TYPE, name: "Deliverable Type", type: "drop_down", type_config: { options: DT_OPTIONS }, value: over.deliverableType === undefined ? 0 : over.deliverableType },
+      { id: CUSTOM_FIELDS.CONTACT_EMAIL, name: "Contact Email", type: "email", value: over.email ?? null },
     ],
   } as unknown as ClickUpTask;
 }
@@ -208,6 +212,23 @@ describe("pairFeedbackTask", () => {
   });
 });
 
+describe("selectContactDomains", () => {
+  it("collects client domains from Project Contact tasks, deduped, without ours or personal ones", () => {
+    expect(
+      selectContactDomains([
+        t({ id: "c1", taskType: 0, email: "Dana@StackOverflow.com" }),
+        t({ id: "c2", taskType: PROJECT_TASK_TYPES.PROJECT_CONTACT, email: "pm@stackoverflow.com" }),
+        t({ id: "c3", taskType: 0, email: "michael@consume-media.com" }),
+        t({ id: "c4", taskType: 0, email: "freelancer@gmail.com" }),
+        t({ id: "c5", taskType: 0, email: "" }),
+        t({ id: "c6", taskType: 0, email: "agency@partner.co" }),
+        t({ id: "fd", taskType: 3, email: "x@other.com" }),
+      ])
+    ).toEqual(["stackoverflow.com", "partner.co"]);
+    expect(selectContactDomains([])).toEqual([]);
+  });
+});
+
 describe("selectMilestones", () => {
   it("keeps only Delivery Deadline tasks, ordered by due date with undated last", () => {
     const ms = selectMilestones([
@@ -272,6 +293,7 @@ const STALE_DATA: LivePayload = {
   milestones: [],
   wrapsUpMs: null,
   archived: false,
+  contactDomains: [],
 };
 /** A row written by the previous payload shape (a bare feedback map). */
 const OLD_SHAPE_DATA = { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true } };
@@ -286,9 +308,16 @@ function row(key: string, ageMs: number, data: unknown = STALE_DATA) {
   return { key, data, updatedAt: new Date(Date.now() - ageMs) };
 }
 
+const FRESH_CONTACTS = [t({ id: "c1", taskType: 0, email: "dana@stackoverflow.com" })];
+
 function mockClickUpHealthy() {
   fetchTasks.mockImplementation(async (_list, _field, optionId) => ({
-    tasks: optionId === PROJECT_TASK_TYPES.DELIVERY_DEADLINE ? FRESH_DD : FRESH_FD,
+    tasks:
+      optionId === PROJECT_TASK_TYPES.DELIVERY_DEADLINE
+        ? FRESH_DD
+        : optionId === PROJECT_TASK_TYPES.PROJECT_CONTACT
+          ? FRESH_CONTACTS
+          : FRESH_FD,
   }));
   fetchList.mockResolvedValue({ id: "L1", name: "List", folder: { id: "F", name: "Client" }, due_date: "7000", archived: false });
   fetchTask.mockImplementation(async (id) => ({ id, name: id === "P1" ? "Post-Production - Ep #21" : "LOC19: Intuit" }) as ClickUpTask);
@@ -354,6 +383,8 @@ describe("getLiveFeedback (cache + outage behaviour)", () => {
     expect(fetchTask).toHaveBeenCalledTimes(2);
     expect(p.wrapsUpMs).toBe(7000);
     expect(p.archived).toBe(false);
+    expect(p.contactDomains).toEqual(["stackoverflow.com"]);
+    expect(fetchTasks).toHaveBeenCalledWith("L1", CUSTOM_FIELDS.PROJECT_TASK_TYPE, PROJECT_TASK_TYPES.PROJECT_CONTACT, true);
     expect(cache.upsert).toHaveBeenCalledTimes(1);
   });
 

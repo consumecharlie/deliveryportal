@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPortalPage, toReview, deriveClientDomain, type PortalPageRow, type BuildPortalPageInput } from "@/lib/portal-page";
+import { buildPortalPage, toReview, deriveClientDomain, pickContactDomain, type PortalPageRow, type BuildPortalPageInput } from "@/lib/portal-page";
 import { decideFeedbackStatus, type ConfirmationRow } from "@/lib/portal-status";
 import type { LivePayload, LiveMilestone, LiveFeedbackTask } from "@/lib/portal-live";
 import { LIVE_PAYLOAD_VERSION } from "@/lib/portal-live";
@@ -46,7 +46,7 @@ function ms(over: Partial<LiveMilestone> & { taskId: string; name: string }): Li
 }
 
 function live(over: Partial<LivePayload>): LivePayload {
-  return { version: LIVE_PAYLOAD_VERSION, feedback: {}, feedbackByParent: {}, milestones: [], wrapsUpMs: null, archived: false, ...over };
+  return { version: LIVE_PAYLOAD_VERSION, feedback: {}, feedbackByParent: {}, milestones: [], wrapsUpMs: null, archived: false, contactDomains: [], ...over };
 }
 
 function fd(over: Partial<LiveFeedbackTask> & { taskId: string }): LiveFeedbackTask {
@@ -639,5 +639,29 @@ describe("deriveClientDomain", () => {
   it("returns null when nothing qualifies", () => {
     expect(deriveClientDomain([])).toBeNull();
     expect(deriveClientDomain([{ primaryEmail: "x@consume-media.com", sentAt: at("2026-09-01") }])).toBeNull();
+  });
+});
+
+describe("pickContactDomain", () => {
+  it("majority wins, in-progress lists are preferred over archived ones, empty -> null", () => {
+    expect(
+      pickContactDomain([
+        live({ contactDomains: ["stackoverflow.com", "partner.co"] }),
+        live({ contactDomains: ["stackoverflow.com"] }),
+        live({ contactDomains: ["partner.co"], archived: true }),
+        live({ contactDomains: ["partner.co"], archived: true }),
+      ])
+    ).toBe("stackoverflow.com");
+    expect(pickContactDomain([live({}), live({ contactDomains: ["callrail.com"], archived: true })])).toBe("callrail.com");
+    expect(pickContactDomain([live({ contactDomains: ["b.com", "a.com"] })])).toBe("a.com");
+    expect(pickContactDomain([])).toBeNull();
+    expect(pickContactDomain([live({}), live({ archived: true })])).toBeNull();
+  });
+
+  it("buildPortalPage falls back to the contact domain only when deliveries gave none", () => {
+    const withContacts = { ...LIVE, L1: live({ ...LIVE.L1, contactDomains: ["stackoverflow.com"] }) };
+    expect(build({ live: withContacts }).clientDomain).toBe("stackoverflow.com");
+    expect(build({ live: withContacts, clientDomain: "intuit.com" }).clientDomain).toBe("intuit.com");
+    expect(build().clientDomain).toBeNull();
   });
 });

@@ -342,3 +342,25 @@ export function reviewLabel(input: ReviewLabelInput): string {
       return `${word} needed, due ${due}`;
   }
 }
+
+// ── Email domains ──────────────────────────────────────────────────
+
+/** Domains that never identify the client: ours, and personal mailboxes a contractor might use. */
+export const SKIPPED_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
+  "consume-media.com",
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "icloud.com",
+]);
+
+/** The lowercased domain of an address, or null when blank, malformed, ours or personal. */
+export function emailDomain(raw: string | null | undefined): string | null {
+  const email = (raw ?? "").trim().toLowerCase().replace(/^<|>$/g, "");
+  const at = email.lastIndexOf("@");
+  if (at < 0 || at === email.length - 1) return null;
+  const domain = email.slice(at + 1);
+  if (!domain.includes(".") || SKIPPED_EMAIL_DOMAINS.has(domain)) return null;
+  return domain;
+}

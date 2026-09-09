@@ -28,6 +28,7 @@ import {
   cleanLinkText,
   reviewMode,
   reviewLabel,
+  emailDomain,
   type ReviewMode,
 } from "@/lib/portal-labels";
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
@@ -89,25 +90,6 @@ export function shortDateWithYear(ms: number): string {
 
 const ATTENTION_STATES: ReadonlySet<ReviewState> = new Set(["awaiting", "due-today", "overdue"]);
 
-/** Domains that never identify the client: ours, and personal mailboxes a contractor might use. */
-const SKIPPED_DOMAINS: ReadonlySet<string> = new Set([
-  "consume-media.com",
-  "gmail.com",
-  "yahoo.com",
-  "outlook.com",
-  "hotmail.com",
-  "icloud.com",
-]);
-
-function emailDomain(raw: string): string | null {
-  const email = raw.trim().toLowerCase().replace(/^<|>$/g, "");
-  const at = email.lastIndexOf("@");
-  if (at < 0 || at === email.length - 1) return null;
-  const domain = email.slice(at + 1);
-  if (!domain.includes(".") || SKIPPED_DOMAINS.has(domain)) return null;
-  return domain;
-}
-
 /**
  * The client's email domain: scanning deliveries newest first, the first
  * address (primary recipient, then cc list) that is not ours or a personal
@@ -126,6 +108,26 @@ export function deriveClientDomain(
     }
   }
   return null;
+}
+
+function majority(domains: string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const d of domains) counts.set(d, (counts.get(d) ?? 0) + 1);
+  let best: string | null = null;
+  for (const [d, n] of counts) {
+    if (best === null || n > counts.get(best)! || (n === counts.get(best) && d < best)) best = d;
+  }
+  return best;
+}
+
+/**
+ * The client's email domain from the Project Contact tasks of its lists:
+ * the most common domain across in-progress (not archived) lists, then
+ * across completed ones. Null when no list has a usable contact.
+ */
+export function pickContactDomain(payloads: LivePayload[]): string | null {
+  const active = payloads.filter((p) => !p.archived).flatMap((p) => p.contactDomains ?? []);
+  return majority(active) ?? majority(payloads.filter((p) => p.archived).flatMap((p) => p.contactDomains ?? []));
 }
 
 function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -463,7 +465,8 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
     token: input.token,
     clientName: input.clientName,
     clientLogoUrl: input.clientLogoUrl ?? null,
-    clientDomain: input.clientDomain ?? null,
+    // Delivery recipients first; Slack-only clients fall back to the lists' Project Contacts.
+    clientDomain: input.clientDomain ?? pickContactDomain(Object.values(input.live)),
     counts,
     countsLabel: countsLine(counts),
     attention,
