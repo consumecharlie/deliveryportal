@@ -410,7 +410,7 @@ export function Desktop({ token, model }: Props) {
         {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
         <img src="/cherry-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-cherry animate-float-medium" />
 
-        <ReviewWindow {...frame(REVIEW_ID)} token={token} items={reviewItems} />
+        {win(REVIEW_ID).open && <ReviewWindow {...frame(REVIEW_ID)} token={token} items={reviewItems} />}
 
         {!focusMode && win(UPNEXT_ID).open && <UpNextWindow {...frame(UPNEXT_ID)} projects={active} />}
 
