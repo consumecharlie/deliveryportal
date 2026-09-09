@@ -14,13 +14,13 @@ interface Props extends WindowFrameProps {
 }
 
 /**
- * NEEDS YOUR REVIEW: always on top, cannot close. One row per item the
- * client owes feedback on, with the two brand pixel buttons. Empty: the
- * ghost and ALL CLEAR.
+ * NEEDS YOUR REVIEW: opens on top. One row per item the client owes
+ * feedback on, with the two brand pixel buttons. Empty: the ghost and ALL
+ * CLEAR. Closable like any window; the dock brings it back.
  */
 export function ReviewWindow({ token, items, ...frame }: Props) {
   return (
-    <MacWindow {...frame} id={REVIEW_ID} title="Needs your review" canClose={false} className="portal-window-review">
+    <MacWindow {...frame} id={REVIEW_ID} title="Needs your review" canClose className="portal-window-review">
       {items.length === 0 ? (
         <div className="portal-allclear">
           {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}

@@ -31,6 +31,7 @@ import { UpNextWindow } from "./up-next-window";
 import { ProjectWindow } from "./project-window";
 import { ArchiveWindow } from "./archive-window";
 import { NoteWindow } from "./note-window";
+import { Dock, type DockEntry } from "./dock";
 
 const PAD = 24;
 const GAP = 24;
@@ -100,12 +101,13 @@ export function Desktop({ token, model }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [archiveFocus, setArchiveFocus] = useState<string | null>(null);
   const [popped, setPopped] = useState(false);
+  /** Project windows opened at some point this session keep a dock item after closing. */
+  const [everOpened, setEverOpened] = useState<string[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // First client frame: restore the desktop, read the environment, measure,
   // and decide whether to boot. All in a layout effect so nothing paints early.
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only state must be read after hydration
     setState(loadDesktopState(storageKey));
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
@@ -280,8 +282,62 @@ export function Desktop({ token, model }: Props) {
   const tidyUp = useCallback(() => {
     setArchiveFocus(null);
     setSelected(null);
+    setEverOpened([]);
     commit(() => EMPTY_STATE);
   }, [commit]);
+
+  // Remember every project window that has been open this session.
+  useEffect(() => {
+    const openNow = cascade.filter((p) => win(projectWindowId(p.listId)).open).map((p) => p.listId);
+    setEverOpened((prev) => {
+      const add = openNow.filter((id) => !prev.includes(id));
+      return add.length ? [...prev, ...add] : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- win() derives from state
+  }, [state, cascade]);
+
+  /** Dock click: closed opens at its last or default spot, minimized restores, open raises, top minimizes. */
+  function activate(id: string) {
+    const s = win(id);
+    if (!wide) {
+      commit((st) => patchWindow(st, id, { open: true, minimized: false }));
+      window.setTimeout(() => {
+        document.querySelector(`[data-window="${id}"]`)?.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
+      }, 60);
+      return;
+    }
+    if (!s.open) {
+      if (id === ARCHIVE_ID) setArchiveFocus(null);
+      openWindow(id);
+      return;
+    }
+    if (s.minimized) {
+      commit((st) => raiseWindow(patchWindow(st, id, { minimized: false }), id, defaultOrder));
+      return;
+    }
+    if (order[order.length - 1] === id) commit((st) => patchWindow(st, id, { minimized: true }));
+    else raise(id);
+  }
+
+  const dockState = (id: string): DockEntry["state"] => {
+    const s = win(id);
+    return !s.open ? "closed" : s.minimized ? "minimized" : "open";
+  };
+  const dockEntries: DockEntry[] = [{ id: REVIEW_ID, label: "Needs your review", icon: "review", state: dockState(REVIEW_ID) }];
+  if (!focusMode) {
+    dockEntries.push(
+      { id: UPNEXT_ID, label: "Up next", icon: "upnext", state: dockState(UPNEXT_ID) },
+      { id: FINDER_ID, label: "Project Finder", icon: "finder", state: dockState(FINDER_ID) },
+      { id: ARCHIVE_ID, label: "Archive", icon: "archive", state: dockState(ARCHIVE_ID) }
+    );
+  }
+  dockEntries.push({ id: NOTE_ID, label: "Notes", icon: "note", state: dockState(NOTE_ID) });
+  for (const p of [...cascade].reverse()) {
+    const id = projectWindowId(p.listId);
+    if (win(id).open || everOpened.includes(p.listId)) {
+      dockEntries.push({ id, label: p.name, icon: "project", state: dockState(id) });
+    }
+  }
 
   function openFolder(id: string) {
     setSelected(id);
@@ -382,6 +438,8 @@ export function Desktop({ token, model }: Props) {
 
         {win(NOTE_ID).open && <NoteWindow {...frame(NOTE_ID)} token={token} listId={focusListId ?? undefined} />}
       </div>
+
+      {phase === "ready" && <Dock entries={dockEntries} onActivate={activate} stacked={!wide} reducedMotion={env.reducedMotion} />}
 
       {phase === "boot" && <BootScreen />}
     </div>

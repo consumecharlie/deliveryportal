@@ -85,7 +85,7 @@ export function FinderWindow({
   ...frame
 }: Props) {
   return (
-    <MacWindow {...frame} id={FINDER_ID} title="Project Finder" canClose={false} className="portal-window-finder">
+    <MacWindow {...frame} id={FINDER_ID} title="Project Finder" canClose className="portal-window-finder">
       <div
         className="portal-fw"
         onPointerDown={(e) => {
