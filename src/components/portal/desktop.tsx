@@ -72,8 +72,6 @@ export function Desktop({ token, model }: Props) {
   const active = useMemo(() => model.projects.filter((p) => p.phase === "in-progress"), [model.projects]);
   const completed = useMemo(() => model.projects.filter((p) => p.phase === "completed"), [model.projects]);
   const focusProject = focusMode ? model.projects.find((p) => p.listId === focusListId) ?? null : null;
-  /** Logo and domain arrive with the model once the data layer fills them; optional until then. */
-  const brand = model as PortalPageModel & { clientLogoUrl?: string | null; clientDomain?: string | null };
 
   /** Default viewer tabs: every in-progress project, most recent activity first (and active). */
   const defaultTabs = useMemo(() => {
@@ -448,8 +446,8 @@ export function Desktop({ token, model }: Props) {
     <div className={rootCls} onPointerDown={(e) => e.target === canvasRef.current && setSelected(null)}>
       <MenuBar
         clientName={model.clientName}
-        clientLogoUrl={brand.clientLogoUrl}
-        clientDomain={brand.clientDomain}
+        clientLogoUrl={model.clientLogoUrl}
+        clientDomain={model.clientDomain}
         crumb={focusMode && focusProject ? { href: `/portal/${token}`, projectName: focusProject.name } : undefined}
         noteOpen={win(NOTE_ID).open}
         onNote={toggleNote}
