@@ -763,6 +763,8 @@
 }
 .portal-window-body {
   position: relative;
+  container-type: inline-size;
+  container-name: portal-body;
   padding: 20px;
   background: #fafffd;
   color: #151919;
@@ -1009,6 +1011,7 @@
 }
 .portal-vchip:hover,
 .portal-vchip[aria-expanded="true"] { background: #d3e3db; }
+.portal-vchip { white-space: nowrap; }
 
 /* Capsule context menu (ported from the MOGRT Library .cmx system) */
 .cmx-menu {
@@ -1335,7 +1338,7 @@ a.portal-rail-link:hover .portal-rail-label {
 .portal-thead,
 .portal-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) 88px minmax(220px, 1.3fr) minmax(170px, 0.9fr) 88px;
+  grid-template-columns: minmax(260px, 2.2fr) 90px minmax(220px, 1.6fr) 170px 100px;
   align-items: center;
   column-gap: 16px;
 }
@@ -1791,26 +1794,17 @@ textarea.portal-input { resize: vertical; }
 .portal-body strong { font-weight: 700; }
 
 /* Narrow windows and phones: the table folds into stacked cells */
-@media (max-width: 899px) {
-  .portal-menu { padding: 0 10px 0 12px; gap: 10px; }
-  .portal-menu-left { gap: 10px; }
-  .portal-os-word { display: none; }
-  .portal-menu-item { padding: 5px 7px; font-size: 12px; }
-  .portal-menu-clock { margin-left: 4px; min-width: 0; }
-  .portal-menu-client { flex: 1 1 auto; min-width: 4ch; }
-}
-@media (max-width: 600px) {
-  .portal-menu-tidy,
-  .portal-menu-sep,
-  .portal-menu-client,
-  .portal-menu-crumb { display: none; }
-  .portal-window-body { padding: 16px; }
-  .portal-review-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 14px 0;
+/* The deliverables table folds by the width of the window body it sits in:
+   the full grid needs about 904px; a compact grid down to 760px; stacked
+   cells below that (phones, and narrow windows). */
+@container portal-body (max-width: 903px) {
+  .portal-thead,
+  .portal-row {
+    grid-template-columns: minmax(200px, 2fr) 80px minmax(180px, 1.4fr) 150px 90px;
+    column-gap: 12px;
   }
-  .portal-review-actions { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+}
+@container portal-body (max-width: 759px) {
   .portal-thead { display: none; }
   .portal-row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1837,6 +1831,28 @@ textarea.portal-input { resize: vertical; }
   .portal-td-toggle { grid-area: toggle; text-align: left; }
   .portal-td-toggle .portal-disclosure-btn { margin-left: -8px; }
   .portal-details { padding: 16px; }
+}
+
+@media (max-width: 899px) {
+  .portal-menu { padding: 0 10px 0 12px; gap: 10px; }
+  .portal-menu-left { gap: 10px; }
+  .portal-os-word { display: none; }
+  .portal-menu-item { padding: 5px 7px; font-size: 12px; }
+  .portal-menu-clock { margin-left: 4px; min-width: 0; }
+  .portal-menu-client { flex: 1 1 auto; min-width: 4ch; }
+}
+@media (max-width: 600px) {
+  .portal-menu-tidy,
+  .portal-menu-sep,
+  .portal-menu-client,
+  .portal-menu-crumb { display: none; }
+  .portal-window-body { padding: 16px; }
+  .portal-review-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px 0;
+  }
+  .portal-review-actions { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
