@@ -67,6 +67,8 @@ Two patterns in delivery snippet templates:
 
 ### Client Portal
 
+**Sandbox until launch.** `PORTAL_SANDBOX=1` (`src/lib/portal-sandbox.ts`, set in Vercel production and preview and in `.env.local`) keeps the portal client-invisible: every Slack post or DM from confirm/undo, the reminder cron and the reach-out route is replaced by ONE DM to `PORTAL_SANDBOX_SLACK_EMAIL` (default michael@consume-media.com) that names the intended destination; ClickUp status changes still happen but comments are prefixed `[Portal sandbox test]`; reminder emails are skipped with reason `sandbox`; portal pages show a PREVIEW ribbon (`Desktop sandbox` prop). Removing `PORTAL_SANDBOX` is the launch switch.
+
 One bookmarkable link per client: `/portal/<token>`. A project view is a deep link under the same token: `/portal/<token>/<listId>`. Tokens are 24 random bytes as base64url (32 chars, `src/lib/portal-token.ts`), stored in `PortalAccess` with one active row per `clientFolderId`; "Rotate" in Settings revokes the old row and creates a new one in a single transaction (`createOrRotateAccess`). Revoked tokens 404 immediately.
 
 **Public carve-out and the scoping rule.** `src/middleware.ts` and `AppShell` skip auth for exactly `/portal`, `/portal/*`, `/api/portal`, `/api/portal/*` (and `/api/cron/*`, which verify `CRON_SECRET` themselves). Every handler under those paths MUST start with `resolveAccess(token)` and MUST scope every query by that row's `clientFolderId` (`loadPortal` does this). A list id or delivery id in a URL or body is only ever a filter inside the token's folder, never authority. Nothing under `/api/settings/*` is public.

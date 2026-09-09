@@ -12,6 +12,7 @@ import {
 } from "@/lib/clickup";
 import { USER_GROUPS, PM_FALLBACK_USERS } from "@/lib/custom-field-ids";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
+import { isPortalSandbox, sandboxComment, sandboxSlackDeliver } from "@/lib/portal-sandbox";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { invalidateLiveFeedback } from "@/lib/portal-live";
 import {
@@ -128,7 +129,7 @@ export async function confirmFeedback(input: {
     try {
       await updateTaskStatus(input.feedbackDeadlineTaskId, FD_CLOSED_STATUS);
       await createTaskComment(input.feedbackDeadlineTaskId, {
-        text: clickupConfirmComment(ctx),
+        text: sandboxComment(clickupConfirmComment(ctx)),
         mentions: await pmMentions(),
         groupAssignee: USER_GROUPS.PROJECT_MANAGEMENT,
       });
@@ -150,7 +151,13 @@ export async function confirmFeedback(input: {
       const ch = await resolveProjectChannel(delivery.projectListId, delivery.projectName, input.clientName, {
         persist: true,
       });
-      if (ch.channelId) {
+      if (ch.channelId && isPortalSandbox()) {
+        // Sandbox: the channel is never posted to; the owner gets one DM naming it.
+        slackOk = await sandboxSlackDeliver(
+          { kind: "channel", channelId: ch.channelId, channelName: ch.channelName },
+          ch.source === "auto" ? `${text}${AUTO_SUFFIX}` : text
+        );
+      } else if (ch.channelId) {
         slackChannelId = ch.channelId;
         slackMessageTs = await postChannelMessage(ch.channelId, ch.source === "auto" ? `${text}${AUTO_SUFFIX}` : text);
       } else {
@@ -165,7 +172,14 @@ export async function confirmFeedback(input: {
       console.error("Slack confirm side-effect failed", delivery.projectListId, err);
     }
   }
-  slackOk = Boolean(slackMessageTs) || (await dmFallback(delivery.senderEmail, text));
+  if (!slackOk) {
+    slackOk = isPortalSandbox()
+      ? await sandboxSlackDeliver(
+          delivery.senderEmail ? { kind: "dm", email: delivery.senderEmail } : { kind: "none" },
+          text
+        )
+      : Boolean(slackMessageTs) || (await dmFallback(delivery.senderEmail, text));
+  }
 
   // 4. Attach the Slack pointer so undo can reply in the thread.
   if (slackChannelId) {
@@ -223,7 +237,7 @@ export async function undoFeedback(input: {
     }
     try {
       await createTaskComment(conf.feedbackDeadlineTaskId, {
-        text: clickupUndoComment(),
+        text: sandboxComment(clickupUndoComment()),
         mentions: await pmMentions(),
       });
       clickupOk = true;
@@ -235,13 +249,24 @@ export async function undoFeedback(input: {
 
   let slackOk = false;
   const text = slackUndoText(ctx);
-  if (conf.slackChannelId) {
-    const ts = await postChannelMessage(conf.slackChannelId, text, {
-      threadTs: conf.slackMessageTs ?? undefined,
-    });
-    slackOk = Boolean(ts);
+  if (isPortalSandbox()) {
+    slackOk = await sandboxSlackDeliver(
+      conf.slackChannelId
+        ? { kind: "channel", channelId: conf.slackChannelId, channelName: null, threadTs: conf.slackMessageTs }
+        : conf.delivery.senderEmail
+          ? { kind: "dm", email: conf.delivery.senderEmail }
+          : { kind: "none" },
+      text
+    );
+  } else {
+    if (conf.slackChannelId) {
+      const ts = await postChannelMessage(conf.slackChannelId, text, {
+        threadTs: conf.slackMessageTs ?? undefined,
+      });
+      slackOk = Boolean(ts);
+    }
+    if (!slackOk) slackOk = await dmFallback(conf.delivery.senderEmail, text);
   }
-  if (!slackOk) slackOk = await dmFallback(conf.delivery.senderEmail, text);
 
   await prisma.feedbackConfirmation.update({ where: { id: conf.id }, data: { undoneAt: new Date() } });
   console.info(

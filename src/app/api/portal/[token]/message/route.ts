@@ -10,6 +10,7 @@ import { buildPortalUrl } from "@/lib/portal-access";
 import { getAppBaseUrl } from "@/lib/app-base-url";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
+import { isPortalSandbox, sandboxSlackDeliver } from "@/lib/portal-sandbox";
 import {
   validateReachOut,
   buildReachOutText,
@@ -47,6 +48,9 @@ async function postToProjectChannel(
 ): Promise<boolean> {
   const ch = await resolveProjectChannel(listId, projectName, access.clientName);
   if (!ch.channelId) return false;
+  if (isPortalSandbox()) {
+    return sandboxSlackDeliver({ kind: "channel", channelId: ch.channelId, channelName: ch.channelName }, text);
+  }
   return Boolean(await postChannelMessage(ch.channelId, text));
 }
 
@@ -56,6 +60,12 @@ async function dmLatestSender(clientFolderId: string, text: string): Promise<boo
     orderBy: { sentAt: "desc" },
     select: { senderEmail: true },
   });
+  if (isPortalSandbox()) {
+    return sandboxSlackDeliver(
+      latest?.senderEmail ? { kind: "dm", email: latest.senderEmail } : { kind: "none" },
+      text
+    );
+  }
   if (!latest?.senderEmail) return false;
   return sendSlackDM(latest.senderEmail, text);
 }

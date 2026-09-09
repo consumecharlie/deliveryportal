@@ -5,6 +5,7 @@ import { resolveAccess, loadPortalPage } from "@/lib/portal-data";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import { recordView } from "@/lib/portal-views";
 import { Desktop } from "@/components/portal/desktop";
+import { isPortalSandbox } from "@/lib/portal-sandbox";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +21,5 @@ async function load(token: string): Promise<PortalPageModel> {
 export default async function ClientPortalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const model = await load(token);
-  return <Desktop token={token} model={model} />;
+  return <Desktop token={token} model={model} sandbox={isPortalSandbox()} />;
 }

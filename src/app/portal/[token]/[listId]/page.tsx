@@ -5,6 +5,7 @@ import { resolveAccess, loadPortalPage } from "@/lib/portal-data";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import { recordView } from "@/lib/portal-views";
 import { Desktop } from "@/components/portal/desktop";
+import { isPortalSandbox } from "@/lib/portal-sandbox";
 
 export const dynamic = "force-dynamic";
 
@@ -28,5 +29,5 @@ export default async function ProjectPortalPage({
   const model = await load(token, listId);
   const project = model.projects.find((p) => p.listId === listId);
   if (!project) notFound();
-  return <Desktop token={token} model={{ ...model, focusListId: listId }} />;
+  return <Desktop token={token} model={{ ...model, focusListId: listId }} sandbox={isPortalSandbox()} />;
 }

@@ -45,6 +45,9 @@ Create a `.env.local` file in the project root:
 | `N8N_API_KEY` | n8n API key for workflow triggers | Yes |
 | `N8N_PORTAL_REMINDER_WEBHOOK_URL` | n8n webhook that emails client feedback reminders (`/api/cron/portal-reminders`); reminders are skipped until set | For portal reminders |
 | `CRON_SECRET` | Bearer secret Vercel cron sends to `/api/cron/*` routes | For crons |
+| `PORTAL_SANDBOX` | `1` keeps the client portal in preview: Slack posts and DMs are redirected to one DM to the sandbox owner (naming the intended destination), ClickUp comments are prefixed `[Portal sandbox test]`, reminder emails are never sent, and portal pages show a PREVIEW ribbon. **Removing this variable is the launch switch.** | Until launch |
+| `PORTAL_SANDBOX_SLACK_EMAIL` | Who receives the redirected sandbox DMs (default `michael@consume-media.com`) | Optional |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob store `deliverable-portal-assets` (client logos uploaded from Settings); added automatically by the store link | For logo uploads |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | For auth |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | For auth |
 | `NEXTAUTH_SECRET` | Random secret for NextAuth session encryption | For auth |

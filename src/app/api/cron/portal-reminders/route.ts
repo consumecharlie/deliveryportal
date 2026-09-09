@@ -24,6 +24,7 @@ import {
 } from "@/lib/portal-reminders";
 import { resolveProjectChannel } from "@/lib/project-channel";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
+import { isPortalSandbox, sandboxSlackDeliver } from "@/lib/portal-sandbox";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,8 @@ async function emailItem(
   const to = row.primaryEmail.trim();
   if (!to) return { channel: "none", result: "skipped", reason: "no primary email (Slack delivery)" };
   if (ctx.dryRun) return { channel: "email", result: "would-send" };
+  // Sandbox: a client must never receive a reminder, even with the webhook configured.
+  if (isPortalSandbox()) return { channel: "email", result: "skipped", reason: "sandbox" };
   if (!ctx.webhook) {
     if (!warned.webhook) {
       console.warn("N8N_PORTAL_REMINDER_WEBHOOK_URL not set; skipping");
@@ -166,15 +169,29 @@ async function nudgeItem(item: AwaitingItem, access: PortalAccessInfo, ctx: RunC
     portalUrl: buildPortalUrl(ctx.baseUrl, access.token, item.entry.projectListId),
   });
   let ok = false;
+  let channel: { channelId: string; channelName: string | null } | null = null;
   if (item.entry.projectListId) {
     try {
       const ch = await resolveProjectChannel(item.entry.projectListId, item.projectName, access.clientName);
-      if (ch.channelId) ok = Boolean(await postChannelMessage(ch.channelId, text));
+      if (ch.channelId) channel = { channelId: ch.channelId, channelName: ch.channelName };
     } catch (err) {
       console.error("[portal-reminders] channel resolve failed", item.entry.projectListId, err);
     }
   }
-  if (!ok) ok = await sendSlackDM(row.senderEmail, text);
+  if (isPortalSandbox()) {
+    // Sandbox: one DM to the owner naming the intended channel or sender.
+    ok = await sandboxSlackDeliver(
+      channel
+        ? { kind: "channel", ...channel }
+        : row.senderEmail
+          ? { kind: "dm", email: row.senderEmail }
+          : { kind: "none" },
+      text
+    );
+  } else {
+    if (channel) ok = Boolean(await postChannelMessage(channel.channelId, text));
+    if (!ok) ok = await sendSlackDM(row.senderEmail, text);
+  }
   if (ok) return { channel: "slack", result: "sent" };
   await releaseClaim(id, "overdue", ctx.sentOn);
   return { channel: "slack", result: "skipped", reason: "Slack post and DM both failed" };
