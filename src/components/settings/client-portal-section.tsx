@@ -390,6 +390,9 @@ export function ClientPortalSection() {
                           <p className="text-xs font-medium text-muted-foreground">
                             Logo for {row.name}
                           </p>
+                          <p className="text-xs text-muted-foreground">
+                            Use a white or light wordmark on a transparent background (SVG or PNG). It sits on a dark bar, about 30px tall.
+                          </p>
                           <input
                             ref={fileInputRef}
                             type="file"
