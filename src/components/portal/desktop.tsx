@@ -296,9 +296,16 @@ export function Desktop({ token, model }: Props) {
   );
   const openWindow = useCallback(
     (id: string) => {
-      commit((s) => raiseWindow(patchWindow(s, id, { open: true, minimized: false }), id, defaultOrder));
+      commit((s) => {
+        let next = s;
+        // Reopening the viewer after its last tab was closed brings the default tabs back.
+        if (id === VIEWER_ID && (s.tabs ?? defaultTabs).filter((t) => knownIds.has(t)).length === 0) {
+          next = { ...s, tabs: undefined, activeTab: undefined };
+        }
+        return raiseWindow(patchWindow(next, id, { open: true, minimized: false }), id, defaultOrder);
+      });
     },
-    [commit, defaultOrder]
+    [commit, defaultOrder, defaultTabs, knownIds]
   );
   function toggleNote() {
     if (win(NOTE_ID).open && !win(NOTE_ID).minimized) close(NOTE_ID);
