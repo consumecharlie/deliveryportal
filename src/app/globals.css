@@ -596,18 +596,21 @@
   100% { transform: scale(1); }
 }
 .portal-dock-item-pop { animation: portal-dock-pop 160ms cubic-bezier(0.2, 0.7, 0.2, 1); }
-/* Magnification (fine pointer, motion allowed): transform only, anchored at the bottom */
+/* Magnification (fine pointer, motion allowed): the item's layout size grows
+   with its scale, so the capsule widens and gaps stay constant; items align to
+   the bottom and grow upward; dots stay on the base baseline. */
+.portal-dock-bar-magnify { align-items: flex-end; }
 .portal-dock-bar-magnify .portal-dock-item {
-  transform: scale(var(--dock-s, 1));
-  transform-origin: bottom center;
-  transition: transform 90ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
-  z-index: 1;
+  --dock-base: 64px;
+  --dock-icon: 40px;
+  width: calc(var(--dock-base) * var(--dock-s, 1));
+  height: calc(var(--dock-base) * var(--dock-s, 1));
+  transition: width 90ms ease-out, height 90ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
 }
-.portal-dock-bar-magnify .portal-dock-item:hover { z-index: 2; }
-.portal-dock-bar-magnify .portal-dock-tip {
-  transform: translateX(-50%) scale(calc(1 / var(--dock-s, 1)));
-  transform-origin: bottom center;
-  transition: transform 90ms ease-out;
+.portal-dock-bar-magnify .portal-dock-icon {
+  width: calc(var(--dock-icon) * var(--dock-s, 1));
+  height: calc(var(--dock-icon) * var(--dock-s, 1));
+  transition: width 90ms ease-out, height 90ms ease-out;
 }
 .portal-dock-stacked {
   left: 0;
