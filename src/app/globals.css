@@ -1087,12 +1087,12 @@
 /* Roadmap rail */
 .portal-rail-wrap {
   position: relative;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 .portal-rail {
   list-style: none;
   margin: 0;
-  padding: 4px 0 8px;
+  padding: 10px 0 8px;
   display: flex;
   overflow-x: auto;
   scrollbar-width: none;
@@ -1142,7 +1142,7 @@ a.portal-rail-link:hover .portal-rail-label {
   height: 20px;
   font-family: var(--font-pixel), monospace;
   font-size: 13px;
-  line-height: 1;
+  line-height: 16px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: #508e61;
@@ -1683,7 +1683,10 @@ textarea.portal-input { resize: vertical; }
   .portal-menu-client { flex: 1 1 auto; min-width: 4ch; }
 }
 @media (max-width: 600px) {
-  .portal-menu-tidy { display: none; }
+  .portal-menu-tidy,
+  .portal-menu-sep,
+  .portal-menu-client,
+  .portal-menu-crumb { display: none; }
   .portal-window-body { padding: 16px; }
   .portal-review-row {
     grid-template-columns: 1fr;
