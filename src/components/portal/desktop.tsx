@@ -36,8 +36,13 @@ const COMPLETED_DOCK_ID = "completed";
 const PAD = 24;
 const GAP = 24;
 const BOTTOM_STRIP = 132;
-/** Top gutter: the 44px floaters sit fully above the first row. */
-const TOP_GUTTER = 60;
+/**
+ * The ghost and cherry floaters in the top corners. Hidden 2026-09-09 pending
+ * a rethink; flip to true to bring them back (markup and CSS are intact).
+ */
+const SHOW_DESKTOP_FLOATERS = false;
+/** Top gutter: 60px so the 44px floaters sit fully above the first row; 24px without them. */
+const TOP_GUTTER = SHOW_DESKTOP_FLOATERS ? 60 : 24;
 const TWO_COLUMN_MIN = 1100;
 const MAX_CONTENT = 1440;
 const REACH = 80;
@@ -458,10 +463,14 @@ export function Desktop({ token, model, sandbox = false }: Props) {
       />
 
       <div ref={canvasRef} className="portal-canvas" style={wide ? { height: canvasH } : undefined}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
-        <img src="/ghost-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-ghost animate-float-slow" />
-        {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
-        <img src="/cherry-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-cherry animate-float-medium" />
+        {SHOW_DESKTOP_FLOATERS && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
+            <img src="/ghost-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-ghost animate-float-slow" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}
+            <img src="/cherry-icon.svg" alt="" aria-hidden="true" draggable={false} className="portal-desk-cherry animate-float-medium" />
+          </>
+        )}
 
         {win(REVIEW_ID).open && <ReviewWindow {...frame(REVIEW_ID)} token={token} items={reviewItems} />}
 
