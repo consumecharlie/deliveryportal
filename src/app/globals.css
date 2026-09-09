@@ -525,8 +525,8 @@
 .portal-dock-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 10px 14px;
   border-radius: 999px;
   background: rgba(28, 34, 34, 0.82);
   -webkit-backdrop-filter: blur(16px);
@@ -536,8 +536,8 @@
 }
 .portal-dock-item {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   margin: 0;
   padding: 0;
   display: inline-flex;
@@ -555,16 +555,15 @@
   border-color: rgba(106, 195, 135, 0.5);
   background: rgba(106, 195, 135, 0.18);
 }
-.portal-dock-icon,
-.portal-dock-folder {
+.portal-dock-icon {
   display: block;
-  margin-top: -3px;
+  margin-top: -4px;
   pointer-events: none;
 }
 .portal-dock-dot {
   position: absolute;
   left: 50%;
-  bottom: 4px;
+  bottom: 6px;
   width: 4px;
   height: 4px;
   margin-left: -2px;
@@ -623,7 +622,8 @@
   backdrop-filter: none;
   box-shadow: none;
 }
-.portal-dock-stacked .portal-dock-item { width: 44px; height: 44px; }
+.portal-dock-stacked .portal-dock-item { width: 52px; height: 52px; }
+.portal-dock-stacked .portal-dock-icon { width: 32px; height: 32px; }
 
 /* Window chrome */
 .portal-window {
