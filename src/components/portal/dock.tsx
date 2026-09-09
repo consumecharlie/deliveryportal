@@ -127,12 +127,14 @@ export function Dock({ entries, onActivate, stacked, reducedMotion, magnify }: P
               onActivate(e.id);
             }}
           >
-            {e.icon === "project" ? (
-              <ProjectBadge index={projectIds.length > 1 ? projectIds.indexOf(e.id) + 1 : null} size={ICON} />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element -- static brand badge icon
-              <img src={ICON_SRC[e.icon]} alt="" width={ICON} height={ICON} draggable={false} className="portal-dock-icon" />
-            )}
+            <span className="portal-dock-ring">
+              {e.icon === "project" ? (
+                <ProjectBadge index={projectIds.length > 1 ? projectIds.indexOf(e.id) + 1 : null} size={ICON} />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- static brand badge icon
+                <img src={ICON_SRC[e.icon]} alt="" width={ICON} height={ICON} draggable={false} className="portal-dock-icon" />
+              )}
+            </span>
             <span className="portal-dock-dot" aria-hidden="true" />
             {hover === e.id && !stacked && (
               <span className="portal-dock-tip" role="tooltip">

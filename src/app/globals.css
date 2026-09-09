@@ -509,7 +509,9 @@
 .portal-desk-cherry { right: 16px; }
 .portal-desk-ghost { left: 16px; }
 
-/* Dock: the floating capsule dock, one item per window */
+/* Dock: the floating capsule dock, one item per window. The capsule never
+   changes height: slots widen under the cursor and the ring (icon) scales
+   upward out of the bar, macOS-style. */
 .portal-dock {
   position: fixed;
   left: 50%;
@@ -519,7 +521,7 @@
 }
 .portal-dock-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px 14px;
   border-radius: 999px;
@@ -528,25 +530,37 @@
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+  overflow: visible;
 }
 .portal-dock-item {
+  --dock-base: 64px;
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: var(--dock-base);
+  height: var(--dock-base);
   margin: 0;
   padding: 0;
-  display: inline-flex;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: #fafffd;
+  cursor: pointer;
+}
+.portal-dock-ring {
+  width: var(--dock-base);
+  height: var(--dock-base);
+  flex: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   border: 1.5px solid rgba(255, 255, 255, 0.2);
   background: transparent;
-  color: #fafffd;
-  cursor: pointer;
   transition: border-color 0.14s ease, background-color 0.14s ease;
 }
-.portal-dock-item:hover,
-.portal-dock-item:focus-visible {
+.portal-dock-item:hover .portal-dock-ring,
+.portal-dock-item:focus-visible .portal-dock-ring {
   border-color: rgba(106, 195, 135, 0.5);
   background: rgba(106, 195, 135, 0.18);
 }
@@ -595,22 +609,23 @@
   50% { transform: scale(1.14); }
   100% { transform: scale(1); }
 }
-.portal-dock-item-pop { animation: portal-dock-pop 160ms cubic-bezier(0.2, 0.7, 0.2, 1); }
-/* Magnification (fine pointer, motion allowed): the item's layout size grows
-   with its scale, so the capsule widens and gaps stay constant; items align to
-   the bottom and grow upward; dots stay on the base baseline. */
-.portal-dock-bar-magnify { align-items: flex-end; }
+.portal-dock-item-pop .portal-dock-ring { animation: portal-dock-pop 160ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+/* Magnification (fine pointer, motion allowed): the slot widens so the capsule
+   grows sideways with constant gaps; the ring scales from its bottom edge so
+   the icon rises above the bar; the dot stays on the base baseline. */
 .portal-dock-bar-magnify .portal-dock-item {
-  --dock-base: 64px;
-  --dock-icon: 40px;
   width: calc(var(--dock-base) * var(--dock-s, 1));
-  height: calc(var(--dock-base) * var(--dock-s, 1));
-  transition: width 90ms ease-out, height 90ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
+  transition: width 90ms ease-out;
 }
-.portal-dock-bar-magnify .portal-dock-icon {
-  width: calc(var(--dock-icon) * var(--dock-s, 1));
-  height: calc(var(--dock-icon) * var(--dock-s, 1));
-  transition: width 90ms ease-out, height 90ms ease-out;
+.portal-dock-bar-magnify .portal-dock-ring {
+  transform: scale(var(--dock-s, 1));
+  transform-origin: bottom center;
+  transition: transform 90ms ease-out, border-color 0.14s ease, background-color 0.14s ease;
+}
+.portal-dock-bar-magnify .portal-dock-item-pop .portal-dock-ring { animation: none; }
+.portal-dock-bar-magnify .portal-dock-tip {
+  bottom: calc(100% + 12px + (var(--dock-s, 1) - 1) * var(--dock-base));
+  transition: bottom 90ms ease-out;
 }
 .portal-dock-stacked {
   left: 0;
@@ -633,7 +648,7 @@
   backdrop-filter: none;
   box-shadow: none;
 }
-.portal-dock-stacked .portal-dock-item { width: 52px; height: 52px; }
+.portal-dock-stacked .portal-dock-item { --dock-base: 52px; }
 .portal-dock-stacked .portal-dock-icon { width: 32px; height: 32px; }
 
 /* Window chrome */
@@ -1826,7 +1841,7 @@ textarea.portal-input { resize: vertical; }
   .portal-tl,
   .cm-btn { transition: none; }
   .portal-window-pop { animation: none; }
-  .portal-dock-item-pop { animation: none; }
+  .portal-dock-item-pop .portal-dock-ring { animation: none; }
   .portal-points { display: none; }
   .portal-desktop .animate-float-slow,
   .portal-desktop .animate-float-medium,
