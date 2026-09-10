@@ -16,6 +16,8 @@ interface Props {
   deliverables: PortalDeliverable[];
   /** Project page: every row starts expanded so all versions are listed. */
   defaultOpen?: boolean;
+  /** The project has upcoming milestones, so the empty state can point at the rail. */
+  hasPlan?: boolean;
 }
 
 function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; defaultOpen: boolean }) {
@@ -123,9 +125,15 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
   );
 }
 
-export function DeliverablesTable({ token, deliverables, defaultOpen = false }: Props) {
+export function DeliverablesTable({ token, deliverables, defaultOpen = false, hasPlan = false }: Props) {
   if (deliverables.length === 0) {
-    return <p className="portal-quiet">Nothing has been shared for this project yet.</p>;
+    return (
+      <p className="portal-quiet">
+        {hasPlan
+          ? "Nothing shared yet. The plan above shows what is coming and when."
+          : "Nothing shared yet. Deliverables land here as soon as we send them."}
+      </p>
+    );
   }
   return (
     <div className="portal-table">

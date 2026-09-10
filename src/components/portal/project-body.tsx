@@ -1,7 +1,7 @@
 "use client";
 
 import type { PortalProject } from "@/lib/portal-page-model";
-import { RoadmapRail } from "./roadmap-rail";
+import { RoadmapRail, hasRoadAhead } from "./roadmap-rail";
 import { DeliverablesTable } from "./deliverables-table";
 
 /**
@@ -25,7 +25,12 @@ export function ProjectBody({
         {project.summary && <p className="portal-project-summary">{project.summary}</p>}
       </div>
       <RoadmapRail milestones={project.milestones} />
-      <DeliverablesTable token={token} deliverables={project.deliverables} defaultOpen={defaultOpenRows} />
+      <DeliverablesTable
+        token={token}
+        deliverables={project.deliverables}
+        defaultOpen={defaultOpenRows}
+        hasPlan={hasRoadAhead(project.milestones)}
+      />
     </div>
   );
 }

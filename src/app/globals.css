@@ -1238,7 +1238,7 @@
   bottom: 0;
   height: 1px;
   background: #151919;
-  z-index: 1;
+  z-index: 2;
 }
 .portal-tab {
   position: relative;
@@ -1259,7 +1259,7 @@
   font-weight: 500;
   cursor: pointer;
   user-select: none;
-  z-index: 2;
+  z-index: 1;
 }
 /* The two slanted shoulders. `background: inherit` keeps the bevel continuous. */
 .portal-tab::before,
