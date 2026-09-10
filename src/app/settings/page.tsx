@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { ConnectionsSection } from "@/components/settings/connections-section";
 import { AllowedSendersSection } from "@/components/settings/allowed-senders-section";
 import { ClientPreferencesSection } from "@/components/settings/client-preferences-section";
 import { ClientPortalSection } from "@/components/settings/client-portal-section";
@@ -11,6 +13,11 @@ export default function SettingsPage() {
           Manage who can be selected as the sender on a delivery.
         </p>
       </div>
+      {/* Reads ?connection= from the OAuth callback, so it needs a Suspense
+          boundary for the static prerender. */}
+      <Suspense fallback={null}>
+        <ConnectionsSection />
+      </Suspense>
       <AllowedSendersSection />
       <ClientPreferencesSection />
       <ClientPortalSection />

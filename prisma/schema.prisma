@@ -6,51 +6,52 @@ datasource db {
   provider = "postgresql"
 }
 
-
 model Delivery {
-  id              String         @id @default(cuid())
-  taskId          String
-  projectName     String
-  clientName      String
-  deliverableType String
-  department      String
-  senderEmail     String
-  primaryEmail    String
-  ccEmails        String?
-  slackChannel     String?
-  slackChannelName String?
-  emailSubject     String
-  emailContent    String         @db.Text
-  slackContent    String?        @db.Text
-  wasEdited       Boolean        @default(false)
-  sentBy          String
-  sentAt          DateTime       @default(now())
-  n8nExecutionId  String?
-  n8nStatus       String?
-  projectListId   String?
-  clientFolderId  String?
+  id                 String                 @id @default(cuid())
+  taskId             String
+  projectName        String
+  clientName         String
+  deliverableType    String
+  department         String
+  senderEmail        String
+  primaryEmail       String
+  ccEmails           String?
+  slackChannel       String?
+  slackChannelName   String?
+  emailSubject       String
+  emailContent       String                 @db.Text
+  slackContent       String?                @db.Text
+  wasEdited          Boolean                @default(false)
+  sentBy             String
+  sentAt             DateTime               @default(now())
+  n8nExecutionId     String?
+  n8nStatus          String?
+  projectListId      String?
+  clientFolderId     String?
   // When this delivery is a resend, points to the original Delivery it
   // corrects. Self-FK so we can chain (rare) and so analytics can exclude
   // resends from totals/leaderboard while still surfacing them in the
   // activity log.
   replacesDeliveryId String?
-  replaces        Delivery?      @relation("DeliveryReplaces", fields: [replacesDeliveryId], references: [id])
-  replacedBy      Delivery[]     @relation("DeliveryReplaces")
+  replaces           Delivery?              @relation("DeliveryReplaces", fields: [replacesDeliveryId], references: [id])
+  replacedBy         Delivery[]             @relation("DeliveryReplaces")
   // Snapshot of the user's per-delivery template + subject edits at send
   // time, so a resend can carry forward "what they meant to send" while
   // still picking up corrected form-field values via re-merge.
-  editedSnippet   String?        @db.Text
-  editedSubject   String?
-  /** Feedback Windows value at send time. Used by the client portal to compute
-   *  a fallback deadline when no live Feedback Deadline task exists. */
-  feedbackWindows String?
+  editedSnippet      String?                @db.Text
+  editedSubject      String?
+  /**
+   * Feedback Windows value at send time. Used by the client portal to compute
+   * a fallback deadline when no live Feedback Deadline task exists.
+   */
+  feedbackWindows    String?
   // Identity of the deliverable behind this send: the share task's parent names the deliverable, the share task name carries the variant.
-  parentTaskId    String?
-  parentTaskName  String?
-  shareTaskName   String?
-  links           DeliveryLink[]
-  confirmations   FeedbackConfirmation[]
-  createdAt       DateTime       @default(now())
+  parentTaskId       String?
+  parentTaskName     String?
+  shareTaskName      String?
+  links              DeliveryLink[]
+  confirmations      FeedbackConfirmation[]
+  createdAt          DateTime               @default(now())
 
   @@index([taskId])
   @@index([projectListId])
@@ -75,15 +76,15 @@ model DeliveryLink {
 }
 
 model Draft {
-  id        String   @id @default(cuid())
-  taskId    String   @unique
-  formData  Json
-  savedBy   String
-  savedAt   DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  scheduledFor      DateTime?
-  scheduleStatus    String?
-  scheduledPayload  Json?
+  id               String    @id @default(cuid())
+  taskId           String    @unique
+  formData         Json
+  savedBy          String
+  savedAt          DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  scheduledFor     DateTime?
+  scheduleStatus   String?
+  scheduledPayload Json?
 
   @@index([taskId])
   @@index([scheduledFor])
@@ -106,6 +107,37 @@ model TemplateVersion {
   @@index([editedAt])
 }
 
+/// A user's OAuth connection to an external provider, used to act on their
+/// behalf when sending deliveries (create a Gmail draft in their mailbox, post
+/// to Slack as them). Tokens are encrypted at rest via src/lib/token-crypto.ts.
+///
+/// Replaces per-person credentials living in n8n, which users had no access to:
+/// when one expired, only an administrator could fix it and the person affected
+/// could not even see the failure.
+model Connection {
+  userEmail     String
+  /// "google" | "slack"
+  provider      String
+  accessToken   String    @db.Text
+  /// Google issues one with access_type=offline. Slack user tokens do not
+  /// rotate unless token rotation is enabled, so this is usually null there.
+  refreshToken  String?   @db.Text
+  expiresAt     DateTime?
+  scopes        String    @db.Text
+  /// "connected" | "needs_reconnect" | "revoked"
+  status        String    @default("connected")
+  /// Provider-side identity (Google sub, Slack user id) for display + sanity checks.
+  externalId    String?
+  externalLabel String?
+  lastCheckedAt DateTime?
+  lastError     String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@id([userEmail, provider])
+  @@index([provider, status])
+}
+
 model AllowedSender {
   clickupUserId Int      @id
   addedBy       String
@@ -122,10 +154,14 @@ model ClientPreference {
   destinationLink      String?
   restrictions         String[]
   customBlockedDomains String[]
-  /** Optional relabel for the "Google Deliverable Link" review-link field
-   *  (e.g. "Box Link" for KeyBank). Null = keep the default label. */
+  /**
+   * Optional relabel for the "Google Deliverable Link" review-link field
+   * (e.g. "Box Link" for KeyBank). Null = keep the default label.
+   */
   deliverableLinkLabel String?
-  /** Client logo shown in the portal header; any https image URL. */
+  /**
+   * Client logo shown in the portal header; any https image URL.
+   */
   logoUrl              String?
   updatedBy            String
   updatedAt            DateTime @updatedAt
@@ -133,17 +169,21 @@ model ClientPreference {
   @@index([updatedAt])
 }
 
-/** Read-through cache for expensive ClickUp reads (e.g. the dashboard task
- *  list). Survives deploys (unlike the Vercel Data Cache) and is refreshed
- *  on demand via stale-while-revalidate. */
+/**
+ * Read-through cache for expensive ClickUp reads (e.g. the dashboard task
+ * list). Survives deploys (unlike the Vercel Data Cache) and is refreshed
+ * on demand via stale-while-revalidate.
+ */
 model DashboardCache {
   key       String   @id
   data      Json
   updatedAt DateTime @updatedAt
 }
 
-/** Per-project result of the communications audit scan. One row per project
- *  list so a single-project re-scan (after a fix) updates just that row. */
+/**
+ * Per-project result of the communications audit scan. One row per project
+ * list so a single-project re-scan (after a fix) updates just that row.
+ */
 model AuditResult {
   listId      String   @id
   clientName  String
@@ -152,38 +192,46 @@ model AuditResult {
   scannedAt   DateTime @updatedAt
 }
 
-/** One bookmarkable client-portal link per ClickUp client folder. A project
- *  view is a deep link under the same token (/portal/<token>/<listId>).
- *  Rotate by revoking (set revokedAt) and creating a new row. Only one active
- *  (revokedAt null) row per clientFolderId is allowed; the create handler must
- *  revoke existing active rows in the same transaction. */
+/**
+ * One bookmarkable client-portal link per ClickUp client folder. A project
+ * view is a deep link under the same token (/portal/<token>/<listId>).
+ * Rotate by revoking (set revokedAt) and creating a new row. Only one active
+ * (revokedAt null) row per clientFolderId is allowed; the create handler must
+ * revoke existing active rows in the same transaction.
+ */
 model PortalAccess {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   clientFolderId String
   clientName     String
-  token          String    @unique
+  token          String       @unique
   createdBy      String
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime     @default(now())
   revokedAt      DateTime?
   views          PortalView[]
 
   @@index([clientFolderId])
 }
 
-/** Confirmed internal Slack channel (#client-project) for a project list.
- *  Written once by a PM (or auto-matched when the crawl is confident). */
+/**
+ * Confirmed internal Slack channel (#client-project) for a project list.
+ * Written once by a PM (or auto-matched when the crawl is confident).
+ */
 model ProjectChannel {
   projectListId String   @id
   channelId     String
   channelName   String
   autoMatched   Boolean  @default(false)
-  /** Session email of the PM who confirmed, or "auto-match" when autoMatched is true. */
+  /**
+   * Session email of the PM who confirmed, or "auto-match" when autoMatched is true.
+   */
   confirmedBy   String
   confirmedAt   DateTime @default(now())
 }
 
-/** A client pressing "All feedback is in" on a delivery. undoneAt != null
- *  means the confirmation was reversed; the latest row per delivery wins. */
+/**
+ * A client pressing "All feedback is in" on a delivery. undoneAt != null
+ * means the confirmation was reversed; the latest row per delivery wins.
+ */
 model FeedbackConfirmation {
   id                     String    @id @default(cuid())
   deliveryId             String
@@ -201,12 +249,16 @@ model FeedbackConfirmation {
   @@index([projectListId])
 }
 
-/** Lightweight open tracking for the internal "has the client looked" view. */
+/**
+ * Lightweight open tracking for the internal "has the client looked" view.
+ */
 model PortalView {
   id         String       @id @default(cuid())
   accessId   String
   access     PortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
-  /** No FK on purpose: view history must survive if a delivery row is ever removed. */
+  /**
+   * No FK on purpose: view history must survive if a delivery row is ever removed.
+   */
   deliveryId String?
   viewedAt   DateTime     @default(now())
   userAgent  String?
@@ -215,18 +267,22 @@ model PortalView {
   @@index([deliveryId, viewedAt])
 }
 
-/** Idempotency log for client reminders and internal overdue nudges. */
+/**
+ * Idempotency log for client reminders and internal overdue nudges.
+ */
 model PortalReminder {
   id         String   @id @default(cuid())
   deliveryId String
-  kind       String   // "tomorrow" | "today" | "overdue"
-  sentOn     String   // Eastern calendar date "YYYY-MM-DD"
+  kind       String // "tomorrow" | "today" | "overdue"
+  sentOn     String // Eastern calendar date "YYYY-MM-DD"
   sentAt     DateTime @default(now())
 
   @@unique([deliveryId, kind, sentOn])
 }
 
-/** Messages clients send through the portal reach-out form. Persisted first so nothing is lost if Slack fails. */
+/**
+ * Messages clients send through the portal reach-out form. Persisted first so nothing is lost if Slack fails.
+ */
 model PortalMessage {
   id            String   @id @default(cuid())
   accessId      String
