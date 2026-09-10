@@ -296,6 +296,50 @@ export function cleanLinkText(text: string | null | undefined, projectName: stri
   return t;
 }
 
+/** Characters that can sit between the client name and the project name. */
+const CLIENT_SEPARATOR = "[\\s:|\\-–—]";
+
+/**
+ * The client name as a regex source: whitespace is flexible and "and" and "&"
+ * are interchangeable, so "Smith & Jones" matches "Smith and Jones". Null when
+ * the client name is blank.
+ */
+function clientNamePattern(clientName: string): string | null {
+  const parts = collapse(clientName).split(" ").filter(Boolean);
+  if (parts.length === 0) return null;
+  return parts
+    .map((p) => (p === "&" || p.toLowerCase() === "and" ? "(?:&|and)" : escapeRegExp(p)))
+    .join("\\s+");
+}
+
+/**
+ * A project name without its client-name prefix: ClickUp lists are named
+ * "<Client name> <Project name>" and the client already knows who they are, so
+ * "Stack Overflow BVAS Talking Head Product Videos" reads as "BVAS Talking
+ * Head Product Videos".
+ *
+ * Only the FULL client name counts, at a word boundary, so "Stack BVAS" keeps
+ * its "Stack" when the client is "Stack Overflow". Any run of separators after
+ * the prefix goes too. The original name is kept when what is left would be
+ * useless: nothing, under three characters, or only digits. Whitespace and
+ * ampersand spelling are normalized for the comparison only, never in the
+ * result.
+ */
+export function stripClientPrefix(projectName: string, clientName: string): string {
+  const name = projectName ?? "";
+  const pattern = clientNamePattern(clientName ?? "");
+  if (!pattern) return name;
+  const re = new RegExp(
+    `^\\s*${pattern}(?=$|${CLIENT_SEPARATOR})${CLIENT_SEPARATOR}*`,
+    "i"
+  );
+  const match = re.exec(name);
+  if (!match) return name;
+  const rest = name.slice(match[0].length).trim();
+  if (rest.length < 3 || /^\d+$/.test(rest)) return name;
+  return rest;
+}
+
 // ── Review wording ─────────────────────────────────────────────────
 
 export type ReviewMode = "feedback" | "approval";

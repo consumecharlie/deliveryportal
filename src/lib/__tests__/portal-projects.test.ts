@@ -177,7 +177,7 @@ describe("buildPortalPage with folder-discovered projects", () => {
     const p = byList.get("ROADMAP_ONLY")!;
     expect(p).toBeDefined();
     expect(p.deliverables).toEqual([]);
-    expect(p.name).toBe("Stack Overflow BVAS Talking Head Product Videos");
+    expect(p.name).toBe("BVAS Talking Head Product Videos");
     expect(p.phase).toBe("in-progress");
     expect(p.milestones.map((m) => [m.label, m.state])).toEqual([
       ["Edit V1", "up-next"],
@@ -203,10 +203,43 @@ describe("buildPortalPage with folder-discovered projects", () => {
     expect(bare.milestones).toEqual([]);
   });
 
-  it("the ClickUp list name wins over the name stored on the delivery", () => {
+  it("the ClickUp list name wins over the name stored on the delivery, client prefix dropped", () => {
     const p = byList.get("ACTIVE_WITH_SENDS")!;
-    expect(p.name).toBe("Stack Overflow 2026 Internal Explainer");
+    expect(p.name).toBe("2026 Internal Explainer");
     expect(p.deliverables).toHaveLength(1);
+  });
+
+  it("every label built from the project name loses the client prefix", () => {
+    expect(byList.get("ROADMAP_ONLY")!.name).toBe("BVAS Talking Head Product Videos");
+    // A project name that does not start with the full client name is untouched.
+    expect(build({ clientName: "Stack Overflow", discovered: [{ listId: "ROADMAP_ONLY", name: "Stack BVAS", archived: false }], rows: [] }).projects[0].name).toBe("Stack BVAS");
+    // Attention rows carry the same name as the project.
+    const attention = build({
+      clientName: "CallRail",
+      discovered: [{ listId: "ACTIVE_WITH_SENDS", name: "CallRail Wiggam Law Virtual Testimonial", archived: false }],
+      rows: [row({ id: "a1", taskId: "S1", feedbackWindows: "2 Business Days", sentAt: new Date("2026-09-02T14:00:00Z") })],
+    });
+    expect(attention.projects[0].name).toBe("Wiggam Law Virtual Testimonial");
+    expect(attention.attention.map((a) => a.projectName)).toEqual(["Wiggam Law Virtual Testimonial"]);
+  });
+
+  it("a milestone whose parent repeats the project name keeps no sublabel, prefix or not", () => {
+    const page = build({
+      clientName: "Stack Overflow",
+      rows: [],
+      discovered: [{ listId: "P1", name: "Stack Overflow Animated Ads", archived: false }],
+      live: {
+        P1: live({
+          milestones: [
+            ms({ taskId: "M1", name: "Share Edit V1 with Client", parentTaskId: "PP", parentTaskName: "Stack Overflow Animated Ads", dueMs: day("2026-09-20") }),
+            ms({ taskId: "M2", name: "Share Edit V2 with Client", parentTaskId: "PQ", parentTaskName: "Animated Ads", dueMs: day("2026-09-21") }),
+            ms({ taskId: "M3", name: "Share Final Deliverables with Client", parentTaskId: "PR", parentTaskName: "Ep #21", deliverableType: "Final Delivery", dueMs: day("2026-09-22") }),
+          ],
+        }),
+      },
+    });
+    expect(page.projects[0].name).toBe("Animated Ads");
+    expect(page.projects[0].milestones.map((m) => m.sublabel)).toEqual([null, null, "Ep #21"]);
   });
 
   it("an archived list with deliveries is a completed project", () => {

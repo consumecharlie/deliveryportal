@@ -29,6 +29,7 @@ import {
   cleanLinkText,
   reviewMode,
   reviewLabel,
+  stripClientPrefix,
   emailDomain,
   type ReviewMode,
 } from "@/lib/portal-labels";
@@ -312,7 +313,8 @@ function buildMilestones(
   live: LivePayload,
   rowsByTaskId: Map<string, PortalPageRow>,
   reviewByDeliveryId: Map<string, ReviewState>,
-  projectName: string
+  /** The project's name as the client reads it and as ClickUp spells it. */
+  projectNames: string[]
 ): PortalMilestone[] {
   let upNextTaken = false;
   return milestones.map((m) => {
@@ -338,7 +340,7 @@ function buildMilestones(
     const parentTitle = informativeParentName(m.parentTaskName);
     const sublabel =
       parentTitle &&
-      !sameText(parentTitle, projectName) &&
+      !projectNames.some((n) => sameText(parentTitle, n)) &&
       !sameText(parentTitle, label) &&
       !sameText(parentTitle, stripVersionTokens(label))
         ? parentTitle
@@ -391,8 +393,11 @@ function buildProject(
   const listId = discovered?.listId ?? newest?.projectListId ?? "";
   // The ClickUp list name is the source of truth (lists get renamed); the
   // name stored on the delivery covers lists we cannot see (archived, moved
-  // out of the folder) and ad-hoc sends with no list at all.
-  const name = (discovered?.name ?? "").trim() || newest?.projectName || "Project";
+  // out of the folder) and ad-hoc sends with no list at all. Lists are named
+  // "<Client name> <Project name>" and the client knows who they are, so the
+  // client name comes off for every label built from this one.
+  const fullName = (discovered?.name ?? "").trim() || newest?.projectName || "Project";
+  const name = stripClientPrefix(fullName, input.clientName);
   const live = listId ? input.live[listId] : undefined;
 
   const deliverables = groupDeliverables(rows).map((d) =>
@@ -400,7 +405,7 @@ function buildProject(
   );
   const reviewByDeliveryId = new Map(deliverables.map((d) => [d.latest.deliveryId, d.review.state]));
   const milestones = live
-    ? buildMilestones(live.milestones, live, allRowsByTaskId, reviewByDeliveryId, name)
+    ? buildMilestones(live.milestones, live, allRowsByTaskId, reviewByDeliveryId, [name, fullName])
     : [];
 
   // Only an archived list is finished: lists keep getting share tasks as

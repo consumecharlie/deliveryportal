@@ -17,6 +17,7 @@ import {
   linkKind,
   linkHint,
   cleanLinkText,
+  stripClientPrefix,
   reviewMode,
   reviewLabel,
   PHASE_ONLY_WORDS,
@@ -306,5 +307,60 @@ describe("review wording", () => {
     expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: "Jun 6" })).toBe("Approved Jun 6");
     expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: null })).toBe("Approved");
     expect(reviewLabel({ state: "none", mode: "feedback" })).toBe("Delivered");
+  });
+});
+
+describe("stripClientPrefix", () => {
+  const so = (name: string) => stripClientPrefix(name, "Stack Overflow");
+
+  it("drops the full client name and the separators after it", () => {
+    expect(so("Stack Overflow BVAS Talking Head Product Videos")).toBe("BVAS Talking Head Product Videos");
+    expect(so("Stack Overflow 2026 Internal Explainer")).toBe("2026 Internal Explainer");
+    expect(so("Stack Overflow: Animated Ads")).toBe("Animated Ads");
+    expect(so("Stack Overflow - Animated Ads")).toBe("Animated Ads");
+    expect(so("Stack Overflow \u2013 Animated Ads")).toBe("Animated Ads");
+    expect(so("Stack Overflow \u2014 Animated Ads")).toBe("Animated Ads");
+    expect(so("Stack Overflow | Animated Ads")).toBe("Animated Ads");
+    expect(so("stack overflow animated ads")).toBe("animated ads");
+    expect(stripClientPrefix("CallRail Wiggam Law Virtual Testimonial", "CallRail")).toBe("Wiggam Law Virtual Testimonial");
+  });
+
+  it("only a full client name counts, at a word boundary", () => {
+    expect(so("Stack BVAS")).toBe("Stack BVAS");
+    expect(so("Stack Internal AI Workflow")).toBe("Stack Internal AI Workflow");
+    expect(so("Stack Internal Animated Explainer")).toBe("Stack Internal Animated Explainer");
+    expect(so("Leaders of Code Podcast")).toBe("Leaders of Code Podcast");
+    // "Stack Overflowing" is a different word, so nothing is stripped.
+    expect(so("Stack Overflowing Ads")).toBe("Stack Overflowing Ads");
+    // The client name has to lead.
+    expect(so("Animated Ads for Stack Overflow")).toBe("Animated Ads for Stack Overflow");
+  });
+
+  it("normalizes whitespace and ampersand spelling for the comparison only", () => {
+    expect(stripClientPrefix("Smith and Jones Brand Video", "Smith & Jones")).toBe("Brand Video");
+    expect(stripClientPrefix("Smith & Jones Brand Video", "Smith and Jones")).toBe("Brand Video");
+    expect(stripClientPrefix("Stack  Overflow  Animated Ads", "Stack Overflow")).toBe("Animated Ads");
+    // The result itself is only trimmed, never respaced.
+    expect(stripClientPrefix("Stack Overflow Animated  Ads", "Stack Overflow")).toBe("Animated  Ads");
+    expect(stripClientPrefix("Stack Overflow Animated Ads", "  Stack   Overflow ")).toBe("Animated Ads");
+  });
+
+  it("keeps the original when what is left would be useless", () => {
+    expect(so("Stack Overflow")).toBe("Stack Overflow");
+    expect(so("Stack Overflow: ")).toBe("Stack Overflow: ");
+    expect(so("Stack Overflow AI")).toBe("Stack Overflow AI");
+    expect(so("Stack Overflow 2026")).toBe("Stack Overflow 2026");
+    expect(so("Stack Overflow - 19")).toBe("Stack Overflow - 19");
+  });
+
+  it("a blank client name or project name changes nothing", () => {
+    expect(stripClientPrefix("Animated Ads", "")).toBe("Animated Ads");
+    expect(stripClientPrefix("Animated Ads", "   ")).toBe("Animated Ads");
+    expect(stripClientPrefix("", "Stack Overflow")).toBe("");
+  });
+
+  it("a client name with regex characters is matched literally", () => {
+    expect(stripClientPrefix("C++ (Europe) Launch Film", "C++ (Europe)")).toBe("Launch Film");
+    expect(stripClientPrefix("Cxx Europe Launch Film", "C++ (Europe)")).toBe("Cxx Europe Launch Film");
   });
 });
