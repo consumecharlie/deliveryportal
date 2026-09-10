@@ -2,7 +2,9 @@
  * Live ClickUp state per project list, cached in DashboardCache: the
  * Feedback Deadline tasks (type 12) that decide review deadlines, the
  * Delivery Deadline share tasks (type 11) that make up the project's
- * roadmap, and the list's own due date / archived flag.
+ * roadmap, and the list's own due date / archived flag. Also the client
+ * folder's own list index (`getClientFolderLists`), which is how the portal
+ * finds projects that have no delivery yet.
  *
  * The client portal spans many lists per client and ClickUp is slow, so a
  * page render never waits on ClickUp when any cached copy exists: a fresh
@@ -15,6 +17,7 @@ import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   getListTasksByDropdownField,
+  getFolderLists,
   getList,
   getTask,
   extractCustomFieldValue,
@@ -91,6 +94,10 @@ const CLOSED_TYPES = new Set(["closed", "done"]);
 
 function cacheKey(listId: string): string {
   return `portal:fd:${listId}`;
+}
+
+function folderCacheKey(folderId: string): string {
+  return `portal:folder:${folderId}`;
 }
 
 function taskTypeIs(t: ClickUpTask, label: string, optionId: string): boolean {
@@ -352,11 +359,24 @@ function rowData(row: CacheRow): LivePayload | null {
   };
 }
 
-async function readRow(listId: string): Promise<CacheRow | null> {
+async function readCacheRow(key: string): Promise<CacheRow | null> {
   try {
-    return await prisma.dashboardCache.findUnique({ where: { key: cacheKey(listId) } });
+    return await prisma.dashboardCache.findUnique({ where: { key } });
   } catch {
     return null; // DB optional
+  }
+}
+
+async function writeCacheRow(key: string, payload: unknown): Promise<void> {
+  try {
+    const data = payload as Prisma.InputJsonObject;
+    await prisma.dashboardCache.upsert({
+      where: { key },
+      create: { key, data },
+      update: { data },
+    });
+  } catch {
+    /* ignore: the cache is an optimization */
   }
 }
 
@@ -430,17 +450,7 @@ async function fetchAndStore(listId: string): Promise<LivePayload> {
     archived: Boolean(list.archived),
     contactDomains: selectContactDomains(contacts.tasks),
   };
-  try {
-    const key = cacheKey(listId);
-    const data = payload as unknown as Prisma.InputJsonObject;
-    await prisma.dashboardCache.upsert({
-      where: { key },
-      create: { key, data },
-      update: { data },
-    });
-  } catch {
-    /* ignore: the cache is an optimization */
-  }
+  await writeCacheRow(cacheKey(listId), payload);
   return payload;
 }
 
@@ -476,7 +486,7 @@ function scheduleRefresh(listIds: string[]): void {
 
 /** @internal exported for tests; production reads go through getLiveFeedbackMany. */
 export async function getLiveFeedback(listId: string, force = false): Promise<LivePayload> {
-  const row = await readRow(listId);
+  const row = await readCacheRow(cacheKey(listId));
   const cached = row ? rowData(row) : null;
   if (row && cached && !force) {
     if (isFresh(row)) return cached;
@@ -516,6 +526,81 @@ export async function getLiveFeedbackMany(
     out[id] = r.status === "fulfilled" ? r.value : EMPTY_LIVE_PAYLOAD;
   });
   return out;
+}
+
+/** One list in a client folder, as the portal needs it. */
+export interface FolderList {
+  id: string;
+  name: string;
+}
+
+interface FolderPayload {
+  version: number;
+  lists: FolderList[];
+}
+
+/** Bumped when the shape changes; older rows are treated as cache misses. */
+export const FOLDER_PAYLOAD_VERSION = 1;
+
+/** The cached list index, or null when the row predates the current shape. */
+function folderRowData(row: CacheRow): FolderList[] | null {
+  const d = row.data as Partial<FolderPayload> | null;
+  if (!d || d.version !== FOLDER_PAYLOAD_VERSION || !Array.isArray(d.lists)) return null;
+  return d.lists
+    .filter((l) => l && typeof l.id === "string" && l.id !== "")
+    .map((l) => ({ id: l.id, name: typeof l.name === "string" ? l.name : "" }));
+}
+
+/** Fetch the folder's active lists from ClickUp and store them. Throws when ClickUp fails. */
+async function fetchAndStoreFolder(folderId: string): Promise<FolderList[]> {
+  const { lists } = await getFolderLists(folderId, false);
+  const out = lists.map((l) => ({ id: l.id, name: l.name }));
+  const payload: FolderPayload = { version: FOLDER_PAYLOAD_VERSION, lists: out };
+  await writeCacheRow(folderCacheKey(folderId), payload);
+  return out;
+}
+
+async function refreshFolder(folderId: string, stale: FolderList[] | null): Promise<FolderList[]> {
+  try {
+    return await fetchAndStoreFolder(folderId);
+  } catch (err) {
+    console.warn(
+      `folder list fetch failed for ${folderId}, serving ${stale ? "stale cache" : "nothing"}`,
+      err
+    );
+    return stale ?? [];
+  }
+}
+
+/**
+ * The client folder's active (non-archived) lists, cached beside the live
+ * payloads under `portal:folder:<folderId>` with the same 5 minute TTL and
+ * stale-while-revalidate treatment, so a portal render does not hit ClickUp
+ * for the folder on every request. Never throws: a failing fetch serves the
+ * stale row, else nothing (the portal then falls back to delivery-derived
+ * projects alone).
+ *
+ * Archived lists are deliberately not listed: a client can have a dozen of
+ * them and their roadmaps are history, so completed projects stay
+ * delivery-driven.
+ */
+export async function getClientFolderLists(folderId: string): Promise<FolderList[]> {
+  if (!folderId) return [];
+  const row = await readCacheRow(folderCacheKey(folderId));
+  const cached = row ? folderRowData(row) : null;
+  if (row && cached) {
+    if (isFresh(row)) return cached;
+    const run = async () => {
+      await refreshFolder(folderId, null);
+    };
+    try {
+      after(run);
+    } catch {
+      void run();
+    }
+    return cached;
+  }
+  return refreshFolder(folderId, cached);
 }
 
 export async function invalidateLiveFeedback(listId: string): Promise<void> {

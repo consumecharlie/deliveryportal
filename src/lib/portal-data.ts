@@ -12,7 +12,8 @@ import {
   type TimelineEntry,
   type MentionNames,
 } from "@/lib/portal-timeline";
-import { getLiveFeedbackMany, pairFeedbackTask } from "@/lib/portal-live";
+import { getClientFolderLists, getLiveFeedbackMany, pairFeedbackTask } from "@/lib/portal-live";
+import { selectProjectLists } from "@/lib/portal-projects";
 import { buildPortalPage, deriveClientDomain, type PortalPageRow } from "@/lib/portal-page";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
@@ -120,7 +121,14 @@ const MENTION_NAMES: MentionNames = {};
 /**
  * The redesigned portal page: every project for the client (so the header
  * counts are client-wide), narrowed to one project's section when
- * `focusListId` is given. Live ClickUp state comes from the per-list cache.
+ * `focusListId` is given.
+ *
+ * Projects come from the client's ClickUp folder, not from past deliveries,
+ * so an active project shows from kickoff with its roadmap and no
+ * deliverables yet. Archived lists are not listed (their roadmaps are history
+ * and a client can have a dozen), so completed projects stay delivery-driven.
+ * Both the folder listing and the live per-list state come from the 5 minute
+ * DashboardCache.
  */
 export async function loadPortalPage(
   access: PortalAccessInfo,
@@ -128,13 +136,20 @@ export async function loadPortalPage(
 ): Promise<PortalPageModel> {
   const rows = await selectDeliveries(access);
   const current = dropReplaced(rows);
-  const [confirmations, live, preference] = await Promise.all([
+  const deliveryListIds = Array.from(
+    new Set(current.map((r) => r.projectListId ?? "").filter(Boolean))
+  );
+  const [confirmations, folderLists, preference] = await Promise.all([
     latestConfirmations(current.map((r) => r.id)),
-    getLiveFeedbackMany(current.map((r) => r.projectListId ?? "")),
+    getClientFolderLists(access.clientFolderId),
     prisma.clientPreference
       .findUnique({ where: { clientFolderId: access.clientFolderId }, select: { logoUrl: true } })
       .catch(() => null),
   ]);
+  // One pass over every list we might show: the folder's active lists plus any
+  // list a delivery points at (archived projects, lists moved out of the folder).
+  const live = await getLiveFeedbackMany([...folderLists.map((l) => l.id), ...deliveryListIds]);
+  const discovered = selectProjectLists({ folderLists, live, deliveryListIds });
   return buildPortalPage({
     token: access.token,
     clientName: access.clientName,
@@ -145,6 +160,7 @@ export async function loadPortalPage(
     rows,
     live,
     confirmations,
+    discovered,
     names: MENTION_NAMES,
   });
 }

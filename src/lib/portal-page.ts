@@ -1,7 +1,8 @@
 /**
- * Builds the client portal page model (`portal-page-model.ts`) from
- * Delivery rows, the cached live ClickUp payload per list, and the newest
- * confirmation per delivery. Pure, no I/O: `portal-data.ts` loads, this shapes.
+ * Builds the client portal page model (`portal-page-model.ts`) from the
+ * projects discovered in the client's ClickUp folder, Delivery rows, the
+ * cached live ClickUp payload per list, and the newest confirmation per
+ * delivery. Pure, no I/O: `portal-data.ts` loads, this shapes.
  */
 import {
   dropReplaced,
@@ -34,6 +35,7 @@ import {
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
 import { pickReviewLink } from "@/lib/portal-view-model";
 import { pairFeedbackTask, type LivePayload, type LiveMilestone } from "@/lib/portal-live";
+import type { DiscoveredProject } from "@/lib/portal-projects";
 import type {
   PortalPageModel,
   PortalProject,
@@ -63,6 +65,13 @@ export interface BuildPortalPageInput {
   focusListId: string | null;
   nowMs: number;
   rows: PortalPageRow[];
+  /**
+   * Projects found in the client's ClickUp folder (`selectProjectLists`).
+   * Each one becomes a project even with no deliveries yet, and its list name
+   * wins over the name stored on the deliveries. Lists a delivery points at
+   * but the folder listing does not carry are added from the rows.
+   */
+  discovered?: DiscoveredProject[];
   /** listId -> live payload. Missing lists (ad-hoc, "" ids) simply have no roadmap. */
   live: Record<string, LivePayload>;
   /** deliveryId -> newest confirmation row (undone rows included, so undo wins). */
@@ -356,18 +365,35 @@ function summarize(
   return ["In progress, next deliverable not scheduled yet", wrapsUp].filter(Boolean).join(", ");
 }
 
+/** The soonest dated milestone the client is still waiting on. */
+function earliestUpcomingMs(milestones: PortalMilestone[]): number | null {
+  const dates = milestones
+    .filter((m) => m.state === "up-next" || m.state === "planned")
+    .map((m) => m.dateMs)
+    .filter((d): d is number => d !== null);
+  return dates.length > 0 ? Math.min(...dates) : null;
+}
+
+/**
+ * One project: a list discovered in the client's folder, the deliveries on
+ * that list, or both. A discovered list with no delivery yet is a real
+ * project with an empty `deliverables` array and a roadmap from ClickUp.
+ */
 function buildProject(
+  discovered: DiscoveredProject | null,
   rows: PortalPageRow[],
   allRowsByTaskId: Map<string, PortalPageRow>,
   input: BuildPortalPageInput,
   names: MentionNames,
   primaryLinks: Map<string, PortalLink | null>
 ): PortalProject {
-  const newest = [...rows].sort(bySentAtDesc)[0];
-  const listId = newest.projectListId ?? "";
-  const name = newest.projectName;
+  const newest = rows.length > 0 ? [...rows].sort(bySentAtDesc)[0] : null;
+  const listId = discovered?.listId ?? newest?.projectListId ?? "";
+  // The ClickUp list name is the source of truth (lists get renamed); the
+  // name stored on the delivery covers lists we cannot see (archived, moved
+  // out of the folder) and ad-hoc sends with no list at all.
+  const name = (discovered?.name ?? "").trim() || newest?.projectName || "Project";
   const live = listId ? input.live[listId] : undefined;
-  const lastActivityMs = newest.sentAt.getTime();
 
   const deliverables = groupDeliverables(rows).map((d) =>
     buildDeliverable(d, live, input, names, primaryLinks)
@@ -379,8 +405,14 @@ function buildProject(
 
   // Only an archived list is finished: lists keep getting share tasks as
   // episodes are added, so "every milestone closed" is not the end.
-  const phase: PortalProject["phase"] = live?.archived ? "completed" : "in-progress";
+  const archived = live ? live.archived : discovered?.archived ?? false;
+  const phase: PortalProject["phase"] = archived ? "completed" : "in-progress";
   const upNext = milestones.find((m) => m.state === "up-next") ?? null;
+
+  // Newest delivery, else what the project is working towards: the soonest
+  // planned milestone, then the list's wrap date.
+  const lastActivityMs =
+    newest?.sentAt.getTime() ?? earliestUpcomingMs(milestones) ?? live?.wrapsUpMs ?? 0;
 
   return {
     listId,
@@ -414,11 +446,26 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
     byProject.set(key, arr);
   }
 
+  // Every project the folder gave us, keyed like the row groups so a list
+  // with deliveries is one project, not two.
+  const discovered = new Map<string, DiscoveredProject>();
+  for (const d of input.discovered ?? []) {
+    if (d.listId) discovered.set(d.listId, d);
+  }
+
   // Frame.io, then Loom, then the first link: decided from the raw links
   // (by template variable) while the deliverables are built.
   const primaryLinks = new Map<string, PortalLink | null>();
-  const projects = Array.from(byProject.values()).map((rows) =>
-    buildProject(rows, rowsByTaskId, input, names, primaryLinks)
+  const keys = Array.from(new Set([...discovered.keys(), ...byProject.keys()]));
+  const projects = keys.map((key) =>
+    buildProject(
+      discovered.get(key) ?? null,
+      byProject.get(key) ?? [],
+      rowsByTaskId,
+      input,
+      names,
+      primaryLinks
+    )
   );
   const rank = (p: PortalProject) => (p.phase === "in-progress" ? 0 : 1);
   projects.sort(

@@ -8,12 +8,14 @@ import {
   runPool,
   getLiveFeedback,
   getLiveFeedbackMany,
+  getClientFolderLists,
+  FOLDER_PAYLOAD_VERSION,
   LIVE_PAYLOAD_VERSION,
   EMPTY_LIVE_PAYLOAD,
   type LivePayload,
 } from "@/lib/portal-live";
 import { prisma } from "@/lib/db";
-import { getListTasksByDropdownField, getList, getTask } from "@/lib/clickup";
+import { getListTasksByDropdownField, getFolderLists, getList, getTask } from "@/lib/clickup";
 import { after } from "next/server";
 
 vi.mock("@/lib/db", () => ({
@@ -24,6 +26,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/clickup", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/clickup")>()),
   getListTasksByDropdownField: vi.fn(),
+  getFolderLists: vi.fn(),
   getList: vi.fn(),
   getTask: vi.fn(),
 }));
@@ -31,6 +34,7 @@ vi.mock("next/server", () => ({ after: vi.fn() }));
 
 const cache = vi.mocked(prisma.dashboardCache);
 const fetchTasks = vi.mocked(getListTasksByDropdownField);
+const fetchFolder = vi.mocked(getFolderLists);
 const fetchList = vi.mocked(getList);
 const fetchTask = vi.mocked(getTask);
 const afterMock = vi.mocked(after);
@@ -467,5 +471,71 @@ describe("getLiveFeedbackMany", () => {
     const out = await getLiveFeedbackMany(["ok", "bad"]);
     expect(out.ok).toEqual(STALE_DATA);
     expect(out.bad).toEqual(EMPTY_LIVE_PAYLOAD);
+  });
+});
+
+describe("getClientFolderLists (folder index cache)", () => {
+  const FOLDER_DATA = { version: FOLDER_PAYLOAD_VERSION, lists: [{ id: "L1", name: "Cached List" }] };
+  const LIVE_LISTS = [
+    { id: "L1", name: "Leaders of Code Podcast" },
+    { id: "L2", name: "BVAS Talking Head Product Videos" },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    cache.upsert.mockResolvedValue({} as never);
+  });
+
+  it("serves a fresh row without touching ClickUp", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:folder:F1", 60_000, FOLDER_DATA) as never);
+    expect(await getClientFolderLists("F1")).toEqual(FOLDER_DATA.lists);
+    expect(cache.findUnique).toHaveBeenCalledWith({ where: { key: "portal:folder:F1" } });
+    expect(fetchFolder).not.toHaveBeenCalled();
+    expect(afterMock).not.toHaveBeenCalled();
+  });
+
+  it("serves a stale row immediately and refreshes after the response", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:folder:F1", 10 * 60_000, FOLDER_DATA) as never);
+    fetchFolder.mockResolvedValue({ lists: LIVE_LISTS });
+    expect(await getClientFolderLists("F1")).toEqual(FOLDER_DATA.lists);
+    expect(fetchFolder).not.toHaveBeenCalled();
+    expect(afterMock).toHaveBeenCalledTimes(1);
+    await (afterMock.mock.calls[0][0] as () => Promise<void>)();
+    // Only active lists: archived roadmaps are history and cost too many calls.
+    expect(fetchFolder).toHaveBeenCalledWith("F1", false);
+    const stored = (cache.upsert.mock.calls[0][0] as unknown as { update: { data: typeof FOLDER_DATA } }).update.data;
+    expect(stored).toEqual({ version: FOLDER_PAYLOAD_VERSION, lists: LIVE_LISTS });
+  });
+
+  it("a miss fetches and stores; a failing fetch serves the stale row, else nothing", async () => {
+    cache.findUnique.mockResolvedValue(null);
+    fetchFolder.mockResolvedValue({ lists: LIVE_LISTS });
+    expect(await getClientFolderLists("F1")).toEqual(LIVE_LISTS);
+    expect(cache.upsert).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    cache.findUnique.mockResolvedValue(row("portal:folder:F1", 10 * 60_000, FOLDER_DATA) as never);
+    fetchFolder.mockRejectedValue(new Error("ClickUp down"));
+    expect(await getClientFolderLists("F1")).toEqual(FOLDER_DATA.lists);
+    await (afterMock.mock.calls[0][0] as () => Promise<void>)();
+    expect(console.warn).toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    cache.findUnique.mockResolvedValue(null);
+    fetchFolder.mockRejectedValue(new Error("ClickUp down"));
+    expect(await getClientFolderLists("F1")).toEqual([]);
+  });
+
+  it("a row from an older shape is a miss, and a blank folder id never fetches", async () => {
+    cache.findUnique.mockResolvedValue(row("portal:folder:F1", 1000, { lists: LIVE_LISTS }) as never);
+    fetchFolder.mockResolvedValue({ lists: LIVE_LISTS });
+    expect(await getClientFolderLists("F1")).toEqual(LIVE_LISTS);
+    expect(fetchFolder).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    expect(await getClientFolderLists("")).toEqual([]);
+    expect(cache.findUnique).not.toHaveBeenCalled();
+    expect(fetchFolder).not.toHaveBeenCalled();
   });
 });
