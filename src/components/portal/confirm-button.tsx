@@ -6,7 +6,10 @@ import Button from "./cm-button";
 
 interface Props {
   token: string;
-  deliveryId: string;
+  /** The delivery to confirm; null for an item that is only a ClickUp feedback task. */
+  deliveryId: string | null;
+  /** The ClickUp Feedback Deadline task, used as the key when there is no delivery. */
+  feedbackTaskId?: string | null;
   initialConfirmed: boolean;
   /**
    * False when the delivery shows as confirmed only because the ClickUp
@@ -15,13 +18,18 @@ interface Props {
   canUndo: boolean;
 }
 
-/** React key that changes whenever the server-side status does, so every instance re-seeds. */
+/**
+ * React key that changes whenever the server-side status does, so every
+ * instance re-seeds. Items with no delivery behind them key on their ClickUp
+ * feedback task instead.
+ */
 export function confirmButtonKey(
-  deliveryId: string,
-  status: { kind: string; confirmedAt: Date | null }
+  deliveryId: string | null,
+  status: { kind: string; confirmedAt: Date | null },
+  feedbackTaskId?: string | null
 ): string {
   const at = status.confirmedAt ? new Date(status.confirmedAt).getTime() : "";
-  return `${deliveryId}:${status.kind}:${at}`;
+  return `${deliveryId ?? feedbackTaskId ?? "unknown"}:${status.kind}:${at}`;
 }
 
 const UNDO_WARNING =
@@ -35,7 +43,7 @@ const UNDO_WARNING =
  * The undo prompt is a native <dialog> opened with showModal(): focus moves
  * into it, stays trapped, and Escape closes it.
  */
-export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: Props) {
+export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfirmed, canUndo }: Props) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirmed, setConfirmed] = useState(initialConfirmed);
@@ -44,6 +52,7 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
   // Arcade points: a "+100" rises out of the button after a confirm. The key
   // bumps so a confirm after an undo pops again; animationend clears it.
   const [points, setPoints] = useState(0);
+  const dialogId = deliveryId ?? feedbackTaskId ?? "item";
 
   function openUndo() {
     setError(null);
@@ -61,7 +70,8 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
       const res = await fetch(`/api/portal/${token}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deliveryId }),
+        // Exactly one of the two identifies the thing being confirmed.
+        body: JSON.stringify(deliveryId ? { deliveryId } : { feedbackTaskId }),
       });
       if (res.status === 409) {
         // The state moved on (someone else confirmed, the team closed it,
@@ -121,10 +131,10 @@ export function ConfirmButton({ token, deliveryId, initialConfirmed, canUndo }: 
 
       <dialog
         ref={dialogRef}
-        aria-labelledby={`undo-${deliveryId}`}
+        aria-labelledby={`undo-${dialogId}`}
         className="portal-modal"
       >
-        <p id={`undo-${deliveryId}`}>
+        <p id={`undo-${dialogId}`}>
           {UNDO_WARNING}
         </p>
         <div className="portal-modal-actions">

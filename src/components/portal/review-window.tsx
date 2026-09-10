@@ -2,7 +2,7 @@
 
 import type { PortalAttentionItem } from "@/lib/portal-page-model";
 import { MacWindow, type WindowFrameProps } from "./mac-window";
-import { ConfirmButton } from "./confirm-button";
+import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { StatusPill, pillNote } from "./status-pill";
 import { reviewMode } from "./link-meta";
 import { ViewLink } from "./view-link";
@@ -16,8 +16,10 @@ interface Props extends WindowFrameProps {
 
 /**
  * NEEDS YOUR REVIEW: opens on top. One row per item the client owes
- * feedback on, with the two brand pixel buttons. Empty: the ghost and ALL
- * CLEAR. Closable like any window; the dock brings it back.
+ * feedback on, with the two brand pixel buttons. An item with no delivery
+ * behind it (an open ClickUp feedback task whose share task was completed
+ * outside the portal) has no link to open, so it says what we are waiting on
+ * instead. Empty: the ghost and ALL CLEAR. Closable; the dock brings it back.
  */
 export function ReviewWindow({ token, items, ...frame }: Props) {
   return (
@@ -32,8 +34,14 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
       ) : (
         <ul className="portal-review-list">
           {items.map((item) => {
+            const mode = reviewMode(item.review, item.deliverableTitle, item.variant);
+            const key = confirmButtonKey(
+              item.deliveryId,
+              { kind: item.review.state, confirmedAt: item.review.confirmedAtMs ? new Date(item.review.confirmedAtMs) : null },
+              item.feedbackTaskId
+            );
             return (
-              <li key={item.deliveryId} className="portal-review-row">
+              <li key={key} className="portal-review-row">
                 <div className="portal-review-what">
                   <span className="portal-row-title">
                     {item.deliverableTitle}
@@ -55,13 +63,13 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                       label={item.review.label}
                     />
                     {(() => {
-                      const note = pillNote(item.review.state, reviewMode(item.review, item.deliverableTitle, item.variant), item.review.label);
+                      const note = pillNote(item.review.state, mode, item.review.label);
                       return note ? <span className="portal-review-due-label">{note}</span> : null;
                     })()}
                   </span>
                 </div>
                 <div className="portal-review-actions">
-                  {item.primaryLink && (
+                  {item.deliveryId && item.primaryLink ? (
                     <ViewLink
                       token={token}
                       deliveryId={item.deliveryId}
@@ -72,11 +80,16 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                     >
                       {openReviewLabel(item.primaryLink)}
                     </ViewLink>
-                  )}
+                  ) : item.deliveryId === null ? (
+                    <span className="portal-quiet">
+                      {mode === "approval" ? "We are waiting on your approval." : "We are waiting on your details."}
+                    </span>
+                  ) : null}
                   <ConfirmButton
-                    key={`${item.deliveryId}:${item.review.state}:${item.review.confirmedAtMs ?? ""}`}
+                    key={key}
                     token={token}
                     deliveryId={item.deliveryId}
+                    feedbackTaskId={item.feedbackTaskId}
                     initialConfirmed={false}
                     canUndo={item.review.canUndo}
                   />
