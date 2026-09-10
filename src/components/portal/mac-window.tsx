@@ -76,6 +76,8 @@ export function MacWindow(props: MacWindowProps) {
 
   // Report height on every render and whenever the content reflows (a table
   // row expanding), so the desktop can place the Finder and size the canvas.
+  // Both paths read offsetHeight after layout has settled: the layout effect
+  // runs before paint, so the canvas never shows a frame of the old height.
   useLayoutEffect(() => {
     const el = ref.current;
     if (el) onMeasure(id, el.offsetHeight);

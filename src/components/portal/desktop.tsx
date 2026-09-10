@@ -513,6 +513,7 @@ export function Desktop({ token, model, sandbox = false }: Props) {
             onActivateTab={activateTab}
             onCloseTab={closeTab}
             defaultOpenRows={focusMode}
+            stacked={!wide}
           />
         )}
 
