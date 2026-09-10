@@ -479,3 +479,45 @@ Templates space, created and deleted):
 **Deferred:** sweeping all projects for mismatches in the `/audit` Project Setup
 console, and writing Feedback Windows / Revision Rounds back to ClickUp on every
 send (no drift was observed, so it adds send-path writes for no proven gain).
+
+---
+
+## 2026-09-09 — Portal-native send, step 1: per-user connections
+
+Design: `docs/plans/2026-09-09-portal-native-send-design.md`. Branch
+`portal-native-send`. Changes NO send behaviour yet; n8n remains the pipeline.
+
+**Why:** an expired Gmail credential in n8n let two client deliveries log as Sent
+with no draft ever created (Woodward Sep 2, Shepard NGAUS Sep 9). The silent
+failure is fixed, but credentials living in n8n means the person who notices
+cannot fix it and the person who can fix it cannot see it. Self-service is only
+possible if the portal owns the credentials.
+
+- `Connection` model keyed by (userEmail, provider); pushed to Neon.
+- `src/lib/token-crypto.ts`: AES-256-GCM at rest, authenticated so tampering
+  throws. Key `CONNECTION_ENCRYPTION_KEY` (set in Vercel production +
+  development; preview intentionally unset, see below).
+- `src/lib/connections.ts`: status/expiry logic kept pure and tested;
+  DB failure degrades to "not connected" rather than crashing.
+- `src/lib/oauth-providers.ts` + `/api/connections/[provider]/{start,callback}`:
+  Google (`gmail.compose`, `access_type=offline`, `prompt=consent`; a missing
+  refresh token is a hard failure) and Slack (`user_scope=chat:write`, so posts
+  are still as the person). Separate from NextAuth sign-in by design.
+- Settings > My Connections: connect / reconnect / disconnect, per user.
+
+**Preview env has no encryption key on purpose:** OAuth redirect URIs are
+registered for the production domain only, so the flow cannot complete on a
+preview URL regardless.
+
+**TODO before this does anything (manual, console-side):**
+1. Google Cloud project `310995579064`: add scope
+   `https://www.googleapis.com/auth/gmail.compose` to the consent screen (user
+   type is Internal, so no verification needed), and add redirect URI
+   `<NEXTAUTH_URL>/api/connections/google/callback`.
+2. Slack app: add redirect URL `<NEXTAUTH_URL>/api/connections/slack/callback`,
+   add user scope `chat:write`, reinstall, then set `SLACK_CLIENT_ID` and
+   `SLACK_CLIENT_SECRET` in Vercel.
+
+**Next steps:** email renderer (Showdown, `headerLevelStart: 2`) with
+golden-file tests against real n8n `htmlEmail` output, then the portal send path
+behind a per-send pipeline toggle defaulting to n8n.
