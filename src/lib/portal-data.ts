@@ -12,9 +12,22 @@ import {
   type TimelineEntry,
   type MentionNames,
 } from "@/lib/portal-timeline";
-import { getClientFolderLists, getLiveFeedbackMany, pairFeedbackTask } from "@/lib/portal-live";
+import {
+  allFeedbackTasks,
+  getClientFolderLists,
+  getLiveFeedbackMany,
+  pairFeedbackTask,
+  type LiveFeedbackTask,
+} from "@/lib/portal-live";
+import { feedbackTaskTitle } from "@/lib/portal-labels";
+import { formatFeedbackDeadline } from "@/lib/feedback-deadline";
 import { selectProjectLists } from "@/lib/portal-projects";
-import { buildPortalPage, deriveClientDomain, type PortalPageRow } from "@/lib/portal-page";
+import {
+  buildPortalPage,
+  deriveClientDomain,
+  type BuildPortalPageInput,
+  type PortalPageRow,
+} from "@/lib/portal-page";
 import type { PortalPageModel } from "@/lib/portal-page-model";
 import {
   decideFeedbackStatus,
@@ -42,6 +55,19 @@ export async function resolveAccess(token: string): Promise<PortalAccessInfo | n
   };
 }
 
+/** One confirmable item that has no delivery behind it, resolved for a route. */
+export interface PortalFeedbackTaskTarget {
+  feedbackTaskId: string;
+  projectListId: string;
+  projectName: string;
+  /** What the client sees it called, for the Slack and ClickUp text. */
+  title: string;
+  /** "Tue, Sep 8" (+ the time when ClickUp carried one). */
+  deadlineLabel: string;
+  /** True when the portal is asking the client to act on it right now. */
+  awaiting: boolean;
+}
+
 export interface PortalActionItem {
   entry: TimelineEntry;
   projectName: string;
@@ -66,6 +92,7 @@ async function latestConfirmations(deliveryIds: string[]) {
   });
   const byDelivery = new Map<string, ConfirmationRow[]>();
   for (const r of rows) {
+    if (!r.deliveryId) continue; // task-only rows have no delivery to group under
     const arr = byDelivery.get(r.deliveryId) ?? [];
     arr.push(r);
     byDelivery.set(r.deliveryId, arr);
@@ -134,6 +161,17 @@ export async function loadPortalPage(
   access: PortalAccessInfo,
   focusListId?: string
 ): Promise<PortalPageModel> {
+  return buildPortalPage({ ...(await loadPortalContext(access)), focusListId: focusListId ?? null });
+}
+
+/**
+ * Everything `buildPortalPage` needs for this client, loaded once. Kept apart
+ * from the build so a second read (the confirm and undo routes resolving a
+ * feedback task) can reuse it without a second trip to ClickUp.
+ */
+async function loadPortalContext(
+  access: PortalAccessInfo
+): Promise<Omit<BuildPortalPageInput, "focusListId">> {
   const rows = await selectDeliveries(access);
   const current = dropReplaced(rows);
   const deliveryListIds = Array.from(
@@ -150,19 +188,60 @@ export async function loadPortalPage(
   // list a delivery points at (archived projects, lists moved out of the folder).
   const live = await getLiveFeedbackMany([...folderLists.map((l) => l.id), ...deliveryListIds]);
   const discovered = selectProjectLists({ folderLists, live, deliveryListIds });
-  return buildPortalPage({
+  return {
     token: access.token,
     clientName: access.clientName,
     clientLogoUrl: preference?.logoUrl ?? null,
     clientDomain: deriveClientDomain(rows),
-    focusListId: focusListId ?? null,
     nowMs: Date.now(),
     rows,
     live,
     confirmations,
     discovered,
     names: MENTION_NAMES,
-  });
+  };
+}
+
+/**
+ * An attention item that stands on a Feedback Deadline task alone, resolved
+ * from the token's own projects. This is the scope check for the task-only
+ * confirm and undo path: a task id that is not in one of this client's lists
+ * resolves to null, exactly as a foreign delivery id does.
+ *
+ * `awaiting` says whether the portal is in fact asking the client to act on
+ * it right now (in progress, waiting on client, dated, and not already spoken
+ * for by a deliverable), so a confirm can answer 404 and 409 apart.
+ */
+export async function findPortalFeedbackTask(
+  access: PortalAccessInfo,
+  feedbackTaskId: string
+): Promise<PortalFeedbackTaskTarget | null> {
+  if (!feedbackTaskId) return null;
+  const ctx = await loadPortalContext(access);
+  let listId: string | null = null;
+  let task: LiveFeedbackTask | null = null;
+  for (const [id, payload] of Object.entries(ctx.live)) {
+    const found = allFeedbackTasks(payload).find((t) => t.taskId === feedbackTaskId);
+    if (found) {
+      listId = id;
+      task = found;
+      break;
+    }
+  }
+  if (!task || !listId) return null;
+
+  const page = buildPortalPage({ ...ctx, focusListId: null });
+  const item = page.attention.find((a) => a.feedbackTaskId === feedbackTaskId && a.deliveryId === null);
+  const project = page.projects.find((p) => p.listId === listId);
+  const fmt = formatFeedbackDeadline(task.dueMs);
+  return {
+    feedbackTaskId,
+    projectListId: listId,
+    projectName: item?.projectName ?? project?.name ?? "",
+    title: item?.deliverableTitle ?? feedbackTaskTitle(task.name, null, task.deliverableType),
+    deadlineLabel: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
+    awaiting: Boolean(item),
+  };
 }
 
 export async function loadPortal(access: PortalAccessInfo, onlyListId?: string): Promise<PortalData> {

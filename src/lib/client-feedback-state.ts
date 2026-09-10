@@ -16,7 +16,8 @@ export interface ClientFeedback {
 }
 
 export interface ConfirmationRowLike {
-  deliveryId: string;
+  /** Null on a confirmation that stands on a feedback task alone; such rows are skipped here. */
+  deliveryId: string | null;
   confirmedAt: Date | string;
   confirmedByName: string | null;
   undoneAt: Date | string | null;
@@ -35,7 +36,7 @@ export function deriveClientFeedback(
 ): Map<string, ClientFeedback> {
   const out = new Map<string, ClientFeedback>();
   for (const r of rows) {
-    if (out.has(r.deliveryId)) continue;
+    if (!r.deliveryId || out.has(r.deliveryId)) continue;
     out.set(r.deliveryId, {
       state: r.undoneAt ? "reopened" : "confirmed",
       confirmedAt: iso(r.confirmedAt),

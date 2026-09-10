@@ -39,6 +39,14 @@ export interface LiveFeedbackTask {
   dueMs: number | null;
   /** true while the client still owes feedback (status is not complete/closed) */
   isOpen: boolean;
+  /** The ClickUp status name as it stands, e.g. "waiting on client", "not ready". */
+  status: string;
+  /**
+   * true only for the status that means the ball is in the client's court
+   * ("waiting on client"). `isOpen` also covers statuses like "not ready",
+   * which are ours to finish, so an item the client must act on uses this.
+   */
+  awaitingClient: boolean;
   /** The deliverable this feedback task belongs to (same parent as its share task). */
   parentTaskId: string | null;
   deliverableType: string;
@@ -74,7 +82,7 @@ export interface LivePayload {
   contactDomains: string[];
 }
 
-export const LIVE_PAYLOAD_VERSION = 4;
+export const LIVE_PAYLOAD_VERSION = 5;
 
 export const EMPTY_LIVE_PAYLOAD: LivePayload = Object.freeze({
   version: LIVE_PAYLOAD_VERSION,
@@ -90,6 +98,8 @@ const TTL_MS = 5 * 60_000;
 /** How many lists fetch from ClickUp at once on a cache miss. */
 const FETCH_WIDTH = 4;
 const CLOSED_STATUSES = new Set(["complete", "closed", "done"]);
+/** The Feedback Deadline status that means the client owes us something. */
+const AWAITING_CLIENT_STATUS = "waiting on client";
 const CLOSED_TYPES = new Set(["closed", "done"]);
 
 function cacheKey(listId: string): string {
@@ -134,11 +144,14 @@ function feedbackTasks(tasks: ClickUpTask[]): LiveFeedbackTask[] {
     if (!taskTypeIs(t, "Feedback Deadline", PROJECT_TASK_TYPES.FEEDBACK_DEADLINE)) continue;
     const type = extractCustomFieldValue(t.custom_fields ?? [], CUSTOM_FIELDS.DELIVERABLE_TYPE);
     if (!type) continue;
+    const status = (t.status?.status ?? "").trim();
     out.push({
       taskId: t.id,
       name: t.name,
       dueMs: msOrNull(t.due_date),
       isOpen: !isClosedTask(t),
+      status,
+      awaitingClient: status.toLowerCase() === AWAITING_CLIENT_STATUS,
       parentTaskId: t.parent || null,
       deliverableType: type,
     });
@@ -266,6 +279,24 @@ export function pairFeedbackTask(
     }
   }
   return live.feedback[delivery.deliverableType] ?? null;
+}
+
+/**
+ * Pure: every Feedback Deadline task a payload knows about, deduped by task
+ * id and ordered by it. `feedback` holds one task per deliverable type and
+ * `feedbackByParent` holds every parented one, so the union is everything
+ * except a parentless task that lost its type to a better candidate.
+ */
+export function allFeedbackTasks(
+  live: Pick<LivePayload, "feedback" | "feedbackByParent"> | undefined
+): LiveFeedbackTask[] {
+  if (!live) return [];
+  const byId = new Map<string, LiveFeedbackTask>();
+  for (const t of Object.values(live.feedback)) byId.set(t.taskId, t);
+  for (const list of Object.values(live.feedbackByParent)) {
+    for (const t of list) if (!byId.has(t.taskId)) byId.set(t.taskId, t);
+  }
+  return Array.from(byId.values()).sort((a, b) => a.taskId.localeCompare(b.taskId));
 }
 
 /**

@@ -340,6 +340,44 @@ export function stripClientPrefix(projectName: string, clientName: string): stri
   return rest;
 }
 
+/** Internal tails on a Feedback Deadline task name, longest first. */
+const FEEDBACK_TASK_SUFFIXES = [
+  /\s*feedback\s+or\s+approval$/i,
+  /\s*feedback\s+received$/i,
+  /\s*with\s+client$/i,
+  /\s*for\s+approval$/i,
+  /\s*approval$/i,
+  /\s*feedback$/i,
+  /\s*received$/i,
+];
+
+/**
+ * What to call a Feedback Deadline task the client must act on, when no
+ * delivery stands behind it: "Confirm Spinoff Details with Client" reads as
+ * "Spinoff Details". The leading "Confirm" and the internal tails come off,
+ * whitespace is collapsed, and when nothing readable is left the parent task's
+ * deliverable name is used, then the deliverable type, then the raw name (so
+ * the result is never blank).
+ */
+export function feedbackTaskTitle(
+  taskName: string | null | undefined,
+  parentTaskName: string | null | undefined,
+  deliverableType: string
+): string {
+  const raw = collapse(taskName ?? "");
+  let title = raw.replace(/^confirm\s+/i, "");
+  for (let pass = 0; pass < FEEDBACK_TASK_SUFFIXES.length; pass++) {
+    const before = title;
+    for (const re of FEEDBACK_TASK_SUFFIXES) title = title.replace(re, "");
+    if (title === before) break;
+  }
+  title = collapse(title);
+  if (title) return title;
+  const parent = informativeParentName(parentTaskName);
+  if (parent) return deliverableTitle(parentTaskName ?? null, "") || parent;
+  return collapse(deliverableType) || raw;
+}
+
 // ── Review wording ─────────────────────────────────────────────────
 
 export type ReviewMode = "feedback" | "approval";

@@ -24,7 +24,13 @@ import { prisma } from "@/lib/db";
 import { updateTaskStatus, createTaskComment, getUserGroupMembers } from "@/lib/clickup";
 import { postChannelMessage, sendSlackDM } from "@/lib/slack-dm";
 import { resolveProjectChannel } from "@/lib/project-channel";
-import { confirmFeedback, undoFeedback, lastFeedbackActivity, PortalConfirmError } from "@/lib/portal-confirm";
+import {
+  confirmFeedback,
+  undoFeedback,
+  lastFeedbackActivity,
+  lastFeedbackTaskActivity,
+  PortalConfirmError,
+} from "@/lib/portal-confirm";
 
 const delivery = {
   id: "d1",
@@ -293,5 +299,163 @@ describe("lastFeedbackActivity", () => {
     const confirmedAt = new Date("2026-09-03T12:00:00Z");
     vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({ confirmedAt, undoneAt: null } as never);
     await expect(lastFeedbackActivity("d1", "folder-1")).resolves.toEqual(confirmedAt);
+  });
+});
+
+describe("confirmFeedback and undoFeedback on a feedback task with no delivery", () => {
+  const taskInput = {
+    accessId: "a1",
+    clientName: "Stack Overflow",
+    clientFolderId: "folder-1",
+    task: {
+      feedbackTaskId: "fd-9",
+      projectListId: "list-9",
+      projectName: "2026 Internal Explainer",
+      title: "Spinoff Details",
+    },
+    confirmedByName: "Dana",
+    feedbackDeadlineTaskId: "fd-9",
+    deadlineLabel: "Thu, Sep 10",
+    portalUrl: "https://portal.example.com/portal/abc",
+  };
+  const confirmedRow = {
+    id: "conf-9",
+    deliveryId: null,
+    projectListId: "list-9",
+    deliverableType: "Spinoff Details",
+    feedbackDeadlineTaskId: "fd-9",
+    confirmedByName: "Dana",
+    slackChannelId: "C9",
+    slackMessageTs: "171.9",
+  };
+
+  beforeEach(() => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: "" }]);
+    tx.feedbackConfirmation.findFirst.mockResolvedValue(null);
+    tx.feedbackConfirmation.create.mockResolvedValue({ id: "conf-9" });
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(confirmedRow as never);
+    vi.mocked(prisma.feedbackConfirmation.update).mockResolvedValue({ id: "conf-9" } as never);
+    vi.mocked(getUserGroupMembers).mockResolvedValue([{ id: 1, username: "PM" }]);
+    vi.mocked(updateTaskStatus).mockResolvedValue(undefined);
+    vi.mocked(createTaskComment).mockResolvedValue({ id: "c9" });
+    vi.mocked(resolveProjectChannel).mockResolvedValue({
+      channelId: "C9",
+      channelName: "stack-explainer",
+      source: "confirmed",
+      autoMatched: false,
+      suggestions: [],
+    });
+    vi.mocked(postChannelMessage).mockResolvedValue("171.9");
+    vi.mocked(sendSlackDM).mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it("writes a row with no delivery, under a lock, before any side effect", async () => {
+    const r = await confirmFeedback(taskInput);
+    expect(prisma.delivery.findFirst).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.feedbackConfirmation.create.mock.calls[0][0].data).toMatchObject({
+      deliveryId: null,
+      projectListId: "list-9",
+      deliverableType: "Spinoff Details",
+      feedbackDeadlineTaskId: "fd-9",
+      confirmedByName: "Dana",
+    });
+    expect(order(tx.feedbackConfirmation.create)).toBeLessThan(order(updateTaskStatus));
+    expect(order(tx.feedbackConfirmation.create)).toBeLessThan(order(postChannelMessage));
+    expect(updateTaskStatus).toHaveBeenCalledWith("fd-9", "complete");
+    expect(postChannelMessage).toHaveBeenCalledWith("C9", expect.stringContaining("*Spinoff Details*"));
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledWith({
+      where: { id: "conf-9" },
+      data: { slackChannelId: "C9", slackMessageTs: "171.9" },
+    });
+    expect(r).toEqual({ id: "conf-9", clickupOk: true, slackOk: true });
+  });
+
+  it("409s when this task already has an active confirmation, with no side effects", async () => {
+    tx.feedbackConfirmation.findFirst.mockResolvedValue({ id: "conf-old" });
+    await expect(confirmFeedback(taskInput)).rejects.toMatchObject({ status: 409 });
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    expect(postChannelMessage).not.toHaveBeenCalled();
+    expect(tx.feedbackConfirmation.findFirst.mock.calls[0][0].where).toEqual({
+      feedbackDeadlineTaskId: "fd-9",
+      deliveryId: null,
+      undoneAt: null,
+    });
+  });
+
+  it("never DMs a sender: there is no delivery, so a missing channel is only logged", async () => {
+    vi.mocked(resolveProjectChannel).mockResolvedValue({
+      channelId: null,
+      channelName: null,
+      source: "none",
+      autoMatched: false,
+      suggestions: [],
+    } as never);
+    const r = await confirmFeedback(taskInput);
+    expect(sendSlackDM).not.toHaveBeenCalled();
+    expect(r.slackOk).toBe(false);
+    expect(r.clickupOk).toBe(true);
+    expect(console.warn).toHaveBeenCalledWith(
+      "portal confirm reached no Slack destination for",
+      "list-9",
+      expect.stringContaining("no sender to DM")
+    );
+  });
+
+  it("undo reopens the task, replies in the thread, and marks the row undone", async () => {
+    const r = await undoFeedback({
+      clientFolderId: "folder-1",
+      clientName: "Stack Overflow",
+      feedbackTaskId: "fd-9",
+      projectName: "2026 Internal Explainer",
+      portalUrl: "https://portal.example.com/portal/abc",
+    });
+    expect(vi.mocked(prisma.feedbackConfirmation.findFirst).mock.calls[0][0]?.where).toEqual({
+      feedbackDeadlineTaskId: "fd-9",
+      deliveryId: null,
+      undoneAt: null,
+    });
+    expect(updateTaskStatus).toHaveBeenCalledWith("fd-9", "waiting on client");
+    expect(postChannelMessage).toHaveBeenCalledWith("C9", expect.stringContaining("reopened feedback"), {
+      threadTs: "171.9",
+    });
+    expect(prisma.feedbackConfirmation.update).toHaveBeenCalledWith({
+      where: { id: "conf-9" },
+      data: { undoneAt: expect.any(Date) },
+    });
+    expect(r).toEqual({ id: "conf-9", clickupOk: true, slackOk: true });
+  });
+
+  it("undo 409s with nothing active, and 502s when ClickUp will not reopen", async () => {
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(null);
+    await expect(
+      undoFeedback({ clientFolderId: "folder-1", clientName: "Stack Overflow", feedbackTaskId: "fd-9", portalUrl: "u" })
+    ).rejects.toMatchObject({ status: 409 });
+
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(confirmedRow as never);
+    vi.mocked(updateTaskStatus).mockRejectedValue(new Error("ClickUp down"));
+    await expect(
+      undoFeedback({ clientFolderId: "folder-1", clientName: "Stack Overflow", feedbackTaskId: "fd-9", portalUrl: "u" })
+    ).rejects.toMatchObject({ status: 502 });
+    expect(prisma.feedbackConfirmation.update).not.toHaveBeenCalled();
+  });
+
+  it("lastFeedbackTaskActivity reads the newest row for the task, undo winning over confirm", async () => {
+    const confirmedAt = new Date("2026-09-10T12:00:00Z");
+    const undoneAt = new Date("2026-09-10T12:05:00Z");
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({ confirmedAt, undoneAt } as never);
+    expect(await lastFeedbackTaskActivity("fd-9")).toEqual(undoneAt);
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue({ confirmedAt, undoneAt: null } as never);
+    expect(await lastFeedbackTaskActivity("fd-9")).toEqual(confirmedAt);
+    vi.mocked(prisma.feedbackConfirmation.findFirst).mockResolvedValue(null);
+    expect(await lastFeedbackTaskActivity("fd-9")).toBeNull();
   });
 });

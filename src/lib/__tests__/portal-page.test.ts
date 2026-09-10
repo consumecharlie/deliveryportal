@@ -50,7 +50,17 @@ function live(over: Partial<LivePayload>): LivePayload {
 }
 
 function fd(over: Partial<LiveFeedbackTask> & { taskId: string }): LiveFeedbackTask {
-  return { name: over.taskId, dueMs: null, isOpen: true, parentTaskId: null, deliverableType: "Edit V1", ...over };
+  const isOpen = over.isOpen ?? true;
+  return {
+    name: over.taskId,
+    dueMs: null,
+    isOpen,
+    status: isOpen ? "waiting on client" : "complete",
+    awaitingClient: isOpen,
+    parentTaskId: null,
+    deliverableType: "Edit V1",
+    ...over,
+  };
 }
 
 const P19 = { parentTaskId: "P19", parentTaskName: "LOC19: Intuit" };
@@ -350,8 +360,9 @@ describe("buildPortalPage: review state", () => {
     const fdSet = (parent: string, closedVideo: boolean) => [
       fd({ taskId: `${parent}-v1`, name: "Confirm Video Edit01 Feedback Received", deliverableType: "LoC Edit V1", parentTaskId: parent, dueMs: day("2026-09-08"), isOpen: !closedVideo }),
       fd({ taskId: `${parent}-s1`, name: "Confirm Snippets Edit01 Feedback Received", deliverableType: "LoC Snippets Edit V1", parentTaskId: parent, dueMs: day("2026-09-10") }),
-      fd({ taskId: `${parent}-v2`, name: "Confirm Edit Feedback or Approval", deliverableType: "LoC Edit V2", parentTaskId: parent, dueMs: day("2026-09-20") }),
-      fd({ taskId: `${parent}-s2`, name: "Confirm Snippets Feedback or Approval", deliverableType: "LoC Snippets Edit V2", parentTaskId: parent, dueMs: day("2026-09-22") }),
+      // V2 is not out yet, so its feedback task is ours, not the client's.
+      fd({ taskId: `${parent}-v2`, name: "Confirm Edit Feedback or Approval", deliverableType: "LoC Edit V2", parentTaskId: parent, dueMs: day("2026-09-20"), status: "not ready", awaitingClient: false }),
+      fd({ taskId: `${parent}-s2`, name: "Confirm Snippets Feedback or Approval", deliverableType: "LoC Snippets Edit V2", parentTaskId: parent, dueMs: day("2026-09-22"), status: "not ready", awaitingClient: false }),
     ];
     const rows = [
       row({ id: "v25", taskId: "S25v", ...EP(25), shareTaskName: "Share Video Edit01 with Client", sentAt: new Date("2026-08-28T14:00:00Z") }),
@@ -531,6 +542,7 @@ describe("buildPortalPage: attention and focus", () => {
     expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, label: "Feedback by Thu, Sep 3 (suggested)" });
     expect(page.attention[0]).toEqual({
       deliveryId: "e21",
+      feedbackTaskId: null,
       deliverableTitle: "Leaders of Code - Ep #21",
       variant: "Video Edit01",
       projectName: "Leaders of Code Podcast",
@@ -663,5 +675,152 @@ describe("pickContactDomain", () => {
     expect(build({ live: withContacts }).clientDomain).toBe("stackoverflow.com");
     expect(build({ live: withContacts, clientDomain: "intuit.com" }).clientDomain).toBe("intuit.com");
     expect(build().clientDomain).toBeNull();
+  });
+});
+
+describe("buildPortalPage: attention items with no delivery behind them", () => {
+  const PARENT = { parentTaskId: "PSpin", parentTaskName: "Spinoffs" };
+  /** A list whose share task was completed in ClickUp without a portal send. */
+  const SPIN = fd({
+    taskId: "FSpin",
+    name: "Confirm Spinoff Details with Client",
+    deliverableType: "Spinoff Details Request",
+    parentTaskId: "PSpin",
+    dueMs: day("2026-09-03"),
+  });
+  const liveSpin = (over: Partial<LivePayload> = {}) =>
+    live({
+      feedback: { "Spinoff Details Request": SPIN },
+      feedbackByParent: { PSpin: [SPIN] },
+      milestones: [
+        ms({
+          taskId: "SSpin",
+          name: "Send Spinoffs Details Request to Client",
+          deliverableType: "Spinoff Details Request",
+          ...PARENT,
+          dueMs: day("2026-09-01"),
+          isClosed: true,
+        }),
+      ],
+      ...over,
+    });
+  const baseArgs = {
+    rows: [],
+    confirmations: new Map<string, ConfirmationRow>(),
+    discovered: [{ listId: "LS", name: "Stack Overflow 2026 Internal Explainer", archived: false }],
+  };
+
+  it("an open 'waiting on client' task with no delivery becomes one attention item", () => {
+    const page = build({ ...baseArgs, live: { LS: liveSpin() } });
+    expect(page.attention).toHaveLength(1);
+    expect(page.attention[0]).toEqual({
+      deliveryId: null,
+      feedbackTaskId: "FSpin",
+      deliverableTitle: "Spinoff Details",
+      variant: "Spinoffs",
+      projectName: "2026 Internal Explainer",
+      projectListId: "LS",
+      primaryLink: null,
+      review: {
+        state: "due-today",
+        mode: "feedback",
+        label: "Due today",
+        dueMs: day("2026-09-03"),
+        dueIsEstimate: false,
+        confirmedAtMs: null,
+        canUndo: false,
+      },
+    });
+    // It is an action item only; the deliverables table stays empty.
+    expect(page.projects[0].deliverables).toEqual([]);
+  });
+
+  it("labels an approval task as approval and dates it from ClickUp", () => {
+    const task = fd({ taskId: "FA", name: "Confirm Final Deliverables Approval", deliverableType: "Final Delivery", dueMs: day("2026-09-10") });
+    const page = build({ ...baseArgs, live: { LS: live({ feedback: { "Final Delivery": task } }) } });
+    expect(page.attention[0].review).toMatchObject({
+      state: "awaiting",
+      mode: "approval",
+      label: "Approval needed, due Thu, Sep 10",
+    });
+    expect(page.attention[0].deliverableTitle).toBe("Final Deliverables");
+    expect(page.attention[0].variant).toBeNull();
+  });
+
+  it("a task a deliverable already speaks for is not listed twice", () => {
+    const rows = [
+      row({
+        id: "dspin",
+        taskId: "SSpin",
+        projectListId: "LS",
+        projectName: "Stack Overflow 2026 Internal Explainer",
+        ...PARENT,
+        shareTaskName: "Send Spinoffs Details Request to Client",
+        deliverableType: "Spinoff Details Request",
+        sentAt: new Date("2026-09-01T14:00:00Z"),
+      }),
+    ];
+    const page = build({ ...baseArgs, rows, live: { LS: liveSpin() } });
+    expect(page.attention).toHaveLength(1);
+    expect(page.attention[0].deliveryId).toBe("dspin");
+    expect(page.attention[0].feedbackTaskId).toBeNull();
+  });
+
+  it("an archived project never contributes one", () => {
+    const page = build({ ...baseArgs, live: { LS: liveSpin({ archived: true }) } });
+    expect(page.projects[0].phase).toBe("completed");
+    expect(page.attention).toEqual([]);
+  });
+
+  it("a task that is open but not waiting on the client contributes none", () => {
+    const notReady = { ...SPIN, status: "not ready", awaitingClient: false };
+    const page = build({
+      ...baseArgs,
+      live: { LS: live({ feedback: { "Spinoff Details Request": notReady }, feedbackByParent: { PSpin: [notReady] } }) },
+    });
+    expect(page.attention).toEqual([]);
+  });
+
+  it("a complete task contributes none", () => {
+    const done = { ...SPIN, isOpen: false, status: "complete", awaitingClient: false };
+    const page = build({ ...baseArgs, live: { LS: live({ feedback: { "Spinoff Details Request": done } }) } });
+    expect(page.attention).toEqual([]);
+  });
+
+  it("an undated task contributes none: with no delivery there is nothing to ask by", () => {
+    const undated = { ...SPIN, dueMs: null };
+    const page = build({ ...baseArgs, live: { LS: live({ feedback: { "Spinoff Details Request": undated } }) } });
+    expect(page.attention).toEqual([]);
+  });
+
+  it("a focused project only shows its own task items", () => {
+    const other = fd({ taskId: "FOther", name: "Confirm Edit V1 with Client", dueMs: day("2026-09-04") });
+    const page = build({
+      ...baseArgs,
+      discovered: [
+        { listId: "LS", name: "Stack Overflow 2026 Internal Explainer", archived: false },
+        { listId: "LO", name: "Stack Overflow Other Project", archived: false },
+      ],
+      live: { LS: liveSpin(), LO: live({ feedback: { "Edit V1": other } }) },
+      focusListId: "LS",
+    });
+    expect(page.attention.map((a) => a.feedbackTaskId)).toEqual(["FSpin"]);
+  });
+
+  it("sorts task items in with the deliverable ones: real deadlines by date, estimates last", () => {
+    const soon = fd({ taskId: "FSoon", name: "Confirm Edit V1 with Client", dueMs: day("2026-09-04") });
+    const later = fd({ taskId: "FLater", name: "Confirm Snippets with Client", dueMs: day("2026-09-12") });
+    const page = build({
+      discovered: [{ listId: "LS", name: "Stack Overflow 2026 Internal Explainer", archived: false }],
+      live: { ...LIVE, LS: live({ feedback: { "Edit V1": soon, Snippets: later } }) },
+    });
+    // e21 is a real Sep 8 deadline, c1 is an estimate, so both task items with
+    // real dates straddle e21 and the estimate stays last.
+    expect(page.attention.map((a) => a.deliveryId ?? a.feedbackTaskId)).toEqual([
+      "FSoon",
+      "e21",
+      "FLater",
+      "c1",
+    ]);
   });
 });

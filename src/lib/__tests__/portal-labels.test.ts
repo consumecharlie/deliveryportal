@@ -18,6 +18,7 @@ import {
   linkHint,
   cleanLinkText,
   stripClientPrefix,
+  feedbackTaskTitle,
   reviewMode,
   reviewLabel,
   PHASE_ONLY_WORDS,
@@ -362,5 +363,34 @@ describe("stripClientPrefix", () => {
   it("a client name with regex characters is matched literally", () => {
     expect(stripClientPrefix("C++ (Europe) Launch Film", "C++ (Europe)")).toBe("Launch Film");
     expect(stripClientPrefix("Cxx Europe Launch Film", "C++ (Europe)")).toBe("Cxx Europe Launch Film");
+  });
+});
+
+describe("feedbackTaskTitle", () => {
+  it("strips the Confirm prefix and the internal suffixes", () => {
+    expect(feedbackTaskTitle("Confirm Spinoff Details with Client", null, "Spinoff Details Request")).toBe("Spinoff Details");
+    expect(feedbackTaskTitle("Confirm Edit V1 Feedback Received", null, "Edit V1")).toBe("Edit V1");
+    expect(feedbackTaskTitle("Confirm Final Deliverables Feedback or Approval", null, "Final Delivery")).toBe("Final Deliverables");
+    expect(feedbackTaskTitle("Confirm AV Script V2 Approval", null, "AV Script V2")).toBe("AV Script V2");
+    expect(feedbackTaskTitle("Confirm Post Script AV Received", null, "Post AV V1")).toBe("Post Script AV");
+    expect(feedbackTaskTitle("confirm  edit v1   feedback received", null, "Edit V1")).toBe("edit v1");
+    // A name that says nothing internal is left alone.
+    expect(feedbackTaskTitle("Spinoff Details", null, "Edit V1")).toBe("Spinoff Details");
+  });
+
+  it("falls back to the parent deliverable, then the deliverable type", () => {
+    expect(feedbackTaskTitle("Confirm Feedback Received", "LOC19: Intuit", "Edit V1")).toBe("LOC19: Intuit");
+    // A phase-only parent says nothing, so the type wins.
+    expect(feedbackTaskTitle("Confirm Feedback Received", "Post-Production", "Edit V1")).toBe("Edit V1");
+    expect(feedbackTaskTitle("Confirm Approval", null, "Final Delivery")).toBe("Final Delivery");
+    expect(feedbackTaskTitle("", null, "Edit V1")).toBe("Edit V1");
+    expect(feedbackTaskTitle(null, null, "Edit V1")).toBe("Edit V1");
+    // Department prefixes come off the parent, as everywhere else.
+    expect(feedbackTaskTitle("Confirm with Client", "Post-Production - Leaders of Code - Ep #21", "Edit V1")).toBe("Leaders of Code - Ep #21");
+  });
+
+  it("never returns an empty string", () => {
+    expect(feedbackTaskTitle("Confirm Approval", null, "")).toBe("Confirm Approval");
+    expect(feedbackTaskTitle("", null, "")).toBe("");
   });
 });

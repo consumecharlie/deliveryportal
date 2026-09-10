@@ -11,6 +11,8 @@ function task(over: Partial<LiveFeedbackTask> = {}): LiveFeedbackTask {
     name: "Feedback Deadline: AV Script V1",
     dueMs: Date.parse("2026-06-04T08:00:00Z"),
     isOpen: true,
+    status: "waiting on client",
+    awaitingClient: true,
     parentTaskId: null,
     deliverableType: "AV Script V1",
     ...over,

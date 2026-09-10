@@ -82,7 +82,7 @@ describe("selectFeedbackTasks", () => {
   it("keeps only Feedback Deadline tasks, keyed by deliverable type label", () => {
     const map = selectFeedbackTasks([t({ id: "a", due: "1000" }), t({ id: "b", taskType: 4 }), t({ id: "c", deliverableType: 1, due: "2000" })]);
     expect(Object.keys(map).sort()).toEqual(["AV Script V1", "AV Script V2"]);
-    expect(map["AV Script V1"]).toEqual({ taskId: "a", name: "Task a", dueMs: 1000, isOpen: true, parentTaskId: null, deliverableType: "AV Script V1" });
+    expect(map["AV Script V1"]).toEqual({ taskId: "a", name: "Task a", dueMs: 1000, isOpen: true, status: "waiting on client", awaitingClient: true, parentTaskId: null, deliverableType: "AV Script V1" });
     expect(map["AV Script V2"].taskId).toBe("c");
   });
 
@@ -133,14 +133,21 @@ describe("selectFeedbackByParent", () => {
 });
 
 describe("pairFeedbackTask", () => {
-  const fd = (over: Partial<import("@/lib/portal-live").LiveFeedbackTask> & { taskId: string }) => ({
-    name: over.taskId,
-    dueMs: null,
-    isOpen: true,
-    parentTaskId: null,
-    deliverableType: "Edit V1",
-    ...over,
-  });
+  const fd = (
+    over: Partial<import("@/lib/portal-live").LiveFeedbackTask> & { taskId: string }
+  ): import("@/lib/portal-live").LiveFeedbackTask => {
+    const isOpen = over.isOpen ?? true;
+    return {
+      name: over.taskId,
+      dueMs: null,
+      isOpen,
+      status: isOpen ? "waiting on client" : "complete",
+      awaitingClient: isOpen,
+      parentTaskId: null,
+      deliverableType: "Edit V1",
+      ...over,
+    };
+  };
   // Two episodes, each with its own "Edit V1" feedback task.
   const live = {
     feedback: { "Edit V1": fd({ taskId: "F21", parentTaskId: "P21", dueMs: 5000 }) },
@@ -292,7 +299,7 @@ describe("runPool", () => {
 
 const STALE_DATA: LivePayload = {
   version: LIVE_PAYLOAD_VERSION,
-  feedback: { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true, parentTaskId: null, deliverableType: "AV Script V1" } },
+  feedback: { "AV Script V1": { taskId: "old", name: "n", dueMs: 1, isOpen: true, status: "waiting on client", awaitingClient: true, parentTaskId: null, deliverableType: "AV Script V1" } },
   feedbackByParent: {},
   milestones: [],
   wrapsUpMs: null,

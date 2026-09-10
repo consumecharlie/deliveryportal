@@ -185,9 +185,14 @@ model ProjectChannel {
 /** A client pressing "All feedback is in" on a delivery. undoneAt != null
  *  means the confirmation was reversed; the latest row per delivery wins. */
 model FeedbackConfirmation {
-  id                     String    @id @default(cuid())
-  deliveryId             String
-  delivery               Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+  /**
+   * Null for a confirmation that stands on a Feedback Deadline task alone: the
+   * team completed the share task in ClickUp without sending through the
+   * portal, so no Delivery row exists and `feedbackDeadlineTaskId` is the key.
+   */
+  deliveryId             String?
+  delivery               Delivery? @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
   projectListId          String?
   deliverableType        String
   feedbackDeadlineTaskId String?
@@ -198,6 +203,7 @@ model FeedbackConfirmation {
   slackMessageTs         String?
 
   @@index([deliveryId, confirmedAt(sort: Desc)])
+  @@index([feedbackDeadlineTaskId, confirmedAt(sort: Desc)])
   @@index([projectListId])
 }
 

@@ -30,12 +30,21 @@ import {
   reviewMode,
   reviewLabel,
   stripClientPrefix,
+  feedbackTaskTitle,
   emailDomain,
   type ReviewMode,
 } from "@/lib/portal-labels";
 import { decideFeedbackStatus, type ConfirmationRow, type FeedbackStatus } from "@/lib/portal-status";
+import { deadlineState } from "@/lib/portal-deadline";
+import { formatFeedbackDeadline } from "@/lib/feedback-deadline";
 import { pickReviewLink } from "@/lib/portal-view-model";
-import { pairFeedbackTask, type LivePayload, type LiveMilestone } from "@/lib/portal-live";
+import {
+  allFeedbackTasks,
+  pairFeedbackTask,
+  type LiveFeedbackTask,
+  type LivePayload,
+  type LiveMilestone,
+} from "@/lib/portal-live";
 import type { DiscoveredProject } from "@/lib/portal-projects";
 import type {
   PortalPageModel,
@@ -214,6 +223,15 @@ export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable
   };
 }
 
+/**
+ * A project plus the attention items that stand on its feedback tasks alone,
+ * which only the project's own build knows enough to find.
+ */
+interface BuiltProject {
+  project: PortalProject;
+  taskAttention: PortalAttentionItem[];
+}
+
 interface DeliverableDraft {
   key: string;
   versions: PortalPageRow[]; // newest first
@@ -241,7 +259,9 @@ function buildDeliverable(
   live: LivePayload | undefined,
   input: BuildPortalPageInput,
   names: MentionNames,
-  primaryLinks: Map<string, PortalLink | null>
+  primaryLinks: Map<string, PortalLink | null>,
+  /** Collects the Feedback Deadline tasks a deliverable already speaks for. */
+  pairedTaskIds: Set<string>
 ): PortalDeliverable {
   const latest = draft.versions[0];
   const total = draft.versions.length;
@@ -278,6 +298,7 @@ function buildDeliverable(
     shareTaskName: latest.shareTaskName,
     sentAtMs: latest.sentAt.getTime(),
   });
+  if (task) pairedTaskIds.add(task.taskId);
   const mode = reviewMode(task?.name, latest.deliverableType);
   const review = live?.archived
     ? noReview(mode)
@@ -376,6 +397,74 @@ function earliestUpcomingMs(milestones: PortalMilestone[]): number | null {
   return dates.length > 0 ? Math.min(...dates) : null;
 }
 
+/** "Tue, Sep 8", with the time when ClickUp carried one. */
+function dueLabelOf(dueMs: number): string {
+  const fmt = formatFeedbackDeadline(dueMs);
+  return fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate;
+}
+
+/** The review block for an attention item that stands on a feedback task alone. */
+function taskReview(task: LiveFeedbackTask, nowMs: number): PortalDeliverable["review"] {
+  const due = deadlineState(task.dueMs!, nowMs);
+  const state: ReviewState = due === "open" ? "awaiting" : due;
+  const mode = reviewMode(task.name, task.deliverableType);
+  return {
+    state,
+    mode,
+    label: reviewLabel({ state, mode, dueLabel: dueLabelOf(task.dueMs!), dueIsEstimate: false }),
+    dueMs: task.dueMs,
+    dueIsEstimate: false,
+    confirmedAtMs: null,
+    canUndo: false,
+  };
+}
+
+/**
+ * Attention items for the feedback tasks nothing else speaks for: the team
+ * completed a share task in ClickUp without sending through the portal, so
+ * there is no Delivery row, yet the paired Feedback Deadline task is waiting
+ * on the client. The roadmap already shows these; without this they would
+ * never reach the action list.
+ *
+ * Only "waiting on client" tasks count (an open "not ready" task is ours to
+ * finish), only tasks no deliverable already paired to, only in-progress
+ * projects, and only dated tasks: with no delivery there is no send date to
+ * compute a deadline from, so an undated task has nothing to ask by.
+ */
+function buildTaskAttention(
+  project: PortalProject,
+  live: LivePayload | undefined,
+  pairedTaskIds: Set<string>,
+  nowMs: number
+): PortalAttentionItem[] {
+  if (!live || project.phase !== "in-progress") return [];
+  const out: PortalAttentionItem[] = [];
+  for (const task of allFeedbackTasks(live)) {
+    if (!task.awaitingClient || task.dueMs === null) continue;
+    if (pairedTaskIds.has(task.taskId)) continue;
+    const parentName = task.parentTaskId
+      ? live.milestones.find((m) => m.parentTaskId === task.parentTaskId)?.parentTaskName ?? null
+      : null;
+    const title = feedbackTaskTitle(task.name, parentName, task.deliverableType);
+    const parentTitle = informativeParentName(parentName);
+    const variant =
+      parentTitle && !sameText(parentTitle, title) && !sameText(parentTitle, project.name)
+        ? deliverableTitle(parentName, "") || parentTitle
+        : null;
+    out.push({
+      deliveryId: null,
+      feedbackTaskId: task.taskId,
+      deliverableTitle: title,
+      variant: variant && !sameText(variant, title) ? variant : null,
+      projectName: project.name,
+      projectListId: project.listId,
+      review: taskReview(task, nowMs),
+      primaryLink: null,
+    });
+  }
+  return out;
+}
+
 /**
  * One project: a list discovered in the client's folder, the deliveries on
  * that list, or both. A discovered list with no delivery yet is a real
@@ -388,7 +477,7 @@ function buildProject(
   input: BuildPortalPageInput,
   names: MentionNames,
   primaryLinks: Map<string, PortalLink | null>
-): PortalProject {
+): BuiltProject {
   const newest = rows.length > 0 ? [...rows].sort(bySentAtDesc)[0] : null;
   const listId = discovered?.listId ?? newest?.projectListId ?? "";
   // The ClickUp list name is the source of truth (lists get renamed); the
@@ -400,8 +489,9 @@ function buildProject(
   const name = stripClientPrefix(fullName, input.clientName);
   const live = listId ? input.live[listId] : undefined;
 
+  const pairedTaskIds = new Set<string>();
   const deliverables = groupDeliverables(rows).map((d) =>
-    buildDeliverable(d, live, input, names, primaryLinks)
+    buildDeliverable(d, live, input, names, primaryLinks, pairedTaskIds)
   );
   const reviewByDeliveryId = new Map(deliverables.map((d) => [d.latest.deliveryId, d.review.state]));
   const milestones = live
@@ -419,7 +509,7 @@ function buildProject(
   const lastActivityMs =
     newest?.sentAt.getTime() ?? earliestUpcomingMs(milestones) ?? live?.wrapsUpMs ?? 0;
 
-  return {
+  const project: PortalProject = {
     listId,
     name,
     phase,
@@ -428,6 +518,10 @@ function buildProject(
     lastActivityMs,
     milestones,
     deliverables,
+  };
+  return {
+    project,
+    taskAttention: buildTaskAttention(project, live, pairedTaskIds, input.nowMs),
   };
 }
 
@@ -462,7 +556,7 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
   // (by template variable) while the deliverables are built.
   const primaryLinks = new Map<string, PortalLink | null>();
   const keys = Array.from(new Set([...discovered.keys(), ...byProject.keys()]));
-  const projects = keys.map((key) =>
+  const built = keys.map((key) =>
     buildProject(
       discovered.get(key) ?? null,
       byProject.get(key) ?? [],
@@ -473,27 +567,34 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
     )
   );
   const rank = (p: PortalProject) => (p.phase === "in-progress" ? 0 : 1);
-  projects.sort(
-    (a, b) =>
+  built.sort(
+    ({ project: a }, { project: b }) =>
       rank(a) - rank(b) ||
       b.lastActivityMs - a.lastActivityMs ||
       a.listId.localeCompare(b.listId) ||
       a.name.localeCompare(b.name)
   );
+  const projects = built.map((b) => b.project);
 
   const counts = {
     inProgress: projects.filter((p) => p.phase === "in-progress").length,
     completed: projects.filter((p) => p.phase === "completed").length,
   };
 
-  const shown = input.focusListId ? projects.filter((p) => p.listId === input.focusListId) : projects;
+  const shownBuilt = input.focusListId
+    ? built.filter((b) => b.project.listId === input.focusListId)
+    : built;
+  const shown = shownBuilt.map((b) => b.project);
 
   const attention: PortalAttentionItem[] = [];
-  for (const p of shown) {
+  for (const { project: p } of shownBuilt) {
     for (const d of p.deliverables) {
       if (!ATTENTION_STATES.has(d.review.state)) continue;
       attention.push({
         deliveryId: d.latest.deliveryId,
+        // The delivery is the confirm key here; the task id only matters for
+        // an item that has no delivery behind it.
+        feedbackTaskId: null,
         deliverableTitle: d.title,
         variant: d.variant,
         projectName: p.name,
@@ -503,14 +604,17 @@ export function buildPortalPage(input: BuildPortalPageInput): PortalPageModel {
       });
     }
   }
+  // Then the feedback tasks no delivery stands behind.
+  for (const b of shownBuilt) attention.push(...b.taskAttention);
   // Real deadlines (ClickUp or the promised window) before estimates; within
   // each group the soonest (for estimates: oldest) first.
   const estimateRank = (a: PortalAttentionItem) => (a.review.dueIsEstimate ? 1 : 0);
+  const itemKey = (a: PortalAttentionItem) => a.deliveryId ?? a.feedbackTaskId ?? "";
   attention.sort(
     (a, b) =>
       estimateRank(a) - estimateRank(b) ||
       (a.review.dueMs ?? Infinity) - (b.review.dueMs ?? Infinity) ||
-      a.deliveryId.localeCompare(b.deliveryId)
+      itemKey(a).localeCompare(itemKey(b))
   );
 
   return {
