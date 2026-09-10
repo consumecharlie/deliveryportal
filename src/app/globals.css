@@ -1509,7 +1509,7 @@ a.portal-rail-link:hover .portal-rail-label {
 .portal-thead,
 .portal-row {
   display: grid;
-  grid-template-columns: minmax(260px, 2.2fr) 90px minmax(220px, 1.6fr) 170px 100px;
+  grid-template-columns: minmax(200px, 2.2fr) 90px minmax(220px, max-content) 170px 100px;
   align-items: center;
   column-gap: 16px;
 }
@@ -1679,10 +1679,9 @@ a.portal-rail-link:hover .portal-rail-label {
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.125rem;
-  /* Never truncate a link's name: wrap inside the button rather than cutting it. */
-  white-space: normal;
-  overflow-wrap: anywhere;
-  max-width: 260px;
+  /* Never truncate or wrap a link's name: the button widens to fit it. */
+  white-space: nowrap;
+  max-width: none;
 }
 .portal-linkbtn-hint {
   font-size: 11px;
