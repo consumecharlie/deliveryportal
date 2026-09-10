@@ -1246,7 +1246,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 240px;
+  max-width: 420px;
   height: 30px;
   margin: 0 6px;
   padding: 0 6px 0 10px;
@@ -1303,7 +1303,7 @@
 }
 .portal-tab-label {
   display: block;
-  max-width: 200px;
+  max-width: 380px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1679,10 +1679,10 @@ a.portal-rail-link:hover .portal-rail-label {
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.125rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
+  /* Never truncate a link's name: wrap inside the button rather than cutting it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 260px;
 }
 .portal-linkbtn-hint {
   font-size: 11px;
