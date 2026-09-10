@@ -1213,47 +1213,97 @@
 
 /* Project Viewer: Finder-style tabs under the title bar */
 .portal-window-viewer .portal-window-body { padding-top: 0; }
+/* Project Viewer tabs: Mac OS 9 keystone tabs (slanted sides, hairline stroke,
+   top highlight). The active tab merges into the panel below. The slants are
+   skewed pseudo-elements so each keeps its own border. */
 .portal-tabs {
+  position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 0;
   margin: 0 -20px;
-  padding: 8px 16px 0;
-  border-bottom: 1px solid #bbd2cf;
-  background: #f1f7f4;
+  padding: 10px 26px 0;
+  background: #e5eee8;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   white-space: nowrap;
 }
+/* The panel edge the tabs sit on; the active tab paints over its own stretch. */
+.portal-tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: #151919;
+  z-index: 1;
+}
 .portal-tab {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  max-width: 260px;
-  height: 34px;
-  padding: 0 8px 0 12px;
-  border-radius: 6px 6px 0 0;
-  border-bottom: 2px solid transparent;
-  background: #e5eee8;
+  gap: 6px;
+  max-width: 240px;
+  height: 30px;
+  margin: 0 6px;
+  padding: 0 6px 0 10px;
+  border: 1px solid #151919;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(#f4f9f7 0, #e2ebe6 55%, #d6e2dc 100%);
   color: #4d5959;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
+  z-index: 2;
 }
-.portal-tab:hover { background: #dbe7e0; }
-.portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: -2px; }
+/* The two slanted shoulders. `background: inherit` keeps the bevel continuous. */
+.portal-tab::before,
+.portal-tab::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: 0;
+  width: 12px;
+  background: inherit;
+  border: 1px solid #151919;
+  border-bottom: none;
+  z-index: -1;
+}
+.portal-tab::before {
+  left: -7px;
+  border-right: none;
+  border-radius: 4px 0 0 0;
+  transform: skewX(-16deg);
+  transform-origin: bottom left;
+}
+.portal-tab::after {
+  right: -7px;
+  border-left: none;
+  border-radius: 0 4px 0 0;
+  transform: skewX(16deg);
+  transform-origin: bottom right;
+}
+.portal-tab:hover { background: linear-gradient(#fafffd 0, #e9f1ed 55%, #dde8e2 100%); }
+.portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
+/* Active tab: the panel colour, one pixel taller, sitting over the panel edge. */
 .portal-tab-active,
 .portal-tab-active:hover {
-  background: #fff;
+  height: 33px;
+  margin-bottom: -1px;
+  padding-bottom: 1px;
+  background: linear-gradient(#ffffff 0, #fafffd 40%, #fafffd 100%);
   color: #151919;
   font-weight: 600;
-  border-bottom-color: #6ac387;
+  z-index: 3;
 }
 .portal-tab-label {
   display: block;
-  max-width: 220px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1263,17 +1313,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: #6f7f7f;
   cursor: pointer;
 }
-.portal-tab-x:hover { background: rgba(21, 25, 25, 0.1); color: #151919; }
+.portal-tab-x:hover { background: rgba(21, 25, 25, 0.12); color: #151919; }
 .portal-viewer-panel { padding-top: 20px; }
 
 /* Project window body */
