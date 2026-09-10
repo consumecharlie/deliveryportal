@@ -49,13 +49,13 @@ describe("describeConnection", () => {
   it("stays connected with a merely stale access token", () => {
     // We hold a refresh token, so an expired access token is not a user problem.
     expect(
-      describeConnection({ status: "connected", expiresAt: new Date("2020-01-01") }, now)
+      describeConnection({ status: "connected", expiresAt: new Date("2020-01-01") })
     ).toEqual({ state: "connected", canSend: true });
   });
 
   it("is connected when healthy", () => {
     expect(
-      describeConnection({ status: "connected", expiresAt: new Date("2026-09-09T23:00:00Z") }, now)
+      describeConnection({ status: "connected", expiresAt: new Date("2026-09-09T23:00:00Z") })
     ).toEqual({ state: "connected", canSend: true });
   });
 });

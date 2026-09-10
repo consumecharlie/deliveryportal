@@ -63,8 +63,7 @@ export function isExpired(
  * the DB so the sender picker and Settings agree on wording.
  */
 export function describeConnection(
-  record: Pick<ConnectionRecord, "status" | "expiresAt"> | null,
-  now: Date = new Date()
+  record: Pick<ConnectionRecord, "status" | "expiresAt"> | null
 ): { state: "connected" | "needs_reconnect" | "not_connected"; canSend: boolean } {
   if (!record) return { state: "not_connected", canSend: false };
   if (record.status !== "connected") return { state: "needs_reconnect", canSend: false };
