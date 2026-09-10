@@ -118,7 +118,15 @@ export interface PortalProject {
 }
 
 export interface PortalAttentionItem {
-  deliveryId: string;
+  /**
+   * The delivery behind this item, when we sent one through the portal. Null
+   * for an item that exists only as an open ClickUp Feedback Deadline task
+   * (the matching share task was completed outside the portal), which still
+   * needs the client's answer and can still be confirmed.
+   */
+  deliveryId: string | null;
+  /** The ClickUp Feedback Deadline task; the confirm key when deliveryId is null. */
+  feedbackTaskId: string | null;
   deliverableTitle: string;
   variant: string | null;
   projectName: string;
