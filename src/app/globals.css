@@ -507,6 +507,22 @@
 }
 
 /* Desktop canvas: the 62px grid from the sign-in art */
+/* Tidy up sits on the desktop, top right, inside the top gutter. */
+.portal-canvas-tools {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+}
+.portal-desktop-stack .portal-canvas-tools {
+  position: static;
+  padding: 12px 16px 0;
+}
+/* Pixel button on the dark desktop or menu bar: off-white stroke and shadow so it reads. */
+.cm-btn--on-dark { --btn-stroke: #e5eee8; --btn-shadow: #e5eee8; }
+.portal-menu-note { --btn-off: 3px; padding: 7px 12px; font-size: 12px; }
 .portal-canvas {
   position: relative;
   flex: 1 0 auto;
@@ -1964,7 +1980,6 @@ textarea.portal-input { resize: vertical; }
   .portal-lockup-logo { height: 18px; max-width: 150px; }
 }
 @media (max-width: 600px) {
-  .portal-menu-tidy,
   .portal-lockup-sub,
   .portal-menu-crumb-sep,
   .portal-menu-project { display: none; }

@@ -27,13 +27,12 @@ export function easternDayKey(ms: number): string {
 }
 
 /** "Tue 4:12 PM", Eastern, for the menu bar clock. */
+/** Menu bar clock: "Wed Sep 9 6:00 PM" (Eastern; the pixel font uppercases it). */
 export function menuClock(ms: number = Date.now()): string {
-  return new Date(ms).toLocaleString("en-US", {
-    timeZone: TZ,
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const d = new Date(ms);
+  const day = d.toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+  return `${day.replace(/,/g, "")} ${time}`;
 }
 
 /** Cut a label to `max` characters with a single ellipsis; never splits a surrogate pair. */

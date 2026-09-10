@@ -22,6 +22,7 @@ import {
 } from "./desktop-state";
 import type { WindowFrameProps } from "./mac-window";
 import { MenuBar } from "./menu-bar";
+import Button from "./cm-button";
 import { BootScreen } from "./boot-screen";
 import { FinderWindow, type FinderView } from "./finder-window";
 import { ReviewWindow } from "./review-window";
@@ -41,8 +42,8 @@ const BOTTOM_STRIP = 132;
  * a rethink; flip to true to bring them back (markup and CSS are intact).
  */
 const SHOW_DESKTOP_FLOATERS = false;
-/** Top gutter: 60px so the 44px floaters sit fully above the first row; 24px without them. */
-const TOP_GUTTER = SHOW_DESKTOP_FLOATERS ? 60 : 24;
+/** Top gutter: room for the Tidy up button row (and the 44px floaters when shown). */
+const TOP_GUTTER = SHOW_DESKTOP_FLOATERS ? 72 : 64;
 const TWO_COLUMN_MIN = 1100;
 const MAX_CONTENT = 1440;
 const REACH = 80;
@@ -458,11 +459,21 @@ export function Desktop({ token, model, sandbox = false }: Props) {
         crumb={focusMode && focusProject ? { href: `/portal/${token}`, projectName: focusProject.name } : undefined}
         noteOpen={win(NOTE_ID).open}
         onNote={toggleNote}
-        onTidy={tidyUp}
         preview={sandbox}
       />
 
       <div ref={canvasRef} className="portal-canvas" style={wide ? { height: canvasH } : undefined}>
+        <div className="portal-canvas-tools">
+          <Button variant="dark" size="sm" className="cm-btn--on-dark" onClick={tidyUp} title="Put every window back in its place">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+              <rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" />
+              <rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" />
+              <rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" />
+              <rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" />
+            </svg>
+            Tidy up
+          </Button>
+        </div>
         {SHOW_DESKTOP_FLOATERS && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG */}

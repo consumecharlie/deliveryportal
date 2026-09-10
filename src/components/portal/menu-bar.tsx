@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { menuClock } from "./format";
+import Button from "./cm-button";
 
 interface Props {
   clientName: string;
@@ -12,7 +13,6 @@ interface Props {
   crumb?: { href: string; projectName: string };
   noteOpen: boolean;
   onNote: () => void;
-  onTidy: () => void;
   /** Sandbox: the PREVIEW chip, nothing here is shared with clients yet. */
   preview?: boolean;
 }
@@ -58,7 +58,7 @@ function Clock() {
   );
 }
 
-export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, onTidy, preview = false }: Props) {
+export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, preview = false }: Props) {
   const lockup = <ClientLockup name={clientName} logoUrl={clientLogoUrl} />;
   return (
     <header className="portal-menu" role="banner">
@@ -90,12 +90,9 @@ export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, on
           </span>
         )}
         <span className="portal-menu-powered">Powered by Consume Media</span>
-        <button type="button" className="portal-menu-item portal-menu-tidy" onClick={onTidy}>
-          Tidy up
-        </button>
-        <button type="button" className="portal-menu-item" aria-pressed={noteOpen} onClick={onNote}>
+        <Button variant="secondary" size="sm" className="portal-menu-note" aria-pressed={noteOpen} onClick={onNote}>
           Send us a note
-        </button>
+        </Button>
         <Clock />
       </div>
     </header>
