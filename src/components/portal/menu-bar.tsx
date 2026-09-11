@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { menuClock } from "./format";
 import Button from "./cm-button";
 
 interface Props {
@@ -33,28 +32,6 @@ function ClientLockup({ name, logoUrl }: { name: string; logoUrl?: string | null
       )}
       <span className="portal-lockup-sub">Client portal</span>
     </span>
-  );
-}
-
-function Clock() {
-  const [text, setText] = useState<string>("");
-  useEffect(() => {
-    let timer: number | undefined;
-    function tick() {
-      setText(menuClock());
-      // Re-align to the next minute boundary so the display never lags.
-      const ms = 60_000 - (Date.now() % 60_000) + 50;
-      timer = window.setTimeout(tick, ms);
-    }
-    tick();
-    return () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, []);
-  return (
-    <time className="portal-menu-clock" aria-live="off" suppressHydrationWarning>
-      {text}
-    </time>
   );
 }
 
@@ -90,10 +67,9 @@ export function MenuBar({ clientName, clientLogoUrl, crumb, noteOpen, onNote, pr
           </span>
         )}
         <span className="portal-menu-powered">Powered by Consume Media</span>
-        <Button variant="secondary" size="sm" className="portal-menu-note" aria-pressed={noteOpen} onClick={onNote}>
+        <Button variant="primary" size="sm" className="portal-menu-note" aria-pressed={noteOpen} onClick={onNote}>
           Send us a note
         </Button>
-        <Clock />
       </div>
     </header>
   );

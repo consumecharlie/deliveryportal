@@ -23,6 +23,7 @@ import {
 import type { WindowFrameProps } from "./mac-window";
 import { MenuBar } from "./menu-bar";
 import Button from "./cm-button";
+import { Clock } from "./clock";
 import { BootScreen } from "./boot-screen";
 import { FinderWindow, type FinderView } from "./finder-window";
 import { ReviewWindow } from "./review-window";
@@ -464,6 +465,7 @@ export function Desktop({ token, model, sandbox = false }: Props) {
 
       <div ref={canvasRef} className="portal-canvas" style={wide ? { height: canvasH } : undefined}>
         <div className="portal-canvas-tools">
+          <Clock />
           <Button variant="dark" size="sm" className="cm-btn--on-dark" onClick={tidyUp} title="Put every window back in its place">
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
               <rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" />

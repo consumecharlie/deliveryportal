@@ -74,12 +74,18 @@ export function ViewerWindow({ token, projects, tabs, activeTab, onActivateTab, 
   // contribute nothing and raise it once they are opened.
   const floor = stacked ? 0 : open.reduce((max, id) => Math.max(max, tabHeights[id] ?? 0), 0);
 
-  // Keep the active tab in view when it changes.
+  // Keep the active tab in view when it changes. This nudges the strip's own
+  // horizontal scroll only: scrollIntoView would scroll the page as well, which
+  // loaded the whole portal scrolled down to the viewer.
   useEffect(() => {
     if (!current) return;
-    listRef.current
-      ?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(current)}"]`)
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(current)}"]`);
+    if (!list || !tab) return;
+    const l = list.getBoundingClientRect();
+    const t = tab.getBoundingClientRect();
+    if (t.left < l.left) list.scrollLeft -= l.left - t.left + 8;
+    else if (t.right > l.right) list.scrollLeft += t.right - l.right + 8;
   }, [current]);
 
   function onKeyDown(e: React.KeyboardEvent) {

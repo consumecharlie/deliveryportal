@@ -7,7 +7,6 @@ import { StatusPill, pillNote } from "./status-pill";
 import { reviewMode } from "./link-meta";
 import { ViewLink } from "./view-link";
 import { REVIEW_ID } from "./desktop-state";
-import { openReviewLabel } from "./link-button";
 
 interface Props extends WindowFrameProps {
   token: string;
@@ -78,7 +77,7 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
                       rel="noopener noreferrer"
                       className="cm-btn cm-btn--secondary cm-btn--sm"
                     >
-                      {openReviewLabel(item.primaryLink)}
+                      Click to review
                     </ViewLink>
                   ) : item.deliveryId === null ? (
                     <span className="portal-quiet">

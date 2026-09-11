@@ -508,13 +508,27 @@
 
 /* Desktop canvas: the 62px grid from the sign-in art */
 /* Tidy up sits on the desktop, top right, inside the top gutter. */
+/* The strip above the first row: the clock on the left, Tidy up on the right. */
 .portal-canvas-tools {
   position: absolute;
   top: 16px;
+  left: 24px;
   right: 24px;
   z-index: 5;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+.portal-canvas-tools > * { pointer-events: auto; }
+.portal-desk-clock {
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(244, 251, 246, 0.55);
+  white-space: nowrap;
 }
 .portal-desktop-stack .portal-canvas-tools {
   position: static;
@@ -919,7 +933,9 @@
 }
 .portal-review-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Fixed actions column: the buttons are identical in every row rather than
+     sized by whatever else shares the column (a link button or a sentence). */
+  grid-template-columns: minmax(0, 1fr) 248px;
   align-items: start;
   gap: 12px 20px;
   padding: 14px 0 16px;
@@ -1247,12 +1263,17 @@
   align-items: center;
   gap: 6px;
   max-width: 420px;
-  height: 30px;
-  margin: 0 6px;
+  /* The shoulder is exactly as wide as the skew displaces its top edge
+     (height * tan(16deg)), so the slant meets the tab's top corner with no
+     leftover horizontal stub. */
+  --tab-h: 30px;
+  --slant: calc(var(--tab-h) * 0.28675);
+  height: var(--tab-h);
+  margin: 0 var(--slant);
   padding: 0 6px 0 10px;
   border: 1px solid #151919;
   border-bottom: none;
-  border-radius: 4px 4px 0 0;
+  border-radius: 0;
   background: linear-gradient(#f4f9f7 0, #e2ebe6 55%, #d6e2dc 100%);
   color: #4d5959;
   font-size: 13px;
@@ -1266,25 +1287,28 @@
 .portal-tab::after {
   content: "";
   position: absolute;
-  top: -1px;
+  top: 0;
   bottom: 0;
-  width: 12px;
+  width: var(--slant);
   background: inherit;
   border: 1px solid #151919;
+  /* Only the slanted edge draws: a top border here would leave a horizontal
+     stub past the tab's corner, and the tab's own top border covers that span. */
+  border-top: none;
   border-bottom: none;
   z-index: -1;
 }
 .portal-tab::before {
-  left: -7px;
+  left: calc(-1 * var(--slant));
   border-right: none;
-  border-radius: 4px 0 0 0;
+  border-radius: 0;
   transform: skewX(-16deg);
   transform-origin: bottom left;
 }
 .portal-tab::after {
-  right: -7px;
+  right: calc(-1 * var(--slant));
   border-left: none;
-  border-radius: 0 4px 0 0;
+  border-radius: 0;
   transform: skewX(16deg);
   transform-origin: bottom right;
 }
@@ -1293,7 +1317,7 @@
 /* Active tab: the panel colour, one pixel taller, sitting over the panel edge. */
 .portal-tab-active,
 .portal-tab-active:hover {
-  height: 33px;
+  --tab-h: 33px;
   margin-bottom: -1px;
   padding-bottom: 1px;
   background: linear-gradient(#ffffff 0, #fafffd 40%, #fafffd 100%);
