@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionTitle,
   countdownText,
+  reviewWindowProgress,
   dueTimeLabel,
   dueUrgency,
   easternDayDiff,
@@ -89,4 +91,62 @@ describe("dueUrgency", () => {
 describe("dueTimeLabel", () => {
   it("says EOD for a whole day", () => expect(dueTimeLabel(dateOnly("2026-09-15"), true)).toBe("EOD"));
   it("shows a set time in Eastern", () => expect(dueTimeLabel(easternEDT("2026-09-15", "16:00"), false)).toBe("4:00 PM"));
+});
+
+describe("reviewWindowProgress", () => {
+  const start = dateOnly("2026-09-05");
+  const due = dateOnly("2026-09-15");
+  const base = { windowStartMs: start, dueMs: due, endOfDay: true };
+
+  it("counts days through the window", () => {
+    const p = reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-11", "09:00") });
+    expect(p).toMatchObject({ total: 10, elapsed: 6, pct: 60, closed: false, label: "6 of 10 days" });
+  });
+  it("counts the day we sent it as day one", () => {
+    expect(reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-05", "09:00") })).toMatchObject({
+      elapsed: 1,
+      pct: 10,
+    });
+  });
+  it("fills and closes once the deadline passes", () => {
+    const p = reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-19", "09:00") });
+    expect(p).toMatchObject({ elapsed: 10, pct: 100, closed: true, label: "Window closed" });
+  });
+  it("holds a date-only window open all through its last day", () => {
+    // The deadline arrives as the 08:00 UTC sentinel: the window must not
+    // read as closed mid-morning on the day it is due.
+    const morning = reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-15", "10:00") });
+    expect(morning).toMatchObject({ elapsed: 10, pct: 100, closed: false, label: "10 of 10 days" });
+    expect(reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-15", "23:00") })?.closed).toBe(false);
+    expect(reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-16", "00:30") })?.closed).toBe(true);
+  });
+  it("floors a same-day window at one day", () => {
+    const sameDay = { ...base, windowStartMs: due };
+    expect(reviewWindowProgress({ ...sameDay, nowMs: easternEDT("2026-09-15", "10:00") })).toMatchObject({
+      total: 1,
+      elapsed: 1,
+      pct: 100,
+      label: "1 of 1 day",
+    });
+  });
+  it("gives up when the numbers make no sense", () => {
+    expect(reviewWindowProgress({ ...base, windowStartMs: null, nowMs: due })).toBeNull();
+    // a start in the future
+    expect(reviewWindowProgress({ ...base, nowMs: easternEDT("2026-09-01", "09:00") })).toBeNull();
+  });
+});
+
+describe("actionTitle", () => {
+  it("keeps the longer of two nested labels", () => {
+    expect(actionTitle("Post Script AV", "Post Script AV V2")).toEqual({ main: "Post Script AV V2", secondary: null });
+  });
+  it("keeps both when they differ", () => {
+    expect(actionTitle("Spinoff Details", "(3) 15s Spinoff (4:5)")).toEqual({
+      main: "Spinoff Details",
+      secondary: "(3) 15s Spinoff (4:5)",
+    });
+  });
+  it("handles a missing variant", () => {
+    expect(actionTitle("Graphics V2", null)).toEqual({ main: "Graphics V2", secondary: null });
+  });
 });

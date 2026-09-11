@@ -212,7 +212,9 @@ export function Desktop({ token, model, sandbox = false }: Props) {
   const left = PAD + offX;
   const twoColumn = !focusMode && fullW >= TWO_COLUMN_MIN;
   const h = (id: string) => (win(id).open ? heights[id] ?? 0 : 0);
-  const leftW = Math.round((W - GAP) * 0.4);
+  // Needs your review is the wide column: it carries the action cards, while
+  // Up next is a list of dates that does not need the room.
+  const leftW = Math.round((W - GAP) * 0.6);
   const rightW = W - GAP - leftW;
   const noteW = Math.min(420, W);
 

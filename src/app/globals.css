@@ -981,155 +981,201 @@
 /* Needs your review */
 .portal-review-list {
   list-style: none;
-  margin: -4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
   padding: 0;
 }
-.portal-review-row {
-  display: grid;
-  /* Fixed actions column: the buttons are identical in every row rather than
-     sized by whatever else shares the column (a link button or a sentence).
-     The deadline sits under the title until the window is wide enough to
-     give it a column of its own. */
-  grid-template-columns: minmax(0, 1fr) 248px;
-  grid-template-areas:
-    "what actions"
-    "due actions";
-  align-items: start;
-  gap: 12px 20px;
-  padding: 14px 0 16px;
-}
-.portal-review-what { grid-area: what; }
-.portal-due { grid-area: due; }
-.portal-review-actions { grid-area: actions; }
-@container portal-body (min-width: 740px) {
-  .portal-review-row {
-    grid-template-columns: minmax(0, 1fr) auto 248px;
-    grid-template-areas: "what due actions";
-    align-items: center;
-  }
-}
-@container portal-body (max-width: 430px) {
-  .portal-review-row {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "what"
-      "due"
-      "actions";
-  }
-}
-.portal-review-row + .portal-review-row { border-top: 1px solid #bbd2cf; }
-.portal-review-row:first-child { padding-top: 4px; }
-.portal-review-what {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.portal-review-dot { color: #bbd2cf; }
-.portal-review-variant { font-weight: 400; color: #6f7f7f; }
-.portal-review-project { font-size: 13px; color: #4d5959; }
 
-/* The deadline: a pixel tear-off calendar, then the ask and the countdown.
-   Square corners and a 2px ink stroke, with the buttons' offset shadow. */
-.portal-due {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.portal-cal {
-  flex: none;
-  width: 54px;
+/* An action item as a card: a solid calendar panel down the left inside the
+   card's 2px ink stroke, then the work, the ask, the review window and the
+   two buttons. Urgency drives one colour through the panel, the swatch and
+   the progress fill. */
+.portal-action {
+  --urgency: #c5ffd8;
+  --urgency-ink: #151919;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   border: 2px solid #151919;
   background: #fafffd;
-  box-shadow: 3px 3px 0 0 #151919;
-  display: flex;
-  flex-direction: column;
-  text-align: center;
   overflow: hidden;
 }
-.portal-cal-month {
-  padding: 4px 2px 3px;
-  border-bottom: 2px solid #151919;
-  background: #c5ffd8;
-  color: #151919;
+.portal-action-soon { --urgency: #dbef00; }
+.portal-action-past { --urgency: #151919; --urgency-ink: #dbef00; }
+.portal-action-estimate { --urgency: #eef5f1; }
+
+.portal-action-cal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 14px 12px;
+  background: var(--urgency);
+  color: var(--urgency-ink);
+  border-right: 2px solid #151919;
+  text-align: center;
+}
+.portal-action-estimate .portal-action-cal {
+  border-right-style: dashed;
+  color: #4d5959;
+}
+.portal-action-month {
   font-family: var(--font-pixel), monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.portal-cal-day {
-  padding: 6px 2px 3px;
-  color: #151919;
-  font-size: 25px;
+.portal-action-day {
+  font-size: 36px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
-.portal-cal-time {
-  padding: 0 2px 5px;
-  color: #4d5959;
+.portal-action-time {
   font-family: var(--font-pixel), monospace;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.2;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  opacity: 0.75;
 }
-/* Due today or tomorrow: the brand yellow, the same "now" marker as the rail. */
-.portal-cal-soon .portal-cal-month { background: #dbef00; }
-/* Past due inverts to an ink block with yellow text. No red anywhere. */
-.portal-cal-past {
-  background: #151919;
-  box-shadow: 3px 3px 0 0 rgba(21, 25, 25, 0.3);
+
+.portal-action-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
 }
-.portal-cal-past .portal-cal-month {
-  background: #151919;
-  border-bottom-color: #dbef00;
-  color: #dbef00;
-}
-.portal-cal-past .portal-cal-day { color: #dbef00; }
-.portal-cal-past .portal-cal-time { color: rgba(219, 239, 0, 0.8); }
-/* A date we inferred rather than read: softer, dashed, never yellow. */
-.portal-cal-estimate {
-  border-style: dashed;
-  box-shadow: none;
-}
-.portal-cal-estimate .portal-cal-month {
-  background: #eef5f1;
-  border-bottom-style: dashed;
-  color: #4d5959;
-}
-.portal-cal-estimate .portal-cal-day { color: #4d5959; }
-.portal-due-text {
+.portal-action-head {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
 }
-.portal-due-ask {
-  font-size: 14px;
+.portal-action-title {
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
+  color: #151919;
+  overflow-wrap: anywhere;
+}
+.portal-action-variant {
+  font-weight: 400;
+  color: #6f7f7f;
+}
+.portal-action-variant::before {
+  content: " \00b7  ";
+  color: #bbd2cf;
+}
+.portal-action-project {
+  margin: 0;
+  font-size: 13px;
+  color: #6f7f7f;
+}
+.portal-action-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-size: 14px;
   color: #151919;
 }
-.portal-due-count {
-  font-size: 13px;
-  line-height: 1.2;
-  color: #4d5959;
-  font-variant-numeric: tabular-nums;
+.portal-action-swatch {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  background: var(--urgency);
+  border: 1px solid #151919;
 }
-.portal-due-count-soon { color: #151919; font-weight: 600; }
-.portal-due-count-past { color: #151919; font-weight: 700; }
-.portal-due-count-estimate { color: #6f7f7f; font-style: italic; }
-.portal-review-actions {
+.portal-action-estimate .portal-action-swatch { border-style: dashed; }
+.portal-action-dot { color: #8fa6a1; }
+.portal-action-count { color: #4d5959; }
+.portal-action-past .portal-action-count { color: #151919; font-weight: 600; }
+.portal-action-estimate .portal-action-count { color: #6f7f7f; font-style: italic; }
+
+/* Review window: 8-bit progress, a dithered fill in a hairline track. */
+.portal-rw {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  padding: 2px 6px 6px 0;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
-.portal-review-actions .cm-btn { justify-content: center; }
+.portal-rw-label,
+.portal-rw-count {
+  flex: none;
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #4d5959;
+  white-space: nowrap;
+}
+.portal-rw-count { color: #151919; }
+.portal-rw-track {
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 14px;
+  border: 1px solid #151919;
+  background: #fafffd;
+  overflow: hidden;
+}
+.portal-rw-fill {
+  display: block;
+  height: 100%;
+  background-color: var(--urgency);
+  /* A 4px checker rather than a gradient, so the fill reads as pixels. */
+  background-image:
+    linear-gradient(45deg, rgba(21, 25, 25, 0.5) 25%, transparent 25% 75%, rgba(21, 25, 25, 0.5) 75%),
+    linear-gradient(45deg, rgba(21, 25, 25, 0.5) 25%, transparent 25% 75%, rgba(21, 25, 25, 0.5) 75%);
+  background-size: 4px 4px;
+  background-position: 0 0, 2px 2px;
+}
+.portal-action-past .portal-rw-fill { background-color: #dbef00; }
+
+.portal-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 2px;
+  padding: 2px 4px 4px 0;
+}
+.portal-action-waiting {
+  margin-right: auto;
+  font-size: 13px;
+  color: #6f7f7f;
+}
+.portal-action-buttons .portal-confirm { align-items: flex-end; }
+
+/* Narrow: the calendar becomes a strip across the top of the card. */
+@container portal-body (max-width: 430px) {
+  .portal-action { grid-template-columns: minmax(0, 1fr); }
+  .portal-action-cal {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 14px;
+    border-right: 0;
+    border-bottom: 2px solid #151919;
+  }
+  .portal-action-estimate .portal-action-cal {
+    border-right: 0;
+    border-bottom-style: dashed;
+  }
+  .portal-action-day { font-size: 24px; line-height: 1; }
+  .portal-action-buttons { justify-content: flex-start; }
+}
 
 /* All clear */
 .portal-allclear {

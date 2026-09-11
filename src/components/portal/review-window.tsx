@@ -2,10 +2,8 @@
 
 import type { PortalAttentionItem } from "@/lib/portal-page-model";
 import { MacWindow, type WindowFrameProps } from "./mac-window";
-import { ConfirmButton, confirmButtonKey } from "./confirm-button";
-import { DueBlock } from "./due-block";
-import { reviewMode } from "./link-meta";
-import { ViewLink } from "./view-link";
+import { confirmButtonKey } from "./confirm-button";
+import { ActionCard } from "./action-card";
 import { REVIEW_ID } from "./desktop-state";
 
 interface Props extends WindowFrameProps {
@@ -32,59 +30,17 @@ export function ReviewWindow({ token, items, ...frame }: Props) {
         </div>
       ) : (
         <ul className="portal-review-list">
-          {items.map((item) => {
-            const mode = reviewMode(item.review, item.deliverableTitle, item.variant);
-            const key = confirmButtonKey(
-              item.deliveryId,
-              { kind: item.review.state, confirmedAt: item.review.confirmedAtMs ? new Date(item.review.confirmedAtMs) : null },
-              item.feedbackTaskId
-            );
-            return (
-              <li key={key} className="portal-review-row">
-                <div className="portal-review-what">
-                  <span className="portal-row-title">
-                    {item.deliverableTitle}
-                    {item.variant && (
-                      <>
-                        <span className="portal-review-dot" aria-hidden="true">
-                          {" · "}
-                        </span>
-                        <span className="portal-review-variant">{item.variant}</span>
-                      </>
-                    )}
-                  </span>
-                  <span className="portal-review-project">{item.projectName}</span>
-                </div>
-                <DueBlock review={item.review} mode={mode} />
-                <div className="portal-review-actions">
-                  {item.deliveryId && item.primaryLink ? (
-                    <ViewLink
-                      token={token}
-                      deliveryId={item.deliveryId}
-                      href={item.primaryLink.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="cm-btn cm-btn--secondary cm-btn--sm"
-                    >
-                      Click to review
-                    </ViewLink>
-                  ) : item.deliveryId === null ? (
-                    <span className="portal-quiet">
-                      {mode === "approval" ? "We are waiting on your approval." : "We are waiting on your details."}
-                    </span>
-                  ) : null}
-                  <ConfirmButton
-                    key={key}
-                    token={token}
-                    deliveryId={item.deliveryId}
-                    feedbackTaskId={item.feedbackTaskId}
-                    initialConfirmed={false}
-                    canUndo={item.review.canUndo}
-                  />
-                </div>
-              </li>
-            );
-          })}
+          {items.map((item) => (
+            <ActionCard
+              key={confirmButtonKey(
+                item.deliveryId,
+                { kind: item.review.state, confirmedAt: item.review.confirmedAtMs ? new Date(item.review.confirmedAtMs) : null },
+                item.feedbackTaskId
+              )}
+              token={token}
+              item={item}
+            />
+          ))}
         </ul>
       )}
     </MacWindow>

@@ -16,6 +16,8 @@ interface Props {
    * feedback task is closed: there is no confirmation row to undo.
    */
   canUndo: boolean;
+  /** The review card makes reviewing primary, so confirming sits quieter. */
+  variant?: "primary" | "secondary";
 }
 
 /**
@@ -43,7 +45,7 @@ const UNDO_WARNING =
  * The undo prompt is a native <dialog> opened with showModal(): focus moves
  * into it, stays trapped, and Escape closes it.
  */
-export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfirmed, canUndo }: Props) {
+export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfirmed, canUndo, variant = "primary" }: Props) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirmed, setConfirmed] = useState(initialConfirmed);
@@ -114,7 +116,7 @@ export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfir
           )}
         </div>
       ) : (
-        <Button type="button" size="sm" onClick={() => post("confirm")} disabled={busy}>
+        <Button type="button" size="sm" variant={variant} onClick={() => post("confirm")} disabled={busy}>
           {busy ? "Saving" : "All feedback is in"}
         </Button>
       )}
