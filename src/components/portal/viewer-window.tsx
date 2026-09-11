@@ -138,8 +138,7 @@ export function ViewerWindow({ token, projects, tabs, activeTab, onActivateTab, 
                   }
                 }}
               >
-                {/* The close box sits to the LEFT of the name, the way a classic window
-                    close box does, and only appears once the tab is hovered or focused. */}
+                <span className="portal-tab-label">{p.name}</span>
                 <button
                   type="button"
                   className="portal-tab-x"
@@ -150,11 +149,10 @@ export function ViewerWindow({ token, projects, tabs, activeTab, onActivateTab, 
                     onCloseTab(id);
                   }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
-                    <path d="M3 3l6 6M9 3l-6 6" />
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+                    <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
                   </svg>
                 </button>
-                <span className="portal-tab-label">{p.name}</span>
               </div>
             );
           })}

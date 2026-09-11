@@ -1390,13 +1390,9 @@
 
 /* Project Viewer: Finder-style tabs under the title bar */
 .portal-window-viewer .portal-window-body { padding-top: 0; }
-/* Project Viewer tabs: Mac OS 9 keystone tabs (slanted sides, rounded top corners,
-   hairline stroke, a hard top highlight). The active tab merges into the panel below.
-   Each tab is ONE shape, a nine-slice svg border-image: the side slices hold the
-   shoulders and the middle stretches, so the slant and the corners stay the same at any
-   width. Skewed pseudo-element shoulders were the obvious construction and are the wrong
-   one, because a border-radius on a skewed box leaves a notch where it meets the tab's
-   own top border. The close box is revealed on hover and its width is always reserved. */
+/* Project Viewer tabs: Mac OS 9 keystone tabs (slanted sides, hairline stroke,
+   top highlight). The active tab merges into the panel below. The slants are
+   skewed pseudo-elements so each keeps its own border. */
 .portal-tabs {
   position: relative;
   display: flex;
@@ -1426,40 +1422,66 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   max-width: 420px;
-  height: 34px;
-  /* The outline is a nine-slice svg: the 16px side borders hold the slanted, rounded
-     shoulders and the middle stretches, so every tab keeps the same slant and the same
-     corners whatever its width. Drawing it as one shape is what removes the seam the old
-     skewed pseudo-element shoulders left at each top corner. */
-  padding: 0;
-  border-style: solid;
-  border-width: 12px 16px 0;
-  border-color: transparent;
-  border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='34' viewBox='0 0 44 34'%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34 Z' fill='%23dbe6e0'/%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34' fill='none' stroke='%23151919' stroke-width='1'/%3E%3Cpath d='M12.4 6.6 Q13 5.1 14.6 5.1 L29.4 5.1 Q31 5.1 31.6 6.6' fill='none' stroke='%23f4faf7' stroke-width='1.1'/%3E%3C/svg%3E");
-  border-image-slice: 12 16 0 fill;
-  border-image-width: 12px 16px 0;
-  border-image-repeat: stretch;
-  background: transparent;
+  /* The shoulder is exactly as wide as the skew displaces its top edge
+     (height * tan(16deg)), so the slant meets the tab's top corner with no
+     leftover horizontal stub. */
+  --tab-h: 30px;
+  --slant: calc(var(--tab-h) * 0.28675);
+  height: var(--tab-h);
+  margin: 0 var(--slant);
+  padding: 0 6px 0 10px;
+  border: 1px solid #151919;
+  border-bottom: none;
+  border-radius: 0;
+  background: linear-gradient(#f4f9f7 0, #e2ebe6 55%, #d6e2dc 100%);
   color: #4d5959;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
-  /* The shoulders overlap the way stacked folder tabs do. */
-  margin: 0 -11px 0 0;
   z-index: 1;
 }
-.portal-tab:first-child { margin-left: 0; }
-.portal-tab:hover { border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='34' viewBox='0 0 44 34'%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34 Z' fill='%23e8f1ec'/%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34' fill='none' stroke='%23151919' stroke-width='1'/%3E%3Cpath d='M12.4 6.6 Q13 5.1 14.6 5.1 L29.4 5.1 Q31 5.1 31.6 6.6' fill='none' stroke='%23ffffff' stroke-width='1.1'/%3E%3C/svg%3E"); z-index: 2; }
+/* The two slanted shoulders. `background: inherit` keeps the bevel continuous. */
+.portal-tab::before,
+.portal-tab::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--slant);
+  background: inherit;
+  border: 1px solid #151919;
+  /* Only the slanted edge draws: a top border here would leave a horizontal
+     stub past the tab's corner, and the tab's own top border covers that span. */
+  border-top: none;
+  border-bottom: none;
+  z-index: -1;
+}
+.portal-tab::before {
+  left: calc(-1 * var(--slant));
+  border-right: none;
+  border-radius: 0;
+  transform: skewX(-16deg);
+  transform-origin: bottom left;
+}
+.portal-tab::after {
+  right: calc(-1 * var(--slant));
+  border-left: none;
+  border-radius: 0;
+  transform: skewX(16deg);
+  transform-origin: bottom right;
+}
+.portal-tab:hover { background: linear-gradient(#fafffd 0, #e9f1ed 55%, #dde8e2 100%); }
 .portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
-/* Active tab: the panel colour, sitting one pixel over the panel edge so the two join. */
+/* Active tab: the panel colour, one pixel taller, sitting over the panel edge. */
 .portal-tab-active,
 .portal-tab-active:hover {
-  height: 37px;
+  --tab-h: 33px;
   margin-bottom: -1px;
-  border-image-source: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='34' viewBox='0 0 44 34'%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34 Z' fill='%23fafffd'/%3E%3Cpath d='M0.5 34 L10.9 6.1 Q11.6 3.6 14.1 3.6 L29.9 3.6 Q32.4 3.6 33.1 6.1 L43.5 34' fill='none' stroke='%23151919' stroke-width='1'/%3E%3Cpath d='M12.4 6.6 Q13 5.1 14.6 5.1 L29.4 5.1 Q31 5.1 31.6 6.6' fill='none' stroke='%23ffffff' stroke-width='1.1'/%3E%3C/svg%3E");
+  padding-bottom: 1px;
+  background: linear-gradient(#ffffff 0, #fafffd 40%, #fafffd 100%);
   color: #151919;
   font-weight: 600;
   z-index: 3;
@@ -1471,40 +1493,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Hidden until the tab is hovered or something in it takes focus, so a resting strip
-   reads like the plain tabs it is modelled on. The box keeps its width either way, so
-   revealing it never shifts the name. */
 .portal-tab-x {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   margin: 0;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 3px;
+  border: 0;
+  border-radius: 4px;
   background: transparent;
-  color: #4d5959;
+  color: #6f7f7f;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 90ms linear;
 }
-.portal-tab:hover .portal-tab-x,
-.portal-tab:focus-within .portal-tab-x,
-.portal-tab-x:focus-visible {
-  opacity: 1;
-}
-.portal-tab-x:hover {
-  border-color: #151919;
-  background: #f7fbf9;
-  color: #151919;
-}
-.portal-tab-x:active { background: #151919; color: #f7fbf9; }
-@media (prefers-reduced-motion: reduce) {
-  .portal-tab-x { transition: none; }
-}
+.portal-tab-x:hover { background: rgba(21, 25, 25, 0.12); color: #151919; }
 .portal-viewer-panel { padding-top: 20px; }
 
 /* Project window body */
