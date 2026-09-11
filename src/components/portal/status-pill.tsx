@@ -31,10 +31,22 @@ export function pillText(state: ReviewState, mode: ReviewMode): string {
   }
 }
 
-/** The full review label when it adds something (a date) beyond the pill's word; else null. */
+/**
+ * What the label adds beyond the pill's own words, so the line under a pill
+ * carries the date rather than repeating the pill: "Feedback needed, due
+ * Tue, Sep 15" under a "Feedback needed" pill becomes "Due Tue, Sep 15".
+ */
 export function pillNote(state: ReviewState, mode: ReviewMode, label: string): string | null {
   if (state === "none" || !label) return null;
-  return label.trim().toLowerCase() === pillText(state, mode).toLowerCase() ? null : label;
+  const text = label.trim();
+  for (const prefix of [pillText(state, mode), mode === "approval" ? "Approval" : "Feedback"]) {
+    if (text.toLowerCase() === prefix.toLowerCase()) return null;
+    if (!text.toLowerCase().startsWith(prefix.toLowerCase())) continue;
+    const rest = text.slice(prefix.length).replace(/^[\s,]+/, "");
+    if (!rest) return null;
+    return rest.charAt(0).toUpperCase() + rest.slice(1);
+  }
+  return text;
 }
 
 export function StatusPill({ state, mode, names = [] }: Props) {

@@ -987,11 +987,35 @@
 .portal-review-row {
   display: grid;
   /* Fixed actions column: the buttons are identical in every row rather than
-     sized by whatever else shares the column (a link button or a sentence). */
+     sized by whatever else shares the column (a link button or a sentence).
+     The deadline sits under the title until the window is wide enough to
+     give it a column of its own. */
   grid-template-columns: minmax(0, 1fr) 248px;
+  grid-template-areas:
+    "what actions"
+    "due actions";
   align-items: start;
   gap: 12px 20px;
   padding: 14px 0 16px;
+}
+.portal-review-what { grid-area: what; }
+.portal-due { grid-area: due; }
+.portal-review-actions { grid-area: actions; }
+@container portal-body (min-width: 740px) {
+  .portal-review-row {
+    grid-template-columns: minmax(0, 1fr) auto 248px;
+    grid-template-areas: "what due actions";
+    align-items: center;
+  }
+}
+@container portal-body (max-width: 430px) {
+  .portal-review-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "what"
+      "due"
+      "actions";
+  }
 }
 .portal-review-row + .portal-review-row { border-top: 1px solid #bbd2cf; }
 .portal-review-row:first-child { padding-top: 4px; }
@@ -1004,16 +1028,100 @@
 .portal-review-dot { color: #bbd2cf; }
 .portal-review-variant { font-weight: 400; color: #6f7f7f; }
 .portal-review-project { font-size: 13px; color: #4d5959; }
-.portal-review-due {
+
+/* The deadline: a pixel tear-off calendar, then the ask and the countdown.
+   Square corners and a 2px ink stroke, with the buttons' offset shadow. */
+.portal-due {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin-top: 6px;
+  gap: 12px;
+  min-width: 0;
+}
+.portal-cal {
+  flex: none;
+  width: 54px;
+  border: 2px solid #151919;
+  background: #fafffd;
+  box-shadow: 3px 3px 0 0 #151919;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  overflow: hidden;
+}
+.portal-cal-month {
+  padding: 4px 2px 3px;
+  border-bottom: 2px solid #151919;
+  background: #c5ffd8;
+  color: #151919;
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.portal-cal-day {
+  padding: 6px 2px 3px;
+  color: #151919;
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.portal-cal-time {
+  padding: 0 2px 5px;
+  color: #4d5959;
+  font-family: var(--font-pixel), monospace;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* Due today or tomorrow: the brand yellow, the same "now" marker as the rail. */
+.portal-cal-soon .portal-cal-month { background: #dbef00; }
+/* Past due inverts to an ink block with yellow text. No red anywhere. */
+.portal-cal-past {
+  background: #151919;
+  box-shadow: 3px 3px 0 0 rgba(21, 25, 25, 0.3);
+}
+.portal-cal-past .portal-cal-month {
+  background: #151919;
+  border-bottom-color: #dbef00;
+  color: #dbef00;
+}
+.portal-cal-past .portal-cal-day { color: #dbef00; }
+.portal-cal-past .portal-cal-time { color: rgba(219, 239, 0, 0.8); }
+/* A date we inferred rather than read: softer, dashed, never yellow. */
+.portal-cal-estimate {
+  border-style: dashed;
+  box-shadow: none;
+}
+.portal-cal-estimate .portal-cal-month {
+  background: #eef5f1;
+  border-bottom-style: dashed;
+  color: #4d5959;
+}
+.portal-cal-estimate .portal-cal-day { color: #4d5959; }
+.portal-due-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.portal-due-ask {
   font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
   color: #151919;
 }
-.portal-review-due-label { font-size: 13px; color: #4d5959; }
+.portal-due-count {
+  font-size: 13px;
+  line-height: 1.2;
+  color: #4d5959;
+  font-variant-numeric: tabular-nums;
+}
+.portal-due-count-soon { color: #151919; font-weight: 600; }
+.portal-due-count-past { color: #151919; font-weight: 700; }
+.portal-due-count-estimate { color: #6f7f7f; font-style: italic; }
 .portal-review-actions {
   display: flex;
   flex-direction: column;
