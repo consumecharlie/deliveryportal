@@ -772,6 +772,7 @@
   gap: 6px;
 }
 .portal-tl {
+  position: relative;
   width: 13px;
   height: 13px;
   margin: 0;
@@ -780,11 +781,17 @@
   border: 1px solid #fff;
   background: transparent;
   cursor: pointer;
-  display: grid;
-  place-items: center;
+  display: block;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
+/* The glyph is as wide as the whole button, so it cannot be laid out inside
+   the content box (13px less the 1px border each side) without being pushed
+   off centre. Centre it on the circle itself instead. */
 .portal-tl svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: block;
   width: 13px;
   height: 13px;
@@ -835,6 +842,42 @@
   font-size: 14px;
 }
 .portal-window-body[hidden] { display: none; }
+/* Focus mode: a dock click brings one window front and centre over a scrim.
+   The scrim sits under the menu bar (2000) and the dock (2500) so both stay
+   clickable, and over every window on the desktop. */
+.portal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(21, 25, 25, 0.62);
+  -webkit-backdrop-filter: blur(3px) saturate(120%);
+  backdrop-filter: blur(3px) saturate(120%);
+  animation: portal-scrim-in 200ms ease-out;
+}
+@keyframes portal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Centred in the room between the menu bar and the dock, so a tall window
+   never runs under either. Height follows the content up to the cap, and the
+   body scrolls inside. */
+.portal-window-focused {
+  position: fixed;
+  inset: 64px 0 126px;
+  margin: auto;
+  width: min(1100px, 92vw);
+  height: fit-content;
+  max-height: min(84vh, 100%);
+  z-index: 1600;
+  display: flex;
+  flex-direction: column;
+}
+.portal-window-focused .portal-window-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 @keyframes portal-win-pop {
   from { transform: scale(0.96); opacity: 0; }
   to { transform: none; opacity: 1; }
@@ -2086,6 +2129,7 @@ textarea.portal-input { resize: vertical; }
   .portal-tl,
   .cm-btn { transition: none; }
   .portal-window-pop { animation: none; }
+  .portal-scrim { animation: none; }
   .portal-dock-item-pop .portal-dock-ring { animation: none; }
   .portal-points { display: none; }
   .portal-desktop .animate-float-slow,

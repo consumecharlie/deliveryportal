@@ -30,6 +30,10 @@ export interface MacWindowProps {
   popIndex: number | null;
   /** Top of the z-order: gets the stronger shadow. */
   isTop?: boolean;
+  /** Focus mode: the window is centred over the scrim as the thing being worked on. */
+  focused?: boolean;
+  /** Animate the move in and out of focus (off under reduced motion). */
+  focusAnimate?: boolean;
   onClose: (id: string) => void;
   onMinimize: (id: string) => void;
   onZoom: (id: string) => void;
@@ -61,6 +65,8 @@ export function MacWindow(props: MacWindowProps) {
     draggable,
     popIndex,
     isTop = false,
+    focused = false,
+    focusAnimate = true,
     onClose,
     onMinimize,
     onZoom,
@@ -73,26 +79,69 @@ export function MacWindow(props: MacWindowProps) {
   } = props;
   const ref = useRef<HTMLElement>(null);
   const drag = useRef<{ startX: number; startY: number; x: number; y: number; moved: boolean } | null>(null);
+  const focusedRef = useRef(focused);
+  /** The rect from the last commit, which is the start rect of a focus move. */
+  const lastRect = useRef<DOMRect | null>(null);
+  const wasFocused = useRef(focused);
 
   // Report height on every render and whenever the content reflows (a table
   // row expanding), so the desktop can place the Finder and size the canvas.
   // Both paths read offsetHeight after layout has settled: the layout effect
   // runs before paint, so the canvas never shows a frame of the old height.
+  // A focused window is lifted out of the canvas and capped, so its height
+  // says nothing about the space it needs on the desktop: keep the last
+  // desktop height so the canvas does not resize under the scrim.
   useLayoutEffect(() => {
+    focusedRef.current = focused;
     const el = ref.current;
-    if (el) onMeasure(id, el.offsetHeight);
+    if (el && !focused) onMeasure(id, el.offsetHeight);
   });
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => onMeasure(id, el.offsetHeight));
+    const ro = new ResizeObserver(() => {
+      if (!focusedRef.current) onMeasure(id, el.offsetHeight);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, [id, onMeasure]);
 
+  /**
+   * FLIP the move into and out of focus: the element jumps to its new place
+   * in the same commit, then a transform puts it visually back where it was
+   * and animates to identity, so the whole move is transform-only.
+   */
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const changed = wasFocused.current !== focused;
+    wasFocused.current = focused;
+    const start = lastRect.current;
+    const end = el.getBoundingClientRect();
+    lastRect.current = end;
+    if (!changed || !start || !focusAnimate || end.width === 0) return;
+    const dx = start.left - end.left;
+    const dy = start.top - end.top;
+    const scale = start.width / end.width;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(scale - 1) < 0.01) return;
+    el.style.transformOrigin = "top left";
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    void el.offsetWidth;
+    el.style.transition = "transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1)";
+    el.style.transform = "none";
+    const clear = () => {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.style.transformOrigin = "";
+      el.removeEventListener("transitionend", clear);
+    };
+    el.addEventListener("transitionend", clear);
+  });
+
   function onBarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     onRaise(id);
-    if (!draggable || e.button !== 0 || x === null || y === null) return;
+    if (!draggable || focused || e.button !== 0 || x === null || y === null) return;
     if ((e.target as HTMLElement).closest(".portal-tl")) return;
     e.preventDefault();
     drag.current = { startX: e.clientX, startY: e.clientY, x, y, moved: false };
@@ -137,9 +186,12 @@ export function MacWindow(props: MacWindowProps) {
   }
 
   const positioned = x !== null && y !== null;
-  const style: React.CSSProperties & Record<`--${string}`, string | number> = positioned
-    ? { left: x, top: y, width: width ?? undefined, zIndex }
-    : { zIndex };
+  // Focused: position, size and z-order all come from the stylesheet.
+  const style: React.CSSProperties & Record<`--${string}`, string | number> = focused
+    ? {}
+    : positioned
+      ? { left: x, top: y, width: width ?? undefined, zIndex }
+      : { zIndex };
   if (popIndex !== null) style["--pop-i"] = popIndex;
 
   const cls = [
@@ -148,8 +200,9 @@ export function MacWindow(props: MacWindowProps) {
     minimized ? "portal-window-min" : "",
     zoomed ? "portal-window-zoomed" : "",
     popIndex !== null ? "portal-window-pop" : "",
-    draggable ? "portal-window-draggable" : "",
+    draggable && !focused ? "portal-window-draggable" : "",
     isTop ? "portal-window-top" : "",
+    focused ? "portal-window-focused" : "",
     className ?? "",
   ]
     .filter(Boolean)

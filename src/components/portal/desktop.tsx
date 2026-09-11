@@ -111,6 +111,8 @@ export function Desktop({ token, model, sandbox = false }: Props) {
   const [env, setEnv] = useState<{ reducedMotion: boolean; coarse: boolean }>({ reducedMotion: false, coarse: false });
   const [selected, setSelected] = useState<string | null>(null);
   const [finderView, setFinderView] = useState<FinderView>("root");
+  /** Focus mode: the one window centred over the scrim; desktop layout only. */
+  const [requestedFocus, setFocusedId] = useState<string | null>(null);
   const [popped, setPopped] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -175,6 +177,8 @@ export function Desktop({ token, model, sandbox = false }: Props) {
 
   const wide = canvasW !== null && canvasW >= WIDE_MIN;
   const draggable = wide && !env.reducedMotion && !env.coarse;
+  // Stacked layouts have no focus mode, so a narrow viewport drops it.
+  const focusedId = wide ? requestedFocus : null;
   const tapOpens = env.coarse;
 
   const knownIds = useMemo(() => new Set(model.projects.map((p) => p.listId)), [model.projects]);
@@ -281,6 +285,7 @@ export function Desktop({ token, model, sandbox = false }: Props) {
 
   const close = useCallback(
     (id: string) => {
+      setFocusedId((f) => (f === id ? null : f));
       if (focusMode && id === VIEWER_ID) {
         router.push(`/portal/${token}`);
         return;
@@ -289,7 +294,15 @@ export function Desktop({ token, model, sandbox = false }: Props) {
     },
     [commit, focusMode, router, token]
   );
-  const minimize = useCallback((id: string) => commit((s) => patchWindow(s, id, { minimized: !(s.windows[id]?.minimized ?? false) })), [commit]);
+  const minimize = useCallback(
+    (id: string) => {
+      // Putting a window away also ends focus: a collapsed title bar centred
+      // over the scrim would be a mode with nothing in it.
+      setFocusedId((f) => (f === id ? null : f));
+      commit((s) => patchWindow(s, id, { minimized: !(s.windows[id]?.minimized ?? false) }));
+    },
+    [commit]
+  );
   const zoom = useCallback((id: string) => commit((s) => patchWindow(s, id, { zoomed: !(s.windows[id]?.zoomed ?? false) })), [commit]);
   const move = useCallback((id: string, x: number, y: number) => commit((s) => patchWindow(s, id, { x, y })), [commit]);
   const raise = useCallback(
@@ -322,6 +335,7 @@ export function Desktop({ token, model, sandbox = false }: Props) {
     else openWindow(NOTE_ID);
   }
   const tidyUp = useCallback(() => {
+    setFocusedId(null);
     setFinderView("root");
     setSelected(null);
     commit(() => EMPTY_STATE);
@@ -363,36 +377,51 @@ export function Desktop({ token, model, sandbox = false }: Props) {
     openWindow(FINDER_ID);
   }
 
-  /** Dock click: closed opens at its last or default spot, minimized restores, open raises, top minimizes. */
+  function scrollToWindow(id: string) {
+    window.setTimeout(() => {
+      document.querySelector(`[data-window="${id}"]`)?.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
+    }, 60);
+  }
+
+  /**
+   * Dock click: bring that app front and centre over the scrim, opening or
+   * restoring it first. Choosing another app moves this one back and brings
+   * that one forward, so only ever one window is focused. Stacked layouts
+   * have no focus mode and scroll to the window as before.
+   */
   function activate(id: string) {
     if (id === COMPLETED_DOCK_ID) {
       openCompleted();
-      if (!wide) {
-        window.setTimeout(() => {
-          document.querySelector(`[data-window="${FINDER_ID}"]`)?.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
-        }, 60);
-      }
+      if (wide) setFocusedId(FINDER_ID);
+      else scrollToWindow(FINDER_ID);
       return;
     }
     const s = win(id);
     if (!wide) {
       commit((st) => patchWindow(st, id, { open: true, minimized: false }));
-      window.setTimeout(() => {
-        document.querySelector(`[data-window="${id}"]`)?.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
-      }, 60);
+      scrollToWindow(id);
       return;
     }
-    if (!s.open) {
-      openWindow(id);
-      return;
-    }
-    if (s.minimized) {
-      commit((st) => raiseWindow(patchWindow(st, id, { minimized: false }), id, defaultOrder));
-      return;
-    }
-    if (order[order.length - 1] === id) commit((st) => patchWindow(st, id, { minimized: true }));
+    if (!s.open || s.minimized) openWindow(id);
     else raise(id);
+    setFocusedId(id);
   }
+
+  /** Leaving focus also tidies the desktop, so the windows land back in order. */
+  const dismissFocus = useCallback(() => {
+    tidyUp();
+  }, [tidyUp]);
+
+  useEffect(() => {
+    if (!focusedId) return;
+    function onKey(e: KeyboardEvent) {
+      // A native <dialog> owns Escape while it is open.
+      if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      dismissFocus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusedId, dismissFocus]);
 
   const dockState = (id: string): DockEntry["state"] => {
     const s = win(id);
@@ -427,9 +456,11 @@ export function Desktop({ token, model, sandbox = false }: Props) {
       zIndex: zOf(id),
       minimized: s.minimized,
       zoomed: s.zoomed,
-      draggable,
+      draggable: draggable && focusedId !== id,
       popIndex: popIndex(id),
       isTop: order[order.length - 1] === id,
+      focused: wide && focusedId === id,
+      focusAnimate: !env.reducedMotion,
       onClose: close,
       onMinimize: minimize,
       onZoom: zoom,
@@ -521,6 +552,10 @@ export function Desktop({ token, model, sandbox = false }: Props) {
 
         {win(NOTE_ID).open && <NoteWindow {...frame(NOTE_ID)} token={token} listId={focusListId ?? undefined} />}
       </div>
+
+      {wide && focusedId && (
+        <div className="portal-scrim" role="presentation" onClick={dismissFocus} />
+      )}
 
       {phase === "ready" && <Dock entries={dockEntries} onActivate={activate} stacked={!wide} reducedMotion={env.reducedMotion} magnify={draggable} />}
 
