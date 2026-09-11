@@ -104,6 +104,14 @@ export interface PortalDeliverable {
      * which the label shows instead.
      */
     dueIsEndOfDay: boolean;
+    /**
+     * When the review window started, for a "6 of 10 days" progress bar: the
+     * latest version's send date, or for an item with no delivery the date we
+     * completed its share task. Null when there is no deadline, and null rather
+     * than a backwards window when the data disagrees, so a bar can rely on
+     * `windowStartMs < dueMs` whenever both are set.
+     */
+    windowStartMs: number | null;
     confirmedAtMs: number | null;
     canUndo: boolean;
   };

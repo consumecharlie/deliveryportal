@@ -186,17 +186,34 @@ function noReview(mode: ReviewMode): PortalDeliverable["review"] {
     dueMs: null,
     dueIsEstimate: false,
     dueIsEndOfDay: false,
+    windowStartMs: null,
     confirmedAtMs: null,
     canUndo: false,
   };
 }
 
 /**
+ * The start of a review window, or null: a start on or after the deadline is
+ * bad data and no window at all, so the UI can trust the pair.
+ */
+function windowStart(startMs: number | null | undefined, dueMs: number | null): number | null {
+  if (startMs === null || startMs === undefined || dueMs === null) return null;
+  return startMs < dueMs ? startMs : null;
+}
+
+/**
  * Map a feedback status onto the portal's review block. An estimated date
  * (our default window, not a deadline anyone set) is a suggestion, so it
  * stays "awaiting" and never escalates to due-today / overdue.
+ *
+ * `startMs` is when the client's clock started (the version's send date); it
+ * reaches the model only while something is actually due.
  */
-export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable["review"] {
+export function toReview(
+  s: FeedbackStatus,
+  mode: ReviewMode,
+  startMs?: number | null
+): PortalDeliverable["review"] {
   if (s.kind === "none") return noReview(mode);
   if (s.kind === "confirmed") {
     const confirmedAtMs = s.confirmedAt?.getTime() ?? null;
@@ -207,6 +224,7 @@ export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable
       dueMs: null,
       dueIsEstimate: false,
       dueIsEndOfDay: false,
+      windowStartMs: null,
       confirmedAtMs,
       canUndo: s.confirmedAt !== null,
     };
@@ -227,6 +245,7 @@ export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable
     dueMs: s.dueMs,
     dueIsEstimate: s.dueIsEstimate,
     dueIsEndOfDay: s.dueIsEndOfDay,
+    windowStartMs: windowStart(startMs, s.dueMs),
     confirmedAtMs: null,
     canUndo: false,
   };
@@ -319,7 +338,8 @@ function buildDeliverable(
           feedbackWindows: latest.feedbackWindows,
           nowMs: input.nowMs,
         }),
-        mode
+        mode,
+        latest.sentAt.getTime()
       );
 
   return {
@@ -415,8 +435,25 @@ function dueLabelOf(dueMs: number): { label: string; isEndOfDay: boolean } {
   };
 }
 
+/**
+ * When we handed this feedback task's work over: the newest completed share
+ * task under the same parent for the same deliverable type. That is the start
+ * of the client's review window when no delivery row exists. Null when the
+ * roadmap has no such completion.
+ */
+function shareTaskClosedMs(task: LiveFeedbackTask, milestones: LiveMilestone[]): number | null {
+  let best: number | null = null;
+  for (const m of milestones) {
+    if (!m.isClosed || m.closedMs === null) continue;
+    if (m.parentTaskId !== task.parentTaskId) continue;
+    if (!sameText(m.deliverableType, task.deliverableType)) continue;
+    if (best === null || m.closedMs > best) best = m.closedMs;
+  }
+  return best;
+}
+
 /** The review block for an attention item that stands on a feedback task alone. */
-function taskReview(task: LiveFeedbackTask, nowMs: number): PortalDeliverable["review"] {
+function taskReview(task: LiveFeedbackTask, live: LivePayload, nowMs: number): PortalDeliverable["review"] {
   const due = deadlineState(task.dueMs!, nowMs);
   const state: ReviewState = due === "open" ? "awaiting" : due;
   const mode = reviewMode(task.name, task.deliverableType);
@@ -428,6 +465,7 @@ function taskReview(task: LiveFeedbackTask, nowMs: number): PortalDeliverable["r
     dueMs: task.dueMs,
     dueIsEstimate: false,
     dueIsEndOfDay: isEndOfDay,
+    windowStartMs: windowStart(shareTaskClosedMs(task, live.milestones), task.dueMs),
     confirmedAtMs: null,
     canUndo: false,
   };
@@ -472,7 +510,7 @@ function buildTaskAttention(
       variant: variant && !sameText(variant, title) ? variant : null,
       projectName: project.name,
       projectListId: project.listId,
-      review: taskReview(task, nowMs),
+      review: taskReview(task, live, nowMs),
       primaryLink: null,
     });
   }

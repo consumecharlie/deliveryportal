@@ -272,6 +272,7 @@ describe("buildPortalPage: review state", () => {
       dueMs: day("2026-09-08"),
       dueIsEstimate: false,
       dueIsEndOfDay: true,
+      windowStartMs: Date.parse("2026-07-30T14:00:00Z"),
       confirmedAtMs: null,
       canUndo: false,
     });
@@ -285,6 +286,7 @@ describe("buildPortalPage: review state", () => {
       dueMs: null,
       dueIsEstimate: false,
       dueIsEndOfDay: false,
+      windowStartMs: null,
       confirmedAtMs: Date.parse("2026-06-06T18:00:00Z"),
       canUndo: true,
     });
@@ -389,7 +391,7 @@ describe("buildPortalPage: review state", () => {
     const p = build({ live: { ...LIVE, L2: { ...LIVE.L2, archived: true } } });
     const callrail = p.projects.find((x) => x.listId === "L2")!;
     expect(callrail.phase).toBe("completed");
-    expect(callrail.deliverables[0].review).toEqual({ state: "none", mode: "feedback", label: "Delivered", dueMs: null, dueIsEstimate: false, dueIsEndOfDay: false, confirmedAtMs: null, canUndo: false });
+    expect(callrail.deliverables[0].review).toEqual({ state: "none", mode: "feedback", label: "Delivered", dueMs: null, dueIsEstimate: false, dueIsEndOfDay: false, windowStartMs: null, confirmedAtMs: null, canUndo: false });
     expect(p.attention.map((a) => a.deliveryId)).toEqual(["e21"]);
     expect(callrail.milestones.map((m) => m.state)).toEqual(["delivered", "up-next"]);
   });
@@ -714,6 +716,8 @@ describe("buildPortalPage: attention items with no delivery behind them", () => 
           ...PARENT,
           dueMs: day("2026-09-01"),
           isClosed: true,
+          // Completing this is when the ball went to the client.
+          closedMs: Date.parse("2026-09-01T16:05:00Z"),
         }),
       ],
       ...over,
@@ -742,6 +746,7 @@ describe("buildPortalPage: attention items with no delivery behind them", () => 
         dueMs: day("2026-09-03"),
         dueIsEstimate: false,
         dueIsEndOfDay: true,
+        windowStartMs: Date.parse("2026-09-01T16:05:00Z"),
         confirmedAtMs: null,
         canUndo: false,
       },
@@ -848,5 +853,125 @@ describe("buildPortalPage: attention items with no delivery behind them", () => 
       "FLater",
       "c1",
     ]);
+  });
+});
+
+describe("review window start", () => {
+  const SENT = new Date("2026-09-01T14:00:00Z");
+  const P = { parentTaskId: "PW", parentTaskName: "(1) 60s Explainer" };
+  const fdTask = (over: Partial<LiveFeedbackTask> = {}) =>
+    fd({ taskId: "FW", name: "Confirm Edit V1 Feedback Received", parentTaskId: "PW", dueMs: day("2026-09-15"), ...over });
+
+  it("a delivery-backed item starts when the latest version went out", () => {
+    const rows = [
+      row({ id: "w1", taskId: "SW", projectListId: "LW", ...P, shareTaskName: "Share Edit V1 with Client", sentAt: new Date("2026-08-25T14:00:00Z") }),
+      row({ id: "w2", taskId: "SW", projectListId: "LW", ...P, shareTaskName: "Share Edit V1 with Client", sentAt: SENT }),
+    ];
+    const page = build({ rows, confirmations: new Map(), live: { LW: live({ feedbackByParent: { PW: [fdTask()] } }) } });
+    const review = page.projects[0].deliverables[0].review;
+    expect(review.state).toBe("awaiting");
+    // The newest version, not the first one.
+    expect(review.windowStartMs).toBe(SENT.getTime());
+    expect(review.windowStartMs! < review.dueMs!).toBe(true);
+  });
+
+  it("an estimated deadline still carries the send date", () => {
+    const rows = [row({ id: "w3", taskId: "SW", projectListId: "LW", ...P, sentAt: SENT, feedbackWindows: "" })];
+    const page = build({ rows, confirmations: new Map(), live: {} });
+    expect(page.projects[0].deliverables[0].review).toMatchObject({
+      dueIsEstimate: true,
+      windowStartMs: SENT.getTime(),
+    });
+  });
+
+  it("is null once there is no deadline: confirmed, delivered and archived", () => {
+    const rows = [row({ id: "w4", taskId: "SW", projectListId: "LW", ...P, sentAt: SENT })];
+    const confirmed = build({
+      rows,
+      confirmations: new Map([["w4", { confirmedAt: new Date("2026-09-02T18:00:00Z"), undoneAt: null, confirmedByName: "Dana" }]]),
+      live: { LW: live({ feedbackByParent: { PW: [fdTask()] } }) },
+    });
+    expect(confirmed.projects[0].deliverables[0].review).toMatchObject({ state: "confirmed", windowStartMs: null });
+
+    // Older than the stale window with no feedback task at all: nothing to do.
+    const stale = build({ rows: [row({ id: "w5", taskId: "SW", projectListId: "LW", ...P, sentAt: new Date("2026-06-01T14:00:00Z") })], confirmations: new Map(), live: {} });
+    expect(stale.projects[0].deliverables[0].review).toMatchObject({ state: "none", windowStartMs: null });
+
+    const archived = build({ rows, confirmations: new Map(), live: { LW: live({ archived: true, feedbackByParent: { PW: [fdTask()] } }) } });
+    expect(archived.projects[0].deliverables[0].review).toMatchObject({ state: "none", windowStartMs: null });
+  });
+
+  it("bad data (a start on or after the deadline) yields null, never a backwards window", () => {
+    const rows = [row({ id: "w6", taskId: "SW", projectListId: "LW", ...P, sentAt: new Date("2026-09-20T14:00:00Z") })];
+    const page = build({ rows, confirmations: new Map(), live: { LW: live({ feedbackByParent: { PW: [fdTask()] } }) } });
+    const review = page.projects[0].deliverables[0].review;
+    expect(review.dueMs).toBe(day("2026-09-15"));
+    expect(review.windowStartMs).toBeNull();
+  });
+
+  it("a task-only item starts when its share task was completed", () => {
+    const closedMs = Date.parse("2026-09-09T17:30:00Z");
+    const page = build({
+      rows: [],
+      confirmations: new Map(),
+      discovered: [{ listId: "LW", name: "Stack Overflow Explainer", archived: false }],
+      live: {
+        LW: live({
+          feedback: { "Edit V1": fdTask() },
+          feedbackByParent: { PW: [fdTask()] },
+          milestones: [
+            ms({ taskId: "SW", name: "Share Edit V1 with Client", ...P, dueMs: day("2026-09-08"), isClosed: true, closedMs }),
+          ],
+        }),
+      },
+    });
+    expect(page.attention).toHaveLength(1);
+    expect(page.attention[0].deliveryId).toBeNull();
+    expect(page.attention[0].review.windowStartMs).toBe(closedMs);
+  });
+
+  it("a task-only item with no completed share task for that parent and type has no start", () => {
+    const base = {
+      rows: [],
+      confirmations: new Map<string, ConfirmationRow>(),
+      discovered: [{ listId: "LW", name: "Stack Overflow Explainer", archived: false }],
+    };
+    const milestone = (over: Partial<LiveMilestone> = {}) =>
+      ms({ taskId: "SW", name: "Share Edit V1 with Client", ...P, isClosed: true, closedMs: Date.parse("2026-09-09T17:30:00Z"), ...over });
+    const withMilestones = (milestones: LiveMilestone[]) =>
+      build({ ...base, live: { LW: live({ feedback: { "Edit V1": fdTask() }, feedbackByParent: { PW: [fdTask()] }, milestones }) } })
+        .attention[0].review.windowStartMs;
+
+    // Still open, so nothing was handed over.
+    expect(withMilestones([milestone({ isClosed: false, closedMs: null })])).toBeNull();
+    // Closed, but a different deliverable.
+    expect(withMilestones([milestone({ deliverableType: "Edit V2" })])).toBeNull();
+    // Closed, but under another parent.
+    expect(withMilestones([milestone({ parentTaskId: "OTHER" })])).toBeNull();
+    // No roadmap at all.
+    expect(withMilestones([])).toBeNull();
+    // And a completion after the deadline is bad data, so null again.
+    expect(withMilestones([milestone({ closedMs: day("2026-09-20") })])).toBeNull();
+  });
+
+  it("a task-only item takes the newest matching completion", () => {
+    const older = Date.parse("2026-09-02T12:00:00Z");
+    const newer = Date.parse("2026-09-09T12:00:00Z");
+    const page = build({
+      rows: [],
+      confirmations: new Map(),
+      discovered: [{ listId: "LW", name: "Stack Overflow Explainer", archived: false }],
+      live: {
+        LW: live({
+          feedback: { "Edit V1": fdTask() },
+          feedbackByParent: { PW: [fdTask()] },
+          milestones: [
+            ms({ taskId: "SW1", name: "Share Edit V1 with Client", ...P, isClosed: true, closedMs: older }),
+            ms({ taskId: "SW2", name: "Share Edit V1 with Client", ...P, isClosed: true, closedMs: newer }),
+          ],
+        }),
+      },
+    });
+    expect(page.attention[0].review.windowStartMs).toBe(newer);
   });
 });
