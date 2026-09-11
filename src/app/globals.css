@@ -862,15 +862,25 @@
    never runs under either. Height follows the content up to the cap, and the
    body scrolls inside. */
 .portal-window-focused {
+  /* The room the window has to live in: under the menu bar, over the dock. */
+  --focus-top: 64px;
+  --focus-bottom: 126px;
   position: fixed;
-  inset: 64px 0 126px;
+  inset: var(--focus-top) 0 var(--focus-bottom);
   margin: auto;
   width: min(1100px, 92vw);
   height: fit-content;
-  max-height: min(84vh, 100%);
+  /* Cap the whole window, title bar included: a percentage here would
+     resolve against the viewport rather than the room between the insets,
+     and auto margins would split the overflow above the menu bar. */
+  max-height: min(84vh, calc(100vh - var(--focus-top) - var(--focus-bottom)));
   z-index: 1600;
   display: flex;
   flex-direction: column;
+}
+/* The title bar always stays whole; everything taller scrolls in the body. */
+.portal-window-focused .portal-window-bar {
+  flex: none;
 }
 .portal-window-focused .portal-window-body {
   flex: 1 1 auto;

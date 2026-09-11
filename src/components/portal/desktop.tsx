@@ -341,9 +341,17 @@ export function Desktop({ token, model, sandbox = false }: Props) {
     commit(() => EMPTY_STATE);
   }, [commit]);
 
-  /** Open a project as a viewer tab (activating an existing one) and raise the viewer. */
+  /**
+   * Open a project as a viewer tab (activating an existing one) and raise the
+   * viewer. Opening from a focused Finder hands focus over: the Finder
+   * recedes and the viewer comes forward, exactly as switching dock apps
+   * does, since otherwise the viewer would open behind the scrim and nothing
+   * would appear to happen. With nothing focused this just raises the viewer
+   * on the desktop as before.
+   */
   function openProject(listId: string) {
     setSelected(listId);
+    if (focusedId) setFocusedId(VIEWER_ID);
     commit((s) => {
       const cur = (s.tabs ?? defaultTabs).filter((id) => knownIds.has(id));
       const next = cur.includes(listId) ? cur : [...cur, listId];
