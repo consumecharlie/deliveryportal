@@ -23,6 +23,12 @@ export interface FeedbackStatus {
   source: DeadlineSource;
   /** True when the date is our default window, not a deadline anyone set. */
   dueIsEstimate: boolean;
+  /**
+   * True when the deadline carries no time of day, so it is due end of day:
+   * a ClickUp date-only due date (the 08:00 UTC sentinel), or a deadline we
+   * computed from the feedback window rather than read from a task.
+   */
+  dueIsEndOfDay: boolean;
   state: DeadlineState;
   feedbackDeadlineTaskId: string | null;
   confirmedAt: Date | null;
@@ -74,6 +80,7 @@ export function decideFeedbackStatus(input: {
     dueMs,
     source,
     dueIsEstimate: source === "default",
+    dueIsEndOfDay: fmt.timeLabel === "",
     dueLabel: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
     state: deadlineState(dueMs, nowMs),
     feedbackDeadlineTaskId: task?.taskId ?? null,

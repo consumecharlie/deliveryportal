@@ -185,6 +185,7 @@ function noReview(mode: ReviewMode): PortalDeliverable["review"] {
     label: reviewLabel({ state: "none", mode }),
     dueMs: null,
     dueIsEstimate: false,
+    dueIsEndOfDay: false,
     confirmedAtMs: null,
     canUndo: false,
   };
@@ -205,6 +206,7 @@ export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable
       label: reviewLabel({ state: "confirmed", mode, confirmedLabel: confirmedAtMs ? shortDate(confirmedAtMs) : null }),
       dueMs: null,
       dueIsEstimate: false,
+      dueIsEndOfDay: false,
       confirmedAtMs,
       canUndo: s.confirmedAt !== null,
     };
@@ -215,9 +217,16 @@ export function toReview(s: FeedbackStatus, mode: ReviewMode): PortalDeliverable
   return {
     state,
     mode,
-    label: reviewLabel({ state, mode, dueLabel: s.dueLabel, dueIsEstimate: s.dueIsEstimate }),
+    label: reviewLabel({
+      state,
+      mode,
+      dueLabel: s.dueLabel,
+      dueIsEstimate: s.dueIsEstimate,
+      dueIsEndOfDay: s.dueIsEndOfDay,
+    }),
     dueMs: s.dueMs,
     dueIsEstimate: s.dueIsEstimate,
+    dueIsEndOfDay: s.dueIsEndOfDay,
     confirmedAtMs: null,
     canUndo: false,
   };
@@ -397,10 +406,13 @@ function earliestUpcomingMs(milestones: PortalMilestone[]): number | null {
   return dates.length > 0 ? Math.min(...dates) : null;
 }
 
-/** "Tue, Sep 8", with the time when ClickUp carried one. */
-function dueLabelOf(dueMs: number): string {
+/** "Tue, Sep 8", with the time when ClickUp carried one, and whether it had one. */
+function dueLabelOf(dueMs: number): { label: string; isEndOfDay: boolean } {
   const fmt = formatFeedbackDeadline(dueMs);
-  return fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate;
+  return {
+    label: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
+    isEndOfDay: fmt.timeLabel === "",
+  };
 }
 
 /** The review block for an attention item that stands on a feedback task alone. */
@@ -408,12 +420,14 @@ function taskReview(task: LiveFeedbackTask, nowMs: number): PortalDeliverable["r
   const due = deadlineState(task.dueMs!, nowMs);
   const state: ReviewState = due === "open" ? "awaiting" : due;
   const mode = reviewMode(task.name, task.deliverableType);
+  const { label, isEndOfDay } = dueLabelOf(task.dueMs!);
   return {
     state,
     mode,
-    label: reviewLabel({ state, mode, dueLabel: dueLabelOf(task.dueMs!), dueIsEstimate: false }),
+    label: reviewLabel({ state, mode, dueLabel: label, dueIsEstimate: false, dueIsEndOfDay: isEndOfDay }),
     dueMs: task.dueMs,
     dueIsEstimate: false,
+    dueIsEndOfDay: isEndOfDay,
     confirmedAtMs: null,
     canUndo: false,
   };

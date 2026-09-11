@@ -398,14 +398,23 @@ export interface ReviewLabelInput {
   /** "Tue, Sep 8" (+ ", 12:00 PM ET" when a time was set). */
   dueLabel?: string;
   dueIsEstimate?: boolean;
+  /** True when the date carries no time of day, so the deadline is end of day. */
+  dueIsEndOfDay?: boolean;
   /** "Jun 6", when the confirmation date is known. */
   confirmedLabel?: string | null;
 }
 
-/** The one line the UI shows for a deliverable's review state. */
+/**
+ * The one line the UI shows for a deliverable's review state.
+ *
+ * A deadline with no time of day is due at end of day and says so ("by EOD
+ * Tue, Sep 15"); one that carries a real time shows the time instead ("by Tue,
+ * Sep 15, 12:00 PM ET"). "Due today" needs neither: the day is the point.
+ */
 export function reviewLabel(input: ReviewLabelInput): string {
   const word = input.mode === "approval" ? "Approval" : "Feedback";
   const due = input.dueLabel ?? "";
+  const when = input.dueIsEndOfDay && due ? `EOD ${due}` : due;
   switch (input.state) {
     case "none":
       return "Delivered";
@@ -413,15 +422,15 @@ export function reviewLabel(input: ReviewLabelInput): string {
       if (input.mode === "approval") return input.confirmedLabel ? `Approved ${input.confirmedLabel}` : "Approved";
       return input.confirmedLabel ? `Feedback received ${input.confirmedLabel}` : "Feedback received";
     case "overdue":
-      return `Past due, was ${due}`;
+      return `Past due, was ${when}`;
     case "due-today": {
       // Keep the time when one was set: "Tue, Sep 8, 12:00 PM ET" -> "Due today, 12:00 PM ET".
       const time = due.split(", ").slice(2).join(", ");
       return time ? `Due today, ${time}` : "Due today";
     }
     case "awaiting":
-      if (input.dueIsEstimate) return `${word} by ${due} (suggested)`;
-      return `${word} needed, due ${due}`;
+      if (input.dueIsEstimate) return `${word} by ${when} (suggested)`;
+      return `${word} needed by ${when}`;
   }
 }
 

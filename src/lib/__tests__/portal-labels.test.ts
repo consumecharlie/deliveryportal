@@ -296,8 +296,8 @@ describe("review wording", () => {
   });
 
   it("reviewLabel by state and mode", () => {
-    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Tue, Sep 8" })).toBe("Feedback needed, due Tue, Sep 8");
-    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Tue, Sep 8, 5:00 PM ET" })).toBe("Approval needed, due Tue, Sep 8, 5:00 PM ET");
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Tue, Sep 8" })).toBe("Feedback needed by Tue, Sep 8");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Tue, Sep 8, 5:00 PM ET" })).toBe("Approval needed by Tue, Sep 8, 5:00 PM ET");
     expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Fri, Sep 11", dueIsEstimate: true })).toBe("Feedback by Fri, Sep 11 (suggested)");
     expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Fri, Sep 11", dueIsEstimate: true })).toBe("Approval by Fri, Sep 11 (suggested)");
     expect(reviewLabel({ state: "due-today", mode: "approval", dueLabel: "Thu, Sep 3" })).toBe("Due today");
@@ -308,6 +308,33 @@ describe("review wording", () => {
     expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: "Jun 6" })).toBe("Approved Jun 6");
     expect(reviewLabel({ state: "confirmed", mode: "approval", confirmedLabel: null })).toBe("Approved");
     expect(reviewLabel({ state: "none", mode: "feedback" })).toBe("Delivered");
+  });
+
+  it("reviewLabel says EOD wherever a date carries no time of day", () => {
+    const eod = { dueIsEndOfDay: true };
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Tue, Sep 15", ...eod })).toBe("Feedback needed by EOD Tue, Sep 15");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Tue, Sep 15", ...eod })).toBe("Approval needed by EOD Tue, Sep 15");
+    expect(reviewLabel({ state: "overdue", mode: "feedback", dueLabel: "Tue, Sep 1", ...eod })).toBe("Past due, was EOD Tue, Sep 1");
+    expect(reviewLabel({ state: "overdue", mode: "approval", dueLabel: "Tue, Sep 1", ...eod })).toBe("Past due, was EOD Tue, Sep 1");
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", dueLabel: "Fri, Sep 11", dueIsEstimate: true, ...eod })).toBe("Feedback by EOD Fri, Sep 11 (suggested)");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", dueLabel: "Fri, Sep 11", dueIsEstimate: true, ...eod })).toBe("Approval by EOD Fri, Sep 11 (suggested)");
+  });
+
+  it("a real time of day keeps the time and never says EOD", () => {
+    const timed = { dueLabel: "Tue, Sep 15, 12:00 PM ET", dueIsEndOfDay: false };
+    expect(reviewLabel({ state: "awaiting", mode: "feedback", ...timed })).toBe("Feedback needed by Tue, Sep 15, 12:00 PM ET");
+    expect(reviewLabel({ state: "awaiting", mode: "approval", ...timed })).toBe("Approval needed by Tue, Sep 15, 12:00 PM ET");
+    expect(reviewLabel({ state: "overdue", mode: "feedback", dueLabel: "Tue, Sep 1, 5:00 PM ET", dueIsEndOfDay: false })).toBe("Past due, was Tue, Sep 1, 5:00 PM ET");
+  });
+
+  it("Due today keeps its shape either way", () => {
+    expect(reviewLabel({ state: "due-today", mode: "feedback", dueLabel: "Thu, Sep 3", dueIsEndOfDay: true })).toBe("Due today");
+    expect(reviewLabel({ state: "due-today", mode: "approval", dueLabel: "Thu, Sep 3, 12:00 PM ET", dueIsEndOfDay: false })).toBe("Due today, 12:00 PM ET");
+  });
+
+  it("confirmed and delivered wording ignores the flag", () => {
+    expect(reviewLabel({ state: "confirmed", mode: "feedback", confirmedLabel: "Jun 6", dueIsEndOfDay: true })).toBe("Feedback received Jun 6");
+    expect(reviewLabel({ state: "none", mode: "approval", dueIsEndOfDay: true })).toBe("Delivered");
   });
 });
 

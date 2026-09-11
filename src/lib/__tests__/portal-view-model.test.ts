@@ -43,6 +43,7 @@ describe("toCardStatus", () => {
   it("omits the feedback task id and keeps the presentation fields", () => {
     const status: FeedbackStatus = {
       kind: "awaiting", dueMs: 1, dueLabel: "Tue, Jun 2", source: "clickup", dueIsEstimate: false,
+    dueIsEndOfDay: true,
       state: "open", feedbackDeadlineTaskId: "T1", confirmedAt: null, confirmedByName: null,
     };
     const slim = toCardStatus(status);

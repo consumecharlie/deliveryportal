@@ -217,7 +217,7 @@ describe("buildPortalPage: projects and deliverables", () => {
       { url: "https://example.com/brief", label: "Brief", hint: "Link", kind: "web" },
     ]);
     // No task, type says Final: approval wording.
-    expect(p.projects[0].deliverables[0].review).toMatchObject({ mode: "approval", label: "Approval by Thu, Sep 3 (suggested)" });
+    expect(p.projects[0].deliverables[0].review).toMatchObject({ mode: "approval", label: "Approval by EOD Thu, Sep 3 (suggested)" });
   });
 
   it("renders client-safe bodies and labelled links", () => {
@@ -268,9 +268,10 @@ describe("buildPortalPage: review state", () => {
     expect(loc.deliverables[0].review).toEqual({
       state: "awaiting",
       mode: "feedback",
-      label: "Feedback needed, due Tue, Sep 8",
+      label: "Feedback needed by EOD Tue, Sep 8",
       dueMs: day("2026-09-08"),
       dueIsEstimate: false,
+      dueIsEndOfDay: true,
       confirmedAtMs: null,
       canUndo: false,
     });
@@ -283,6 +284,7 @@ describe("buildPortalPage: review state", () => {
       label: "Feedback received Jun 6",
       dueMs: null,
       dueIsEstimate: false,
+      dueIsEndOfDay: false,
       confirmedAtMs: Date.parse("2026-06-06T18:00:00Z"),
       canUndo: true,
     });
@@ -299,7 +301,7 @@ describe("buildPortalPage: review state", () => {
     expect(callrail.deliverables[0].review).toMatchObject({
       state: "awaiting",
       mode: "feedback",
-      label: "Feedback by Thu, Sep 3 (suggested)",
+      label: "Feedback by EOD Thu, Sep 3 (suggested)",
       dueIsEstimate: true,
       dueMs: day("2026-09-03"),
     });
@@ -322,9 +324,9 @@ describe("buildPortalPage: review state", () => {
     expect(p.projects.find((x) => x.listId === "L1")!.deliverables[0].review).toMatchObject({
       state: "awaiting",
       mode: "approval",
-      label: "Approval needed, due Tue, Sep 8",
+      label: "Approval needed by EOD Tue, Sep 8",
     });
-    expect(p.attention[0].review.label).toBe("Approval needed, due Tue, Sep 8");
+    expect(p.attention[0].review.label).toBe("Approval needed by EOD Tue, Sep 8");
   });
 
   it("pairs feedback by parent first, so sibling episodes with the same type do not share one task", () => {
@@ -349,7 +351,7 @@ describe("buildPortalPage: review state", () => {
     const byId = Object.fromEntries(p.projects.find((x) => x.listId === "L1")!.deliverables.map((d) => [d.latest.deliveryId, d.review]));
     expect(byId.e21).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
     expect(byId.e22).toMatchObject({ state: "confirmed" });
-    expect(byId.e23).toMatchObject({ state: "awaiting", label: "Feedback needed, due Wed, Sep 16" });
+    expect(byId.e23).toMatchObject({ state: "awaiting", label: "Feedback needed by EOD Wed, Sep 16" });
     expect(byId.e24).toMatchObject({ state: "awaiting", dueMs: day("2026-09-08") });
     // The LOC19 video (Edit V2) pairs with its parent's closed Edit V2 task.
     expect(byId.v2).toMatchObject({ state: "confirmed" });
@@ -377,9 +379,9 @@ describe("buildPortalPage: review state", () => {
     });
     const byId = Object.fromEntries(p.projects[0].deliverables.map((d) => [d.latest.deliveryId, d.review]));
     expect(byId.v25).toMatchObject({ state: "confirmed" });
-    expect(byId.s25).toMatchObject({ state: "awaiting", mode: "feedback", label: "Feedback needed, due Thu, Sep 10" });
-    expect(byId.v26).toMatchObject({ state: "awaiting", label: "Feedback needed, due Tue, Sep 8" });
-    expect(byId.s26).toMatchObject({ state: "awaiting", label: "Feedback needed, due Thu, Sep 10" });
+    expect(byId.s25).toMatchObject({ state: "awaiting", mode: "feedback", label: "Feedback needed by EOD Thu, Sep 10" });
+    expect(byId.v26).toMatchObject({ state: "awaiting", label: "Feedback needed by EOD Tue, Sep 8" });
+    expect(byId.s26).toMatchObject({ state: "awaiting", label: "Feedback needed by EOD Thu, Sep 10" });
     expect(p.attention.map((a) => a.deliveryId)).toEqual(["v26", "s25", "s26"]);
   });
 
@@ -387,7 +389,7 @@ describe("buildPortalPage: review state", () => {
     const p = build({ live: { ...LIVE, L2: { ...LIVE.L2, archived: true } } });
     const callrail = p.projects.find((x) => x.listId === "L2")!;
     expect(callrail.phase).toBe("completed");
-    expect(callrail.deliverables[0].review).toEqual({ state: "none", mode: "feedback", label: "Delivered", dueMs: null, dueIsEstimate: false, confirmedAtMs: null, canUndo: false });
+    expect(callrail.deliverables[0].review).toEqual({ state: "none", mode: "feedback", label: "Delivered", dueMs: null, dueIsEstimate: false, dueIsEndOfDay: false, confirmedAtMs: null, canUndo: false });
     expect(p.attention.map((a) => a.deliveryId)).toEqual(["e21"]);
     expect(callrail.milestones.map((m) => m.state)).toEqual(["delivered", "up-next"]);
   });
@@ -408,7 +410,7 @@ describe("toReview labels", () => {
 
   it("overdue: 'Past due, was ...'", () => {
     const r = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-01")), nowMs: NOW }), "feedback");
-    expect(r).toMatchObject({ state: "overdue", label: "Past due, was Tue, Sep 1", dueMs: day("2026-09-01") });
+    expect(r).toMatchObject({ state: "overdue", label: "Past due, was EOD Tue, Sep 1", dueMs: day("2026-09-01") });
   });
 
   it("due today, with and without a time", () => {
@@ -416,8 +418,20 @@ describe("toReview labels", () => {
     expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-03T16:00:00Z")), nowMs: NOW }), "feedback")).toMatchObject({ state: "due-today", label: "Due today, 12:00 PM ET" });
   });
 
-  it("a timed future deadline keeps the time", () => {
-    expect(toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-08T21:00:00Z")), nowMs: NOW }), "approval").label).toBe("Approval needed, due Tue, Sep 8, 5:00 PM ET");
+  it("a timed future deadline keeps the time and never says EOD", () => {
+    const r = toReview(decideFeedbackStatus({ ...base, task: task(Date.parse("2026-09-08T21:00:00Z")), nowMs: NOW }), "approval");
+    expect(r.label).toBe("Approval needed by Tue, Sep 8, 5:00 PM ET");
+    expect(r.dueIsEndOfDay).toBe(false);
+  });
+
+  it("a date-only ClickUp deadline and a computed one are both end of day", () => {
+    const sentinel = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-15")), nowMs: NOW }), "feedback");
+    expect(sentinel).toMatchObject({ dueIsEndOfDay: true, label: "Feedback needed by EOD Tue, Sep 15" });
+    const computed = toReview(
+      decideFeedbackStatus({ ...base, task: null, sentAt: new Date("2026-09-09T14:00:00Z"), nowMs: NOW }),
+      "approval"
+    );
+    expect(computed).toMatchObject({ dueIsEndOfDay: true, label: "Approval needed by EOD Fri, Sep 11" });
   });
 });
 
@@ -539,7 +553,7 @@ describe("buildPortalPage: attention and focus", () => {
     const page = build();
     // c1's Sep 3 date is an estimate, so e21's real Sep 8 deadline comes first.
     expect(page.attention.map((a) => a.deliveryId)).toEqual(["e21", "c1"]);
-    expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, label: "Feedback by Thu, Sep 3 (suggested)" });
+    expect(page.attention[1].review).toMatchObject({ dueIsEstimate: true, dueIsEndOfDay: true, label: "Feedback by EOD Thu, Sep 3 (suggested)" });
     expect(page.attention[0]).toEqual({
       deliveryId: "e21",
       feedbackTaskId: null,
@@ -727,6 +741,7 @@ describe("buildPortalPage: attention items with no delivery behind them", () => 
         label: "Due today",
         dueMs: day("2026-09-03"),
         dueIsEstimate: false,
+        dueIsEndOfDay: true,
         confirmedAtMs: null,
         canUndo: false,
       },
@@ -735,13 +750,24 @@ describe("buildPortalPage: attention items with no delivery behind them", () => 
     expect(page.projects[0].deliverables).toEqual([]);
   });
 
+  it("a task-only item with a real ClickUp time keeps the time instead of EOD", () => {
+    const timed = fd({ taskId: "FT", name: "Confirm Spinoff Details with Client", dueMs: Date.parse("2026-09-15T21:00:00Z") });
+    const page = build({ ...baseArgs, live: { LS: live({ feedback: { "Spinoff Details Request": timed } }) } });
+    expect(page.attention[0].review).toMatchObject({
+      state: "awaiting",
+      dueIsEndOfDay: false,
+      label: "Feedback needed by Tue, Sep 15, 5:00 PM ET",
+    });
+  });
+
   it("labels an approval task as approval and dates it from ClickUp", () => {
     const task = fd({ taskId: "FA", name: "Confirm Final Deliverables Approval", deliverableType: "Final Delivery", dueMs: day("2026-09-10") });
     const page = build({ ...baseArgs, live: { LS: live({ feedback: { "Final Delivery": task } }) } });
     expect(page.attention[0].review).toMatchObject({
       state: "awaiting",
       mode: "approval",
-      label: "Approval needed, due Thu, Sep 10",
+      label: "Approval needed by EOD Thu, Sep 10",
+      dueIsEndOfDay: true,
     });
     expect(page.attention[0].deliverableTitle).toBe("Final Deliverables");
     expect(page.attention[0].variant).toBeNull();

@@ -112,4 +112,23 @@ describe("decideFeedbackStatus", () => {
     const s = decideFeedbackStatus({ task: task({ dueMs: Date.parse("2026-06-04T16:00:00Z") }), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
     expect(s.dueLabel).toBe("Thu, Jun 4, 12:00 PM ET");
   });
+
+  it("dueIsEndOfDay follows whether the deadline carries a time of day", () => {
+    // A ClickUp date-only due date (the 08:00 UTC sentinel) is end of day.
+    const sentinel = decideFeedbackStatus({ task: task(), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(sentinel.source).toBe("clickup");
+    expect(sentinel.dueIsEndOfDay).toBe(true);
+
+    // A real ClickUp time is not.
+    const timed = decideFeedbackStatus({ task: task({ dueMs: Date.parse("2026-06-04T16:00:00Z") }), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(timed.dueIsEndOfDay).toBe(false);
+
+    // Computed from the feedback window, and the default window: both end of day.
+    const computed = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "2 Business Days", nowMs: NOW });
+    expect(computed.source).toBe("computed");
+    expect(computed.dueIsEndOfDay).toBe(true);
+    const fallback = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(fallback.source).toBe("default");
+    expect(fallback.dueIsEndOfDay).toBe(true);
+  });
 });

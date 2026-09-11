@@ -98,6 +98,12 @@ export interface PortalDeliverable {
     label: string;
     dueMs: number | null;
     dueIsEstimate: boolean;
+    /**
+     * True when the deadline has no time of day, so it is due end of day (the
+     * label says "by EOD Tue, Sep 15"). False when ClickUp carried a real time,
+     * which the label shows instead.
+     */
+    dueIsEndOfDay: boolean;
     confirmedAtMs: number | null;
     canUndo: boolean;
   };
