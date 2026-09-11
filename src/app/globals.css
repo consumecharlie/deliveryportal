@@ -1450,9 +1450,10 @@
 .portal-tab::after {
   content: "";
   position: absolute;
-  /* Start above the arc's tangent point so the slant's blunt end hides under
-     the rounded corner instead of showing as a tick. */
-  top: calc(var(--tab-r) - 3px);
+  /* Start below the arc, where the tab's edge has straightened, so the slant's
+     blunt end hides behind the tab's own 2px border instead of poking past the
+     curve as a burr. */
+  top: calc(var(--tab-r) + 1px);
   bottom: 0;
   width: var(--slant);
   background: inherit;
