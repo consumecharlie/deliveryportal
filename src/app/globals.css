@@ -1424,18 +1424,20 @@
   align-items: center;
   gap: 6px;
   max-width: 420px;
-  /* The shoulder is exactly as wide as the skew displaces its top edge
-     (height * tan(16deg)), so the slant meets the tab's top corner with no
-     leftover horizontal stub. */
+  /* 16-bit keystone: chunky 2px stroke, a rounded top, and shoulders sized so
+     the slant meets the start of that arc (height above the radius, times
+     tan(16deg)) with no stub. */
   --tab-h: 30px;
-  --slant: calc(var(--tab-h) * 0.28675);
+  --tab-r: 6px;
+  --slant: calc((var(--tab-h) - var(--tab-r)) * 0.28675);
   height: var(--tab-h);
   margin: 0 var(--slant);
-  padding: 0 6px 0 10px;
-  border: 1px solid #151919;
+  padding: 0 12px 0 8px;
+  border: 2px solid #151919;
   border-bottom: none;
-  border-radius: 0;
-  background: linear-gradient(#f4f9f7 0, #e2ebe6 55%, #d6e2dc 100%);
+  border-radius: var(--tab-r) var(--tab-r) 0 0;
+  background: #e6eeea;
+  box-shadow: inset 0 2px 0 #f7fbf9;
   color: #4d5959;
   font-size: 13px;
   font-weight: 500;
@@ -1448,11 +1450,13 @@
 .portal-tab::after {
   content: "";
   position: absolute;
-  top: 0;
+  /* Start above the arc's tangent point so the slant's blunt end hides under
+     the rounded corner instead of showing as a tick. */
+  top: calc(var(--tab-r) - 3px);
   bottom: 0;
   width: var(--slant);
   background: inherit;
-  border: 1px solid #151919;
+  border: 2px solid #151919;
   /* Only the slanted edge draws: a top border here would leave a horizontal
      stub past the tab's corner, and the tab's own top border covers that span. */
   border-top: none;
@@ -1473,15 +1477,15 @@
   transform: skewX(16deg);
   transform-origin: bottom right;
 }
-.portal-tab:hover { background: linear-gradient(#fafffd 0, #e9f1ed 55%, #dde8e2 100%); }
+.portal-tab:hover { background: #eef4f1; }
 .portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
 /* Active tab: the panel colour, one pixel taller, sitting over the panel edge. */
 .portal-tab-active,
 .portal-tab-active:hover {
-  --tab-h: 33px;
-  margin-bottom: -1px;
-  padding-bottom: 1px;
-  background: linear-gradient(#ffffff 0, #fafffd 40%, #fafffd 100%);
+  --tab-h: 34px;
+  margin-bottom: -2px;
+  padding-bottom: 2px;
+  background: #fafffd;
   color: #151919;
   font-weight: 600;
   z-index: 3;
@@ -1493,6 +1497,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The close control keeps its space and fades in on hover or keyboard focus. */
 .portal-tab-x {
   flex: none;
   display: inline-flex;
@@ -1505,9 +1510,14 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #6f7f7f;
+  color: #4d5959;
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1));
 }
+.portal-tab:hover .portal-tab-x,
+.portal-tab:focus-within .portal-tab-x,
+.portal-tab-x:focus-visible { opacity: 1; }
 .portal-tab-x:hover { background: rgba(21, 25, 25, 0.12); color: #151919; }
 .portal-viewer-panel { padding-top: 20px; }
 
