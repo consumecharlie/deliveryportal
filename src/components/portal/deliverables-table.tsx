@@ -7,9 +7,10 @@ import { sendPortalView } from "@/lib/portal-view-beacon";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { StatusPill, pillNote } from "./status-pill";
 import { LinkButtons } from "./link-button";
+import { ViewLink } from "./view-link";
 import { VersionMenu } from "./version-menu";
 import { MessagePopover } from "./message-popover";
-import { allVersions, reviewMode, versionNumber } from "./link-meta";
+import { allVersions, pickPrimaryLink, reviewMode, versionNumber } from "./link-meta";
 import { shortDate } from "./format";
 
 interface Props {
@@ -34,6 +35,7 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
   const actionable = review.state === "awaiting" || review.state === "due-today" || review.state === "overdue";
   const showConfirm = actionable || (review.state === "confirmed" && review.canUndo);
   const dueNote = pillNote(review.state, reviewMode(review, d.title, d.variant, d.latest.label), review.label);
+  const primaryLink = pickPrimaryLink(current.links);
 
   function toggle() {
     if (!open) sendPortalView(token, current.deliveryId);
@@ -81,18 +83,46 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
           {dueNote && <span className="portal-due-note">{dueNote}</span>}
         </div>
         <div className="portal-td portal-td-toggle">
-          <button
-            ref={setButton}
-            type="button"
-            className="portal-disclosure-btn"
-            aria-expanded={open}
-            aria-haspopup="dialog"
-            aria-controls={open ? panelId : undefined}
-            onClick={toggle}
-          >
-            <span className={`portal-chevron${open ? " portal-chevron-open" : ""}`} aria-hidden="true" />
-            View delivery message
-          </button>
+          <div className="portal-row-actions">
+            {/* A row that is waiting on the client can be answered here, with
+                the same controls and the same link the review card uses. */}
+            {actionable && primaryLink && (
+              <ViewLink
+                token={token}
+                deliveryId={current.deliveryId}
+                href={primaryLink.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cm-btn cm-btn--sm"
+              >
+                Click to review
+              </ViewLink>
+            )}
+            {actionable && (
+              <ConfirmButton
+                key={confirmButtonKey(d.latest.deliveryId, {
+                  kind: review.state,
+                  confirmedAt: review.confirmedAtMs ? new Date(review.confirmedAtMs) : null,
+                })}
+                token={token}
+                deliveryId={d.latest.deliveryId}
+                initialConfirmed={false}
+                canUndo={review.canUndo}
+                variant="secondary"
+              />
+            )}
+            <button
+              ref={setButton}
+              type="button"
+              className="portal-btn portal-btn-secondary portal-btn-sm portal-msg-btn"
+              aria-expanded={open}
+              aria-haspopup="dialog"
+              aria-controls={open ? panelId : undefined}
+              onClick={toggle}
+            >
+              View delivery message
+            </button>
+          </div>
         </div>
       </div>
 

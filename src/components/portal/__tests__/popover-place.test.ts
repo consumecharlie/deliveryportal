@@ -45,7 +45,7 @@ describe("place", () => {
   it("stays in frame for a control at any height, at any viewport height", () => {
     for (const vh of [800, 900, 1200]) {
       for (let y = 0; y <= vh - 24; y += 8) {
-        for (const natural of [200, 540, 900, 1600]) {
+        for (const natural of [200, 540, 900, 1600, 2500]) {
           const p = place(rect(600, y), natural, 1440, vh);
           expect(inFrame(p, 1440, vh), `y=${y} vh=${vh} natural=${natural}`).toBe(true);
         }
@@ -67,8 +67,17 @@ describe("place", () => {
     expect(place(rect(600, 240), 900, 1440, 900).fits).toBe(true);
   });
 
-  it("never caps taller than 60vh even with room to spare", () => {
-    expect(place(rect(600, 40), 2000, 1440, 1200).height).toBeLessThanOrEqual(720);
+  it("takes the whole message when the room allows, without an inner scroll", () => {
+    const p = place(rect(600, 60), 900, 1440, 1200);
+    expect(p.height).toBe(900);
+  });
+
+  it("caps a very long message to the room, never beyond it", () => {
+    for (const vh of [800, 900, 1200]) {
+      const p = place(rect(600, 300), 2500, 1440, vh);
+      expect(p.height).toBeLessThanOrEqual(vh - 24);
+      expect(inFrame(p, 1440, vh)).toBe(true);
+    }
   });
 
   it("narrows on a small viewport rather than overflowing", () => {

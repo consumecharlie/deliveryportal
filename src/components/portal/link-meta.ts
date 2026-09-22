@@ -79,3 +79,16 @@ export function reviewMode(review: { mode?: ReviewMode }, ...names: (string | nu
   if (review.mode) return review.mode;
   return names.some((n) => n && /\bfinal\b/i.test(n)) ? "approval" : "feedback";
 }
+
+/**
+ * The link the review controls point at: the same choice the review card
+ * makes, so a row and its card send the client to the same place.
+ */
+export function pickPrimaryLink(links: PortalLink[]): PortalLink | null {
+  return (
+    links.find((l) => linkKind(l) === "frame") ??
+    links.find((l) => linkKind(l) === "loom") ??
+    links[0] ??
+    null
+  );
+}

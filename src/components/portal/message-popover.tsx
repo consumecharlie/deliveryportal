@@ -8,8 +8,7 @@ const MARGIN = 12;
 const GAP = 10;
 const WIDTH = 460;
 const BEAK_W = 22;
-/** The tallest the panel goes when there is room for it. */
-const MAX_VH = 0.6;
+const BEAK_H = 12;
 /** Less room than this either side and an anchored panel is not worth it. */
 const MIN_H = 220;
 /** Below this the desktop itself stacks, and an anchored popover reads badly. */
@@ -32,16 +31,18 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * Prefer below the control, flip above when that side has more room, and
- * clamp so the panel is always wholly inside the viewport. When neither side
- * fits the preferred height the panel shrinks to the room it actually has and
- * the message scrolls inside; below a usable minimum the caller shows the
- * centred sheet instead. The beak keeps pointing at the control throughout.
+ * Take the whole message wherever it fits: below the control by preference,
+ * above when only that side can hold it, and otherwise the roomier of the
+ * two, capped to the room that side actually has so a long message scrolls
+ * inside only when the screen truly cannot hold it. The result is clamped
+ * into the frame, and below a usable minimum the caller shows the centred
+ * sheet instead. The beak keeps pointing at the control throughout.
  */
 export function place(anchor: DOMRect, natural: number, vw: number, vh: number): Placement {
   const width = Math.min(WIDTH, vw - MARGIN * 2);
   const left = clamp(anchor.left + anchor.width / 2 - width / 2, MARGIN, Math.max(MARGIN, vw - MARGIN - width));
-  const preferred = Math.min(natural, Math.round(vh * MAX_VH));
+  // No arbitrary cap: the message should be read whole wherever it fits.
+  const preferred = Math.ceil(natural);
   const roomBelow = vh - MARGIN - (anchor.bottom + GAP);
   const roomAbove = anchor.top - GAP - MARGIN;
 
@@ -230,10 +231,30 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
       aria-label={title}
     >
       {!asSheet && placement && (
-        <svg className="portal-pop-beak" width={BEAK_W} height="12" viewBox="0 0 22 12" style={{ left: placement.beakX - BEAK_W / 2 }} aria-hidden="true">
-          <path d="M1 11.5 11 1.6 21 11.5" fill="#fafffd" stroke="#151919" strokeWidth="2" strokeLinejoin="round" />
-          {/* Breaks the popover's own border under the beak, so the two join. */}
-          <rect x="2.6" y="10.2" width="16.8" height="3" fill="#fafffd" />
+        /* The beak and the panel are one shape: the flat band at the beak's
+           base paints over the panel's own border for exactly its 2px, then
+           the two walls carry on, so there is no seam to see. Each direction
+           is drawn outright rather than mirrored, which would land the band
+           off the border by a fraction. */
+        <svg
+          className="portal-pop-beak"
+          width={BEAK_W}
+          height={BEAK_H}
+          viewBox={`0 0 ${BEAK_W} ${BEAK_H}`}
+          style={{ left: placement.beakX - BEAK_W / 2 }}
+          aria-hidden="true"
+        >
+          {placement.flipped ? (
+            <>
+              <path d="M1 1 11 11.2 21 1" fill="#fafffd" stroke="#151919" strokeWidth="2" strokeLinejoin="round" />
+              <rect x="2.4" y="-1" width="17.2" height="3" fill="#fafffd" />
+            </>
+          ) : (
+            <>
+              <path d={`M1 ${BEAK_H - 1} 11 ${BEAK_H - 11.2} 21 ${BEAK_H - 1}`} fill="#fafffd" stroke="#151919" strokeWidth="2" strokeLinejoin="round" />
+              <rect x="2.4" y={BEAK_H - 2} width="17.2" height="3" fill="#fafffd" />
+            </>
+          )}
         </svg>
       )}
       <div ref={barRef} className="portal-pop-bar">

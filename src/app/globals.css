@@ -1734,7 +1734,7 @@ a.portal-rail-link:hover .portal-rail-label {
   margin-top: 20px;
   border-top: 1px solid #bbd2cf;
   display: grid;
-  grid-template-columns: minmax(180px, 2.2fr) max-content 90px minmax(200px, max-content) 170px max-content;
+  grid-template-columns: minmax(180px, 2.2fr) max-content 90px minmax(200px, max-content) 170px minmax(170px, auto);
   column-gap: 16px;
 }
 .portal-thead,
@@ -1768,6 +1768,15 @@ a.portal-rail-link:hover .portal-rail-label {
 .portal-td-label { display: none; }
 .portal-td-versions { min-width: 0; }
 .portal-td-toggle { text-align: right; }
+/* The row's controls: they wrap inside the cell rather than widening the table. */
+.portal-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.portal-row-actions .portal-confirm { align-items: flex-end; }
 .portal-links {
   display: flex;
   flex-wrap: wrap;
@@ -1814,6 +1823,18 @@ a.portal-rail-link:hover .portal-rail-label {
 }
 .portal-details-block:first-child.portal-details-confirm { border-top: 0; padding-top: 4px; }
 
+/* The popover's trigger: a quiet button like the link buttons beside it,
+   pressed while its popover is open. */
+.portal-msg-btn {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.portal-msg-btn[aria-expanded="true"] {
+  background: #e5eee8;
+  border-color: #151919;
+  color: #151919;
+}
+
 /* The delivery message as an anchored popover: a small Mac window floating
    over the page from a portal, so opening one never moves the table. */
 .portal-pop {
@@ -1830,8 +1851,8 @@ a.portal-rail-link:hover .portal-rail-label {
     0 10px 24px -12px rgba(0, 0, 0, 0.4);
   font-family: var(--font-montserrat), "Montserrat", system-ui, sans-serif;
 }
-/* The cap is placed per popover: never taller than the room that side has. */
-.portal-pop-anchored { max-height: 60vh; }
+/* The cap is placed per popover: the room that side has, and nothing less
+   arbitrary, so the message is read whole wherever it fits. */
 @keyframes portal-pop-in {
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: none; }
@@ -1842,6 +1863,9 @@ a.portal-rail-link:hover .portal-rail-label {
 }
 .portal-pop-flipped.portal-pop-in { transform-origin: bottom center; }
 /* The beak: its base paints over the popover's own border, so the two join. */
+/* The beak overlaps the panel's border by its 2px, and its base band paints
+   that stretch out so the outlines join. No mirroring: each direction has its
+   own path, so the band sits on the border exactly. */
 .portal-pop-beak {
   position: absolute;
   top: -10px;
@@ -1849,9 +1873,8 @@ a.portal-rail-link:hover .portal-rail-label {
   overflow: visible;
 }
 .portal-pop-flipped .portal-pop-beak {
-  top: auto;
-  bottom: -10px;
-  transform: scaleY(-1);
+  top: 100%;
+  margin-top: -2px;
 }
 .portal-pop-bar {
   position: relative;
@@ -2320,7 +2343,7 @@ textarea.portal-input { resize: vertical; }
    cells below that (phones, and narrow windows). */
 @container portal-body (max-width: 903px) {
   .portal-table {
-    grid-template-columns: minmax(150px, 2fr) max-content 80px minmax(170px, max-content) 150px max-content;
+    grid-template-columns: minmax(150px, 2fr) max-content 80px minmax(170px, max-content) 150px minmax(150px, auto);
     column-gap: 12px;
   }
 }
@@ -2357,7 +2380,7 @@ textarea.portal-input { resize: vertical; }
   .portal-due-note { margin: 0; text-align: right; }
   .portal-td-links { grid-area: links; }
   .portal-td-toggle { grid-area: toggle; text-align: left; }
-  .portal-td-toggle .portal-disclosure-btn { margin-left: -8px; }
+  .portal-row-actions { justify-content: flex-start; }
   .portal-details { padding: 16px; }
 }
 
