@@ -1,6 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  ACTIVE_H,
+  INACTIVE_H,
+  STRIP_H,
+  baselineY,
+  stripWidth,
+  tabPath,
+  tabSlots,
+} from "./tab-shape";
 import type { PortalProject } from "@/lib/portal-page-model";
 import { MacWindow, type WindowFrameProps } from "./mac-window";
 import { VIEWER_ID } from "./desktop-state";
@@ -40,6 +49,20 @@ export function ViewerWindow({ token, projects, tabs, activeTab, onActivateTab, 
   const current = activeTab && open.includes(activeTab) ? activeTab : open[0] ?? null;
   const project = current ? byId.get(current) ?? null : null;
   const listRef = useRef<HTMLDivElement>(null);
+  const [stripW, setStripW] = useState(0);
+
+  // The strip divides equally among the open tabs, so its own width drives
+  // the geometry. Measured before paint and kept current as the window resizes.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const read = () => setStripW(el.clientWidth);
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tabHeights, setTabHeights] = useState<Record<string, number>>({});
 
@@ -113,49 +136,79 @@ export function ViewerWindow({ token, projects, tabs, activeTab, onActivateTab, 
     }
   }
 
+  const totalW = stripWidth(stripW, open.length);
+  const slots = tabSlots(totalW, open.length);
+  const activeIndex = current ? open.indexOf(current) : -1;
+
   return (
     <MacWindow {...frame} id={VIEWER_ID} title="Project Viewer" canClose className="portal-window-viewer">
       <div className="portal-viewer" onKeyDown={onKeyDown}>
         <div ref={listRef} className="portal-tabs" role="tablist" aria-label="Open projects">
-          {open.map((id) => {
-            const p = byId.get(id)!;
-            const isActive = id === current;
-            return (
-              <div
-                key={id}
-                role="tab"
-                data-tab={id}
-                aria-selected={isActive}
-                aria-controls={`viewer-panel-${id}`}
-                tabIndex={isActive ? 0 : -1}
-                title={p.name}
-                className={`portal-tab${isActive ? " portal-tab-active" : ""}`}
-                onClick={() => onActivateTab(id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onActivateTab(id);
-                  }
-                }}
-              >
-                <button
-                  type="button"
-                  className="portal-tab-x"
-                  aria-label={`Close ${p.name}`}
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(id);
+          <div className="portal-tabs-inner" style={{ width: totalW, height: STRIP_H }}>
+            {/* One drawing for the whole strip: neighbours share an exact edge
+                and no shape has a blunt end to show as a burr. */}
+            <svg
+              className="portal-tabs-art"
+              width={totalW}
+              height={STRIP_H}
+              viewBox={`0 0 ${totalW} ${STRIP_H}`}
+              aria-hidden="true"
+              focusable="false"
+            >
+              {slots.map((slot, i) =>
+                open[i] === current ? null : (
+                  <path key={open[i]} className="portal-tab-shape" d={tabPath(slot, INACTIVE_H)} />
+                )
+              )}
+              <line className="portal-tabs-edge" x1={0} y1={baselineY} x2={totalW} y2={baselineY} />
+              {activeIndex >= 0 && slots[activeIndex] && (
+                <path className="portal-tab-shape portal-tab-shape-active" d={tabPath(slots[activeIndex], ACTIVE_H)} />
+              )}
+            </svg>
+            {open.map((id, i) => {
+              const p = byId.get(id)!;
+              const isActive = id === current;
+              const slot = slots[i];
+              return (
+                <div
+                  key={id}
+                  role="tab"
+                  data-tab={id}
+                  aria-selected={isActive}
+                  aria-controls={`viewer-panel-${id}`}
+                  tabIndex={isActive ? 0 : -1}
+                  title={p.name}
+                  className={`portal-tab${isActive ? " portal-tab-active" : ""}`}
+                  style={slot ? { width: slot.x1 - slot.x0, height: isActive ? ACTIVE_H : INACTIVE_H } : undefined}
+                  onClick={() => onActivateTab(id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onActivateTab(id);
+                    }
                   }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" aria-hidden="true">
-                    <path d="M3 3l6 6M9 3l-6 6" />
-                  </svg>
-                </button>
-                <span className="portal-tab-label">{p.name}</span>
-              </div>
-            );
-          })}
+                  <button
+                    type="button"
+                    className="portal-tab-x"
+                    aria-label={`Close ${p.name}`}
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseTab(id);
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" aria-hidden="true">
+                      <path d="M3 3l6 6M9 3l-6 6" />
+                    </svg>
+                  </button>
+                  <span className="portal-tab-label">{p.name}</span>
+                  {/* Balances the close control so the label stays centred. */}
+                  <span className="portal-tab-pad" aria-hidden="true" />
+                </div>
+              );
+            })}
+          </div>
         </div>
         {project && (
           <div id={`viewer-panel-${project.listId}`} role="tabpanel" className="portal-viewer-panel">

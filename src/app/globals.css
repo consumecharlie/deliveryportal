@@ -1436,122 +1436,85 @@
 
 /* Project Viewer: Finder-style tabs under the title bar */
 .portal-window-viewer .portal-window-body { padding-top: 0; }
-/* Project Viewer tabs: Mac OS 9 keystone tabs (slanted sides, hairline stroke,
-   top highlight). The active tab merges into the panel below. The slants are
-   skewed pseudo-elements so each keeps its own border. */
+/* Mac OS 9 keystone tabs. The whole strip is drawn as one SVG (see
+   tab-shape.ts) so neighbours share an exact edge and nothing has a blunt
+   end to show as a burr; these rules only place the labels over it. */
 .portal-tabs {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 0;
   margin: 0 -20px;
-  padding: 10px 26px 0;
+  padding: 10px 0 0;
   background: #e5eee8;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  white-space: nowrap;
 }
-/* The panel edge the tabs sit on; the active tab paints over its own stretch. */
-.portal-tabs::after {
-  content: "";
+.portal-tabs-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+.portal-tabs-art {
   position: absolute;
   left: 0;
-  right: 0;
   bottom: 0;
-  height: 1px;
-  background: #151919;
-  z-index: 2;
+  display: block;
+}
+.portal-tab-shape {
+  fill: #e6eeea;
+  stroke: #151919;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.portal-tab-shape-active { fill: #fafffd; }
+.portal-tabs-edge {
+  stroke: #151919;
+  stroke-width: 2;
 }
 .portal-tab {
   position: relative;
+  z-index: 1;
   flex: none;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 420px;
-  /* 16-bit keystone: chunky 2px stroke, a rounded top, and shoulders sized so
-     the slant meets the start of that arc (height above the radius, times
-     tan(16deg)) with no stub. */
-  --tab-h: 30px;
-  --tab-r: 6px;
-  --slant: calc((var(--tab-h) - var(--tab-r)) * 0.28675);
-  height: var(--tab-h);
-  margin: 0 var(--slant);
-  padding: 0 12px 0 8px;
-  border: 2px solid #151919;
-  border-bottom: none;
-  border-radius: var(--tab-r) var(--tab-r) 0 0;
-  background: #e6eeea;
-  box-shadow: inset 0 2px 0 #f7fbf9;
+  justify-content: center;
+  gap: 4px;
+  /* The slant eats the corners, so keep the label clear of them. */
+  padding: 0 11px;
   color: #4d5959;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
-  z-index: 1;
 }
-/* The two slanted shoulders. `background: inherit` keeps the bevel continuous. */
-.portal-tab::before,
-.portal-tab::after {
-  content: "";
-  position: absolute;
-  /* Start below the arc, where the tab's edge has straightened, so the slant's
-     blunt end hides behind the tab's own 2px border instead of poking past the
-     curve as a burr. */
-  top: calc(var(--tab-r) + 1px);
-  bottom: 0;
-  width: var(--slant);
-  background: inherit;
-  border: 2px solid #151919;
-  /* Only the slanted edge draws: a top border here would leave a horizontal
-     stub past the tab's corner, and the tab's own top border covers that span. */
-  border-top: none;
-  border-bottom: none;
-  z-index: -1;
+.portal-tab:focus-visible {
+  outline: 2px solid #6ac387;
+  outline-offset: -4px;
+  border-radius: 4px;
 }
-.portal-tab::before {
-  left: calc(-1 * var(--slant));
-  border-right: none;
-  border-radius: 0;
-  transform: skewX(-16deg);
-  transform-origin: bottom left;
-}
-.portal-tab::after {
-  right: calc(-1 * var(--slant));
-  border-left: none;
-  border-radius: 0;
-  transform: skewX(16deg);
-  transform-origin: bottom right;
-}
-.portal-tab:hover { background: #eef4f1; }
-.portal-tab:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
-/* Active tab: the panel colour, one pixel taller, sitting over the panel edge. */
-.portal-tab-active,
-.portal-tab-active:hover {
-  --tab-h: 34px;
-  margin-bottom: -2px;
-  padding-bottom: 2px;
-  background: #fafffd;
+.portal-tab-active {
   color: #151919;
   font-weight: 600;
-  z-index: 3;
 }
 .portal-tab-label {
-  display: block;
-  max-width: 380px;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
-/* The close control keeps its space and fades in on hover or keyboard focus. */
-.portal-tab-x {
+/* The close control keeps its space and fades in on hover or keyboard focus,
+   with a matching pad on the right so the label never shifts. */
+.portal-tab-x,
+.portal-tab-pad {
   flex: none;
+  width: 18px;
+  height: 18px;
+}
+.portal-tab-x {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -1566,6 +1529,10 @@
 .portal-tab:focus-within .portal-tab-x,
 .portal-tab-x:focus-visible { opacity: 1; }
 .portal-tab-x:hover { background: rgba(21, 25, 25, 0.12); color: #151919; }
+/* A tab at the floor has no room for the close control beside the label. */
+@media (hover: none) {
+  .portal-tab-x { opacity: 1; }
+}
 .portal-viewer-panel { padding-top: 20px; }
 
 /* Project window body */
