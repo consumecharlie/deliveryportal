@@ -41,9 +41,6 @@ export interface ConfirmationRow {
   confirmedByName: string | null;
 }
 
-/** Without a live feedback task, stop asking for feedback this long after send. */
-export const STALE_AFTER_MS = 30 * 86_400_000;
-
 /** The most recent row by confirmedAt (undone rows included, so an undo wins). */
 export function newestConfirmation<T extends ConfirmationRow>(rows: T[]): T | null {
   let best: T | null = null;
@@ -53,6 +50,13 @@ export function newestConfirmation<T extends ConfirmationRow>(rows: T[]): T | nu
   return best;
 }
 
+/**
+ * ClickUp decides whether the client owes us anything: only a Feedback
+ * Deadline task in "waiting on client" asks them for something. A task that
+ * has not started ("not ready") is ours to finish, and a delivery with no
+ * paired task at all is simply delivered. Inferring a deadline from the send
+ * date alone once produced firm countdowns for work nobody was waiting on.
+ */
 export function decideFeedbackStatus(input: {
   task: LiveFeedbackTask | null;
   confirmation: ConfirmationRow | null;
@@ -71,15 +75,19 @@ export function decideFeedbackStatus(input: {
   });
   const fmt = formatFeedbackDeadline(dueMs);
 
-  let kind: FeedbackStatus["kind"] = confirmed ? "confirmed" : "awaiting";
-  // Without a live feedback task, stop asking 30 days after send.
-  if (!task && !confirmed && nowMs - sentAt.getTime() > STALE_AFTER_MS) kind = "none";
+  let kind: FeedbackStatus["kind"];
+  if (confirmed) kind = "confirmed";
+  else if (task?.awaitingClient) kind = "awaiting";
+  else kind = "none";
 
   return {
     kind,
     dueMs,
     source,
-    dueIsEstimate: source === "default",
+    // A date we worked out from the send date and the feedback window is our
+    // suggestion, never a deadline anyone set, whichever window it used. It
+    // only reaches the client when the awaiting task carries no due date.
+    dueIsEstimate: source !== "clickup",
     dueIsEndOfDay: fmt.timeLabel === "",
     dueLabel: fmt.timeLabel ? `${fmt.formattedDate}, ${fmt.timeLabel}` : fmt.formattedDate,
     state: deadlineState(dueMs, nowMs),

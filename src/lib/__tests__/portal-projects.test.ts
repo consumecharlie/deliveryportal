@@ -213,11 +213,30 @@ describe("buildPortalPage with folder-discovered projects", () => {
     expect(byList.get("ROADMAP_ONLY")!.name).toBe("BVAS Talking Head Product Videos");
     // A project name that does not start with the full client name is untouched.
     expect(build({ clientName: "Stack Overflow", discovered: [{ listId: "ROADMAP_ONLY", name: "Stack BVAS", archived: false }], rows: [] }).projects[0].name).toBe("Stack BVAS");
-    // Attention rows carry the same name as the project.
+    // Attention rows carry the same name as the project. ClickUp has to be
+    // waiting on the client for there to be one at all.
+    const waiting = {
+      taskId: "FW1",
+      name: "Confirm Video Edit01 Feedback Received",
+      deliverableType: "Edit V1",
+      parentTaskId: "P1",
+      dueMs: day("2026-09-08"),
+      isOpen: true,
+      status: "waiting on client",
+      awaitingClient: true,
+    };
     const attention = build({
       clientName: "CallRail",
       discovered: [{ listId: "ACTIVE_WITH_SENDS", name: "CallRail Wiggam Law Virtual Testimonial", archived: false }],
       rows: [row({ id: "a1", taskId: "S1", feedbackWindows: "2 Business Days", sentAt: new Date("2026-09-02T14:00:00Z") })],
+      live: {
+        ...LIVE,
+        ACTIVE_WITH_SENDS: live({
+          ...LIVE.ACTIVE_WITH_SENDS,
+          feedback: { "Edit V1": waiting },
+          feedbackByParent: { P1: [waiting] },
+        }),
+      },
     });
     expect(attention.projects[0].name).toBe("Wiggam Law Virtual Testimonial");
     expect(attention.attention.map((a) => a.projectName)).toEqual(["Wiggam Law Virtual Testimonial"]);

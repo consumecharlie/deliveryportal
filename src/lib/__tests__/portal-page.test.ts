@@ -108,6 +108,12 @@ const LIVE: Record<string, LivePayload> = {
     wrapsUpMs: day("2026-09-28"),
   }),
   L2: live({
+    feedback: {
+      "Post AV V1": fd({ taskId: "FC1", name: "Confirm Post Script AV V1 Feedback Received", deliverableType: "Post AV V1", parentTaskId: "PC", dueMs: null }),
+    },
+    feedbackByParent: {
+      PC: [fd({ taskId: "FC1", name: "Confirm Post Script AV V1 Feedback Received", deliverableType: "Post AV V1", parentTaskId: "PC", dueMs: null })],
+    },
     milestones: [
       ms({ taskId: "SC1", name: "Share Post Script AV  V1 with Client", parentTaskId: "PC", parentTaskName: "Post-Production", deliverableType: "Post AV V1", dueMs: day("2026-09-01"), isClosed: true }),
       ms({ taskId: "SC2", name: "Share Post Script AV V2 with Client", parentTaskId: "PC", parentTaskName: "Post-Production", deliverableType: "Post AV V2", dueMs: day("2026-09-10") }),
@@ -216,8 +222,9 @@ describe("buildPortalPage: projects and deliverables", () => {
       { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
       { url: "https://example.com/brief", label: "Brief", hint: "Link", kind: "web" },
     ]);
-    // No task, type says Final: approval wording.
-    expect(p.projects[0].deliverables[0].review).toMatchObject({ mode: "approval", label: "Approval by EOD Thu, Sep 3 (suggested)" });
+    // No paired feedback task: nothing is being asked for, though the type
+    // still decides the wording ("Final" asks for approval).
+    expect(p.projects[0].deliverables[0].review).toMatchObject({ mode: "approval", state: "none", label: "Delivered", dueMs: null });
   });
 
   it("renders client-safe bodies and labelled links", () => {
@@ -430,10 +437,11 @@ describe("toReview labels", () => {
     const sentinel = toReview(decideFeedbackStatus({ ...base, task: task(day("2026-09-15")), nowMs: NOW }), "feedback");
     expect(sentinel).toMatchObject({ dueIsEndOfDay: true, label: "Feedback needed by EOD Tue, Sep 15" });
     const computed = toReview(
-      decideFeedbackStatus({ ...base, task: null, sentAt: new Date("2026-09-09T14:00:00Z"), nowMs: NOW }),
+      decideFeedbackStatus({ ...base, task: fd({ taskId: "F", dueMs: null }), sentAt: new Date("2026-09-09T14:00:00Z"), nowMs: NOW }),
       "approval"
     );
-    expect(computed).toMatchObject({ dueIsEndOfDay: true, label: "Approval needed by EOD Fri, Sep 11" });
+    // A deadline we worked out is always a suggestion now, EOD included.
+    expect(computed).toMatchObject({ dueIsEndOfDay: true, dueIsEstimate: true, label: "Approval by EOD Fri, Sep 11 (suggested)" });
   });
 });
 
@@ -580,7 +588,17 @@ describe("buildPortalPage: attention and focus", () => {
     const page = build({
       rows,
       confirmations: new Map(),
-      live: { L8: live({ feedback: { "Edit V1": fd({ taskId: "F", dueMs: day("2026-09-10") }) } }) },
+      live: {
+        L8: live({
+          feedback: {
+            "Edit V1": fd({ taskId: "F-late", dueMs: day("2026-09-10") }),
+            "Post AV V1": fd({ taskId: "F-soon", deliverableType: "Post AV V1", dueMs: day("2026-09-05") }),
+            // Waiting on the client with no date: the window fills in, as a suggestion.
+            "AV Script V1": fd({ taskId: "F-est-old", deliverableType: "AV Script V1", dueMs: null }),
+            "Storyboards V1": fd({ taskId: "F-est-new", deliverableType: "Storyboards V1", dueMs: null }),
+          },
+        }),
+      },
     });
     expect(page.attention.map((a) => a.deliveryId)).toEqual(["real-soon", "real-late", "est-old", "est-new"]);
     expect(page.attention.map((a) => a.review.dueIsEstimate)).toEqual([false, false, true, true]);
@@ -592,7 +610,14 @@ describe("buildPortalPage: attention and focus", () => {
       row({ id: "y", links: [DRIVE], projectListId: "L9", projectName: "P9", deliverableType: "Edit V2", sentAt: new Date("2026-08-30T14:00:00Z") }),
       row({ id: "z", links: [], projectListId: "L9", projectName: "P9", deliverableType: "Storyboards V1", sentAt: new Date("2026-08-31T14:00:00Z") }),
     ];
-    const page = build({ rows, live: {}, confirmations: new Map() });
+    const l9 = live({
+      feedback: {
+        "AV Script V1": fd({ taskId: "F9a", deliverableType: "AV Script V1", dueMs: day("2026-09-10") }),
+        "Edit V2": fd({ taskId: "F9b", deliverableType: "Edit V2", dueMs: day("2026-09-11") }),
+        "Storyboards V1": fd({ taskId: "F9c", deliverableType: "Storyboards V1", dueMs: day("2026-09-12") }),
+      },
+    });
+    const page = build({ rows, live: { L9: l9 }, confirmations: new Map() });
     const byId = Object.fromEntries(page.attention.map((a) => [a.deliveryId, a.primaryLink]));
     expect(byId.x).toEqual({ url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" });
     expect(byId.y).toEqual({ url: DRIVE.url, label: "Google Drive", hint: "Google Drive", kind: "google-drive" });
@@ -877,7 +902,11 @@ describe("review window start", () => {
 
   it("an estimated deadline still carries the send date", () => {
     const rows = [row({ id: "w3", taskId: "SW", projectListId: "LW", ...P, sentAt: SENT, feedbackWindows: "" })];
-    const page = build({ rows, confirmations: new Map(), live: {} });
+    const page = build({
+      rows,
+      confirmations: new Map(),
+      live: { LW: live({ feedbackByParent: { PW: [fdTask({ dueMs: null })] } }) },
+    });
     expect(page.projects[0].deliverables[0].review).toMatchObject({
       dueIsEstimate: true,
       windowStartMs: SENT.getTime(),
@@ -973,5 +1002,114 @@ describe("review window start", () => {
       },
     });
     expect(page.attention[0].review.windowStartMs).toBe(newer);
+  });
+});
+
+describe("ClickUp decides what the client owes us", () => {
+  const NOW_SEP22 = Date.parse("2026-09-22T15:00:00Z");
+
+  it("the BVAS shape: a delivery with no matching feedback task is delivered, never a countdown", () => {
+    // Every Feedback Deadline task in the list is complete, and the ones under
+    // this parent are for other deliverables, so nothing pairs. The known "24
+    // Hours" window used to turn that into a firm "Approval needed".
+    const parent = { parentTaskId: "PBV", parentTaskName: "Phase 1 - (3) 60s Videos (16:9)" };
+    const siblings = [
+      fd({ taskId: "FBV1", name: "Confirm Edit V1 Feedback Received", deliverableType: "Edit V1", parentTaskId: "PBV", isOpen: false, dueMs: day("2026-09-10") }),
+      fd({ taskId: "FBV2", name: "Confirm Potential Master Feedback Received", deliverableType: "Potential Master", parentTaskId: "PBV", isOpen: false, dueMs: day("2026-09-12") }),
+    ];
+    const page = build({
+      nowMs: NOW_SEP22,
+      confirmations: new Map(),
+      rows: [
+        row({
+          id: "bvas",
+          taskId: "SBV",
+          projectListId: "LBV",
+          projectName: "Stack Overflow BVAS Talking Head Product Videos",
+          ...parent,
+          shareTaskName: "Share Final Deliverables with Client",
+          deliverableType: "Final Delivery",
+          feedbackWindows: "24 Hours",
+          sentAt: new Date("2026-09-22T00:19:00Z"),
+        }),
+      ],
+      live: {
+        LBV: live({
+          feedback: { "Edit V1": siblings[0], "Potential Master": siblings[1] },
+          feedbackByParent: { PBV: siblings },
+        }),
+      },
+    });
+    expect(page.projects[0].deliverables[0].review).toMatchObject({
+      state: "none",
+      mode: "approval",
+      label: "Delivered",
+      dueMs: null,
+      windowStartMs: null,
+    });
+    expect(page.attention).toEqual([]);
+  });
+
+  it("a paired task that has not started is not the client's problem", () => {
+    const notReady = fd({ taskId: "FNR", name: "Confirm Edit V1 Feedback Received", parentTaskId: "PN", status: "not ready", awaitingClient: false, dueMs: day("2026-09-25") });
+    const page = build({
+      nowMs: NOW_SEP22,
+      confirmations: new Map(),
+      rows: [row({ id: "nr", taskId: "SN", projectListId: "LN", projectName: "P", parentTaskId: "PN", parentTaskName: "Ep #30", sentAt: new Date("2026-09-20T14:00:00Z") })],
+      live: { LN: live({ feedback: { "Edit V1": notReady }, feedbackByParent: { PN: [notReady] } }) },
+    });
+    expect(page.projects[0].deliverables[0].review).toMatchObject({ state: "none", label: "Delivered" });
+    expect(page.attention).toEqual([]);
+  });
+
+  it("the Spinoffs shape: a milestone whose own task is complete is delivered, not in review", () => {
+    // Its own feedback task closed; a sibling of the same type is "not ready",
+    // which the old type-based lookup read as the client owing us feedback.
+    const own = fd({ taskId: "86ak3zer4", name: "Confirm Spinoff Details with Client", deliverableType: "Spinoff Details Request", parentTaskId: "PSpin", isOpen: false, dueMs: day("2026-09-15") });
+    const sibling = fd({ taskId: "FSpinNR", name: "Confirm Spinoff Post AV Round 1 Feedback Received", deliverableType: "Spinoff Details Request", parentTaskId: "POther", status: "not ready", awaitingClient: false, dueMs: day("2026-09-30") });
+    const page = build({
+      nowMs: NOW_SEP22,
+      rows: [],
+      confirmations: new Map(),
+      discovered: [{ listId: "LSP", name: "Stack Overflow 2026 Internal Explainer", archived: false }],
+      live: {
+        LSP: live({
+          // The list-wide map holds the sibling, which is what used to win.
+          feedback: { "Spinoff Details Request": sibling },
+          feedbackByParent: { PSpin: [own], POther: [sibling] },
+          milestones: [
+            ms({ taskId: "SSpin", name: "Send Spinoffs Details Request to Client", deliverableType: "Spinoff Details Request", parentTaskId: "PSpin", parentTaskName: "Spinoffs", dueMs: day("2026-09-10"), isClosed: true, closedMs: Date.parse("2026-09-10T17:38:00Z") }),
+            ms({ taskId: "SNext", name: "Share Spinoff Post AV V1 with Client", deliverableType: "Spinoff Post AV V1", parentTaskId: "POther", parentTaskName: "Spinoffs", dueMs: day("2026-09-30") }),
+          ],
+        }),
+      },
+    });
+    expect(page.projects[0].milestones.map((m) => [m.label, m.state])).toEqual([
+      ["Send Spinoffs Details Request to Client", "delivered"],
+      ["Spinoff Post AV V1", "up-next"],
+    ]);
+    expect(page.attention).toEqual([]);
+  });
+
+  it("a milestone with no delivery is in review while its own task waits on the client", () => {
+    const waiting = fd({ taskId: "FW2", name: "Confirm Spinoff Details with Client", deliverableType: "Spinoff Details Request", parentTaskId: "PSpin", dueMs: day("2026-09-25") });
+    const page = build({
+      nowMs: NOW_SEP22,
+      rows: [],
+      confirmations: new Map(),
+      discovered: [{ listId: "LSP", name: "Stack Overflow 2026 Internal Explainer", archived: false }],
+      live: {
+        LSP: live({
+          feedback: { "Spinoff Details Request": waiting },
+          feedbackByParent: { PSpin: [waiting] },
+          milestones: [
+            ms({ taskId: "SSpin", name: "Send Spinoffs Details Request to Client", deliverableType: "Spinoff Details Request", parentTaskId: "PSpin", parentTaskName: "Spinoffs", dueMs: day("2026-09-10"), isClosed: true, closedMs: Date.parse("2026-09-10T17:38:00Z") }),
+          ],
+        }),
+      },
+    });
+    expect(page.projects[0].milestones.map((m) => m.state)).toEqual(["in-review"]);
+    // And it is an action item, since nothing was delivered through the portal.
+    expect(page.attention.map((a) => a.feedbackTaskId)).toEqual(["FW2"]);
   });
 });

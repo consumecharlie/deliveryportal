@@ -354,9 +354,11 @@ function buildDeliverable(
 
 /**
  * Milestone states. A delivered milestone is "in-review" while the client
- * still owes feedback on it: when we have its delivery row, that is the
- * row's own review state (so an older version never reads as in review);
- * without a row, the paired Feedback Deadline task for its type being open.
+ * still owes feedback on it: when we have its delivery row, that is the row's
+ * own review state (so an older version never reads as in review); without a
+ * row, its paired Feedback Deadline task being "waiting on client". Pairing
+ * goes through the same rules as a delivery, so a milestone whose own task is
+ * complete is not put back in review by a sibling task of the same type.
  */
 function buildMilestones(
   milestones: LiveMilestone[],
@@ -374,7 +376,14 @@ function buildMilestones(
     if (delivered) {
       const inReview = row
         ? ATTENTION_STATES.has(reviewByDeliveryId.get(row.id) ?? "none")
-        : Boolean(m.deliverableType && live.feedback[m.deliverableType]?.isOpen);
+        : Boolean(
+            pairFeedbackTask(live, {
+              parentTaskId: m.parentTaskId,
+              deliverableType: m.deliverableType,
+              shareTaskName: m.name,
+              sentAtMs: m.closedMs ?? m.dueMs,
+            })?.awaitingClient
+          );
       state = inReview ? "in-review" : "delivered";
     } else if (!upNextTaken) {
       upNextTaken = true;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideFeedbackStatus, newestConfirmation, STALE_AFTER_MS } from "@/lib/portal-status";
+import { decideFeedbackStatus, newestConfirmation } from "@/lib/portal-status";
 import type { LiveFeedbackTask } from "@/lib/portal-live";
 
 const SENT = new Date("2026-06-01T15:00:00Z");
@@ -79,31 +79,46 @@ describe("decideFeedbackStatus", () => {
     expect(s.feedbackDeadlineTaskId).toBe("T1");
   });
 
-  it("without a task: computed deadline, awaiting until 30 days after send, then none", () => {
-    const before = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: SENT.getTime() + STALE_AFTER_MS });
-    expect(before.kind).toBe("awaiting");
-    expect(before.source).toBe("computed");
-    expect(before.feedbackDeadlineTaskId).toBeNull();
-    const after = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: SENT.getTime() + STALE_AFTER_MS + 1 });
-    expect(after.kind).toBe("none");
+  it("ClickUp decides: only 'waiting on client' is awaiting, any other open status is not", () => {
+    const notReady = task({ status: "not ready", awaitingClient: false });
+    const s = decideFeedbackStatus({ task: notReady, confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: NOW });
+    expect(s.kind).toBe("none");
+    // The task is still open, so this is not a confirmation either.
+    expect(s.confirmedAt).toBeNull();
+    expect(s.feedbackDeadlineTaskId).toBe("T1");
   });
 
-  it("the 30-day rule never downgrades a confirmed delivery, and a task keeps it awaiting", () => {
-    const late = SENT.getTime() + STALE_AFTER_MS * 2;
-    const confirmed = decideFeedbackStatus({ task: null, confirmation: conf(), sentAt: SENT, feedbackWindows: "", nowMs: late });
+  it("no paired task at all is never an action item, however fresh the delivery", () => {
+    // The real shape: a "Final Deliverables" send whose list has no matching
+    // feedback task. A known window used to make this a firm deadline.
+    const fresh = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "24 Hours", nowMs: SENT.getTime() + 3_600_000 });
+    expect(fresh.kind).toBe("none");
+    expect(fresh.feedbackDeadlineTaskId).toBeNull();
+    const old = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: SENT.getTime() + 90 * 86_400_000 });
+    expect(old.kind).toBe("none");
+  });
+
+  it("a confirmation row still reads as confirmed with no task, and an undo cannot resurrect one", () => {
+    const confirmed = decideFeedbackStatus({ task: null, confirmation: conf(), sentAt: SENT, feedbackWindows: "", nowMs: NOW });
     expect(confirmed.kind).toBe("confirmed");
-    const withTask = decideFeedbackStatus({ task: task(), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: late });
-    expect(withTask.kind).toBe("awaiting");
-    expect(withTask.state).toBe("overdue");
+    const undone = decideFeedbackStatus({ task: null, confirmation: conf({ undoneAt: "2026-06-02T11:00:00Z" }), sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(undone.kind).toBe("none");
+    // An undo with a task ClickUp reopened does go back to awaiting.
+    const reopened = decideFeedbackStatus({ task: task(), confirmation: conf({ undoneAt: "2026-06-02T11:00:00Z" }), sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(reopened.kind).toBe("awaiting");
   });
 
-  it("flags the default window as an estimate; a snapshotted window is not", () => {
-    const est = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
-    expect(est.source).toBe("default");
-    expect(est.dueIsEstimate).toBe(true);
-    const real = decideFeedbackStatus({ task: null, confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: NOW });
-    expect(real.dueIsEstimate).toBe(false);
+  it("a deadline we worked out ourselves is always an estimate, a ClickUp one never is", () => {
+    // Awaiting with no due date on the task: the window fills in, as a suggestion.
+    const noDue = decideFeedbackStatus({ task: task({ dueMs: null }), confirmation: null, sentAt: SENT, feedbackWindows: "48 Hours", nowMs: NOW });
+    expect(noDue.kind).toBe("awaiting");
+    expect(noDue.source).toBe("computed");
+    expect(noDue.dueIsEstimate).toBe(true);
+    const defaulted = decideFeedbackStatus({ task: task({ dueMs: null }), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(defaulted.source).toBe("default");
+    expect(defaulted.dueIsEstimate).toBe(true);
     const live = decideFeedbackStatus({ task: task(), confirmation: null, sentAt: SENT, feedbackWindows: "", nowMs: NOW });
+    expect(live.source).toBe("clickup");
     expect(live.dueIsEstimate).toBe(false);
   });
 
