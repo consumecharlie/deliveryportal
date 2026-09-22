@@ -481,7 +481,12 @@ export function Desktop({ token, model, sandbox = false }: Props) {
     };
   };
 
-  const openProjectIds = new Set(win(VIEWER_ID).open ? tabs : []);
+  // Only the project you are actually looking at draws as an open folder.
+  // Every active project starts life as a tab, so keying on tabs alone left
+  // the whole Finder open.
+  const openProjectIds = new Set(
+    win(VIEWER_ID).open && !win(VIEWER_ID).minimized && activeTab ? [activeTab] : []
+  );
   const reviewItems = focusMode ? model.attention.filter((a) => a.projectListId === focusListId) : model.attention;
 
   const rootCls = [
