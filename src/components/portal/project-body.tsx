@@ -12,11 +12,9 @@ import { DeliverablesTable } from "./deliverables-table";
 export function ProjectBody({
   token,
   project,
-  defaultOpenRows = false,
 }: {
   token: string;
   project: PortalProject;
-  defaultOpenRows?: boolean;
 }) {
   return (
     <div className="portal-project">
@@ -28,7 +26,6 @@ export function ProjectBody({
       <DeliverablesTable
         token={token}
         deliverables={project.deliverables}
-        defaultOpen={defaultOpenRows}
         hasPlan={hasRoadAhead(project.milestones)}
       />
     </div>

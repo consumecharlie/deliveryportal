@@ -27,8 +27,6 @@ interface Props extends WindowFrameProps {
   onCloseTab: (listId: string) => void;
   /** Commit a new tab order after a drag or a keyboard move. */
   onReorderTabs: (order: string[]) => void;
-  /** Project page: every table row starts expanded. */
-  defaultOpenRows?: boolean;
   /** Phones: windows flow in a column, so the viewer keeps its natural height. */
   stacked?: boolean;
 }
@@ -63,7 +61,6 @@ export function ViewerWindow({
   onActivateTab,
   onCloseTab,
   onReorderTabs,
-  defaultOpenRows = false,
   stacked = false,
   ...frame
 }: Props) {
@@ -339,7 +336,7 @@ export function ViewerWindow({
         {project && (
           <div id={`viewer-panel-${project.listId}`} role="tabpanel" className="portal-viewer-panel">
             <div ref={bodyRef} style={floor > 0 ? { minHeight: floor } : undefined}>
-              <ProjectBody key={project.listId} token={token} project={project} defaultOpenRows={defaultOpenRows} />
+              <ProjectBody key={project.listId} token={token} project={project} />
             </div>
           </div>
         )}

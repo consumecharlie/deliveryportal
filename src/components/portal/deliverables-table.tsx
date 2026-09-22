@@ -8,20 +8,21 @@ import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { StatusPill, pillNote } from "./status-pill";
 import { LinkButtons } from "./link-button";
 import { VersionMenu } from "./version-menu";
+import { MessagePopover } from "./message-popover";
 import { allVersions, reviewMode, versionNumber } from "./link-meta";
 import { shortDate } from "./format";
 
 interface Props {
   token: string;
   deliverables: PortalDeliverable[];
-  /** Project page: every row starts expanded so all versions are listed. */
-  defaultOpen?: boolean;
   /** The project has upcoming milestones, so the empty state can point at the rail. */
   hasPlan?: boolean;
 }
 
-function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable; open: boolean; onToggle: (key: string | null) => void }) {
+  // The popover anchors to this element, so it has to be state, not a ref:
+  // it must be set by the time the popover renders.
+  const [button, setButton] = useState<HTMLButtonElement | null>(null);
   const versions = useMemo(() => allVersions(d), [d]);
   const [selectedId, setSelectedId] = useState(d.latest.deliveryId);
   const current = versions.find((v) => v.deliveryId === selectedId) ?? d.latest;
@@ -36,7 +37,7 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
 
   function toggle() {
     if (!open) sendPortalView(token, current.deliveryId);
-    setOpen((o) => !o);
+    onToggle(open ? null : d.key);
   }
 
   function select(id: string) {
@@ -81,10 +82,12 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
         </div>
         <div className="portal-td portal-td-toggle">
           <button
+            ref={setButton}
             type="button"
             className="portal-disclosure-btn"
             aria-expanded={open}
-            aria-controls={panelId}
+            aria-haspopup="dialog"
+            aria-controls={open ? panelId : undefined}
             onClick={toggle}
           >
             <span className={`portal-chevron${open ? " portal-chevron-open" : ""}`} aria-hidden="true" />
@@ -93,40 +96,40 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
         </div>
       </div>
 
-      <div id={panelId} className={`portal-expand${open ? " portal-expand-open" : ""}`} inert={!open}>
-        <div className="portal-expand-inner">
-          <div className="portal-details">
-            {current.body && (
-              <div className="portal-details-block">
-                <h4 className="portal-details-h">
-                  {isLatest ? "The message we sent" : `The message we sent with v${currentNumber}`}
-                </h4>
-                <div className="portal-body" dangerouslySetInnerHTML={{ __html: html }} />
-              </div>
-            )}
+      <MessagePopover open={open} anchor={button} title={d.title} onClose={() => onToggle(null)}>
+        <div id={panelId} className="portal-pop-content">
+          {current.body && (
+            <div className="portal-details-block">
+              <h4 className="portal-details-h">
+                {isLatest ? "The message we sent" : `The message we sent with v${currentNumber}`}
+              </h4>
+              <div className="portal-body" dangerouslySetInnerHTML={{ __html: html }} />
+            </div>
+          )}
 
-            {showConfirm && (
-              <div className="portal-details-block portal-details-confirm">
-                <ConfirmButton
-                  key={confirmButtonKey(d.latest.deliveryId, {
-                    kind: review.state,
-                    confirmedAt: review.confirmedAtMs ? new Date(review.confirmedAtMs) : null,
-                  })}
-                  token={token}
-                  deliveryId={d.latest.deliveryId}
-                  initialConfirmed={review.state === "confirmed"}
-                  canUndo={review.canUndo}
-                />
-              </div>
-            )}
-          </div>
+          {showConfirm && (
+            <div className="portal-details-block portal-details-confirm">
+              <ConfirmButton
+                key={confirmButtonKey(d.latest.deliveryId, {
+                  kind: review.state,
+                  confirmedAt: review.confirmedAtMs ? new Date(review.confirmedAtMs) : null,
+                })}
+                token={token}
+                deliveryId={d.latest.deliveryId}
+                initialConfirmed={review.state === "confirmed"}
+                canUndo={review.canUndo}
+              />
+            </div>
+          )}
         </div>
-      </div>
+      </MessagePopover>
     </li>
   );
 }
 
-export function DeliverablesTable({ token, deliverables, defaultOpen = false, hasPlan = false }: Props) {
+export function DeliverablesTable({ token, deliverables, hasPlan = false }: Props) {
+  // One open message at a time, so the key lives with the table.
+  const [openKey, setOpenKey] = useState<string | null>(null);
   if (deliverables.length === 0) {
     return (
       <p className="portal-quiet">
@@ -148,7 +151,7 @@ export function DeliverablesTable({ token, deliverables, defaultOpen = false, ha
       </div>
       <ul className="portal-tbody">
         {deliverables.map((d) => (
-          <Row key={d.key} token={token} d={d} defaultOpen={defaultOpen} />
+          <Row key={d.key} token={token} d={d} open={openKey === d.key} onToggle={setOpenKey} />
         ))}
       </ul>
     </div>

@@ -1814,6 +1814,120 @@ a.portal-rail-link:hover .portal-rail-label {
 }
 .portal-details-block:first-child.portal-details-confirm { border-top: 0; padding-top: 4px; }
 
+/* The delivery message as an anchored popover: a small Mac window floating
+   over the page from a portal, so opening one never moves the table. */
+.portal-pop {
+  position: fixed;
+  z-index: 4200;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #151919;
+  background: #fafffd;
+  color: #151919;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.07) inset,
+    0 24px 60px -18px rgba(0, 0, 0, 0.55),
+    0 10px 24px -12px rgba(0, 0, 0, 0.4);
+  font-family: var(--font-montserrat), "Montserrat", system-ui, sans-serif;
+}
+.portal-pop-anchored { max-height: 60vh; }
+@keyframes portal-pop-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.portal-pop-in {
+  animation: portal-pop-in 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  transform-origin: top center;
+}
+.portal-pop-flipped.portal-pop-in { transform-origin: bottom center; }
+/* The beak: its base paints over the popover's own border, so the two join. */
+.portal-pop-beak {
+  position: absolute;
+  top: -10px;
+  display: block;
+  overflow: visible;
+}
+.portal-pop-flipped .portal-pop-beak {
+  top: auto;
+  bottom: -10px;
+  transform: scaleY(-1);
+}
+.portal-pop-bar {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  background: #151919;
+  color: #fafffd;
+}
+.portal-pop-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(250, 255, 253, 0.75);
+  cursor: pointer;
+}
+.portal-pop-x:hover { background: rgba(250, 255, 253, 0.16); color: #fafffd; }
+.portal-pop-x:focus-visible { outline: 2px solid #6ac387; outline-offset: 1px; }
+.portal-pop-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 18px;
+  text-align: center;
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.portal-pop-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 18px;
+}
+.portal-pop-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+/* Below the stacked breakpoint the same content is a centred sheet. */
+.portal-pop-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 4200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(21, 25, 25, 0.5);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.portal-pop-sheet {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: 80vh;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-pop-in { animation: none; }
+}
+
 /* Disclosure control + animated expand */
 .portal-disclosure-btn {
   display: inline-flex;
