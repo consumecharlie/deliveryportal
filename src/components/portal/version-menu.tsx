@@ -91,7 +91,15 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
     items?.[active]?.focus();
   }, [open, pos, active]);
 
-  if (!enabled) return null;
+  if (!enabled) {
+    // One version still says so, so the column reads consistently down the
+    // table: the same chip, muted, with nothing to open.
+    return (
+      <span className="portal-vchip portal-vchip-static" aria-disabled="true">
+        <span className="portal-vchip-label">{tagOf(selected)}</span>
+      </span>
+    );
+  }
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {

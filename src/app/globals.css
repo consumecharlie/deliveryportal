@@ -1294,6 +1294,13 @@
 .portal-vchip[aria-expanded="true"] { background: #e5eee8; }
 .portal-vchip[aria-expanded="true"] .portal-vchip-chev { transform: rotate(180deg); }
 .portal-vchip:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
+/* A lone version: the same chip, muted, with nothing to open. */
+.portal-vchip-static {
+  border-color: #bbd2cf;
+  background: transparent;
+  color: #6f7f7f;
+  cursor: default;
+}
 
 /* Capsule context menu (ported from the MOGRT Library .cmx system) */
 .cmx-menu {
@@ -1773,10 +1780,30 @@ a.portal-rail-link:hover .portal-rail-label {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
   gap: 8px;
 }
+/* The two labelled buttons wrap under each other only when the window is
+   genuinely too narrow; the icon keeps its place at the end of the row. */
+.portal-row-labelled {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
 .portal-row-actions .portal-confirm { align-items: flex-end; }
+.portal-msg-btn {
+  flex: none;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4d5959;
+}
+.portal-msg-btn:hover:not(:disabled) { color: #151919; }
 .portal-links {
   display: flex;
   flex-wrap: wrap;
@@ -1825,10 +1852,6 @@ a.portal-rail-link:hover .portal-rail-label {
 
 /* The popover's trigger: a quiet button like the link buttons beside it,
    pressed while its popover is open. */
-.portal-msg-btn {
-  font-weight: 600;
-  white-space: nowrap;
-}
 .portal-msg-btn[aria-expanded="true"] {
   background: #e5eee8;
   border-color: #151919;

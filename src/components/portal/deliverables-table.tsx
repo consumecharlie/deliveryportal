@@ -84,33 +84,37 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
         </div>
         <div className="portal-td portal-td-toggle">
           <div className="portal-row-actions">
-            {/* A row that is waiting on the client can be answered here, with
-                the same controls and the same link the review card uses. */}
-            {actionable && primaryLink && (
-              <ViewLink
-                token={token}
-                deliveryId={current.deliveryId}
-                href={primaryLink.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cm-btn cm-btn--sm"
-              >
-                Click to review
-              </ViewLink>
-            )}
+            {/* Confirming first as the quiet button, reviewing as the green
+                one: the same order and weighting as the review card. */}
             {actionable && (
-              <ConfirmButton
-                key={confirmButtonKey(d.latest.deliveryId, {
-                  kind: review.state,
-                  confirmedAt: review.confirmedAtMs ? new Date(review.confirmedAtMs) : null,
-                })}
-                token={token}
-                deliveryId={d.latest.deliveryId}
-                initialConfirmed={false}
-                canUndo={review.canUndo}
-                variant="secondary"
-              />
+              <div className="portal-row-labelled">
+                <ConfirmButton
+                  key={confirmButtonKey(d.latest.deliveryId, {
+                    kind: review.state,
+                    confirmedAt: review.confirmedAtMs ? new Date(review.confirmedAtMs) : null,
+                  })}
+                  token={token}
+                  deliveryId={d.latest.deliveryId}
+                  initialConfirmed={false}
+                  canUndo={review.canUndo}
+                  variant="secondary"
+                />
+                {primaryLink && (
+                  <ViewLink
+                    token={token}
+                    deliveryId={current.deliveryId}
+                    href={primaryLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cm-btn cm-btn--sm"
+                  >
+                    Click to review
+                  </ViewLink>
+                )}
+              </div>
             )}
+            {/* Reading the message we already sent is a reference action, so
+                it keeps its place on every row without taking a label. */}
             <button
               ref={setButton}
               type="button"
@@ -118,9 +122,14 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
               aria-expanded={open}
               aria-haspopup="dialog"
               aria-controls={open ? panelId : undefined}
+              aria-label="View delivery message"
+              title="View delivery message"
               onClick={toggle}
             >
-              View delivery message
+              <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                <path d="M3 2.6h8a1.6 1.6 0 0 1 1.6 1.6v3.6A1.6 1.6 0 0 1 11 9.4H6.6L4 11.8V9.4H3a1.6 1.6 0 0 1-1.6-1.6V4.2A1.6 1.6 0 0 1 3 2.6Z" />
+                <path d="M4.4 5h4.6M4.4 7.2h3" />
+              </svg>
             </button>
           </div>
         </div>
@@ -148,6 +157,7 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
                 deliveryId={d.latest.deliveryId}
                 initialConfirmed={review.state === "confirmed"}
                 canUndo={review.canUndo}
+                variant="secondary"
               />
             </div>
           )}
