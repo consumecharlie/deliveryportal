@@ -108,7 +108,7 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
                     <button
                       ref={setReviewButton}
                       type="button"
-                      className="portal-btn portal-btn-sm portal-quietbtn"
+                      className="portal-btn portal-btn-sm portal-quietbtn portal-quietbtn-go"
                       aria-haspopup="dialog"
                       aria-expanded={guideOpen}
                       onClick={() => setGuideOpen((o) => !o)}
@@ -126,7 +126,7 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
                       href={primaryLink.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="portal-btn portal-btn-sm portal-quietbtn"
+                      className="portal-btn portal-btn-sm portal-quietbtn portal-quietbtn-go"
                     >
                       <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
                         <path d="M5.6 8.4a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-1 1" />

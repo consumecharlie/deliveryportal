@@ -21,11 +21,16 @@ interface Props {
   /**
    * "pixel" is the offset-shadow hero button, which belongs to the action
    * card. Everything in the table and the popovers uses "quiet": the same
-   * hairline rectangle as the link buttons, filled green so the affirmative
-   * action still reads.
+   * hairline rectangle as the link buttons. Confirming is the plain
+   * secondary wherever it appears, because "Click to review" is the green
+   * primary. The single exception is `nudge`.
    */
   appearance?: "pixel" | "quiet";
-  /** Draw attention once a guided review is finished. */
+  /**
+   * Set once every step of a guided review is ticked. Only then does
+   * confirming take the green fill, having earned it by the client having
+   * actually been through the links.
+   */
   nudge?: boolean;
 }
 
@@ -136,7 +141,7 @@ export function ConfirmButton({
       ) : appearance === "quiet" ? (
           <button
             type="button"
-            className={`portal-btn portal-btn-sm portal-quietbtn portal-quietbtn-go${nudge ? " portal-quietbtn-nudge" : ""}`}
+            className={`portal-btn portal-btn-sm portal-quietbtn${nudge ? " portal-quietbtn-go portal-quietbtn-nudge" : ""}`}
             onClick={() => post("confirm")}
             disabled={busy}
           >

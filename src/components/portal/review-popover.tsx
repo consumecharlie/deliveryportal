@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import type { PortalLink } from "@/lib/portal-page-model";
 import { MessagePopover } from "./message-popover";
 import { ConfirmButton } from "./confirm-button";
@@ -46,6 +46,20 @@ export function ReviewPopover({ open, anchor, onClose, token, deliveryId, title,
     });
   }
 
+  /**
+   * The whole step is the hit target, so the tick does not depend on hitting a
+   * 24px box. Two things inside it are left alone: the link, which opens and
+   * ticks itself exactly once, and the checkbox, which fires its own change.
+   * A click that ends a text selection is a read, not a tick.
+   */
+  function onStepClick(event: MouseEvent<HTMLLIElement>, url: string) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("a, input, button")) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    toggleStep(url);
+  }
+
   const finished = allDone(urls, done);
 
   return (
@@ -59,13 +73,27 @@ export function ReviewPopover({ open, anchor, onClose, token, deliveryId, title,
             const instruction = linkInstruction(link);
             const ticked = done.includes(link.url);
             return (
-              <li key={link.url} className={`portal-guide-step${ticked ? " portal-guide-step-done" : ""}`}>
-                <label className="portal-guide-tick">
-                  <input type="checkbox" checked={ticked} onChange={() => toggleStep(link.url)} />
-                  <span className="portal-guide-num" aria-hidden="true">
-                    {i + 1}
-                  </span>
-                </label>
+              <li
+                key={link.url}
+                className={`portal-guide-step${ticked ? " portal-guide-step-done" : ""}`}
+                onClick={(event) => onStepClick(event, link.url)}
+              >
+                <input
+                  type="checkbox"
+                  className="portal-guide-input"
+                  checked={ticked}
+                  onChange={() => toggleStep(link.url)}
+                  aria-label={instruction ?? `Step ${i + 1}: open ${link.label}`}
+                />
+                {/* A hairline box, the same vocabulary as every other control
+                    here, so it reads as tickable before anyone tries. It shows
+                    the step number until it is ticked, then the check. */}
+                <span className="portal-guide-box" aria-hidden="true">
+                  <span className="portal-guide-num">{i + 1}</span>
+                  <svg className="portal-guide-check" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+                    <path d="M2.8 7.4 5.6 10.2 11.2 4" />
+                  </svg>
+                </span>
                 <div className="portal-guide-body">
                   {instruction ? (
                     <p className="portal-guide-say">{instruction}</p>

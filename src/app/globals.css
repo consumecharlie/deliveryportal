@@ -1985,44 +1985,58 @@ a.portal-rail-link:hover .portal-rail-label {
   flex-direction: column;
   gap: 14px;
 }
+/* The whole step is the hit target, so it gets the hover of a control. */
 .portal-guide-step {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: start;
-}
-.portal-guide-tick {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  margin: -7px -8px;
+  padding: 7px 8px;
+  border-radius: 10px;
   cursor: pointer;
 }
-.portal-guide-tick input {
+.portal-guide-step:hover { background: #f1f7f4; }
+/* The real checkbox: keyboard reachable, drawn by the box beside it. */
+.portal-guide-input {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  top: 9px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
   opacity: 0;
+  cursor: pointer;
 }
-.portal-guide-num {
+.portal-guide-box {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
   border: 1px solid #bbd2cf;
-  border-radius: 50%;
+  border-radius: 7px;
   background: #fff;
   color: #4d5959;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.portal-guide-num {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
 }
-.portal-guide-tick input:focus-visible + .portal-guide-num { outline: 2px solid #6ac387; outline-offset: 2px; }
-.portal-guide-step-done .portal-guide-num {
+.portal-guide-check { display: none; }
+.portal-guide-step:hover .portal-guide-box { border-color: #6ac387; background: #eef5f1; }
+.portal-guide-input:focus-visible ~ .portal-guide-box { outline: 2px solid #6ac387; outline-offset: 2px; }
+.portal-guide-step-done .portal-guide-box {
   background: #6ac387;
   border-color: #6ac387;
   color: #11271a;
 }
+.portal-guide-step-done .portal-guide-num { display: none; }
+.portal-guide-step-done .portal-guide-check { display: block; }
 /* A ticked step keeps its place but stops asking for attention. */
 .portal-guide-step-done .portal-guide-say { color: #6f7f7f; text-decoration: line-through; }
 .portal-guide-body {
@@ -2170,7 +2184,9 @@ a.portal-rail-link:hover .portal-rail-label {
 }
 .portal-quietbtn:hover:not(:disabled) { background: #eef5f1; border-color: #a6c2bd; }
 .portal-quietbtn svg { flex: none; color: #4d5959; }
-/* The affirmative action keeps a green fill so it still reads as the yes. */
+/* Green is the primary, and in this vocabulary that is "Click to review".
+   Confirming stays plain: the one place it takes the fill is the close of a
+   guided review, once every step has actually been ticked. */
 .portal-quietbtn-go {
   background: #c5ffd8;
   border-color: #6ac387;
