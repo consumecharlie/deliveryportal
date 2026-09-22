@@ -13,7 +13,9 @@ describe("extractFamilyName", () => {
 
   it("honors explicit overrides before suffix stripping", () => {
     expect(extractFamilyName("Edit V1")).toBe("Edit");
-    expect(extractFamilyName("Final Delivery")).toBe("Edit");
+    // The handoff is its own deliverable, not the Edit's last version.
+    expect(extractFamilyName("Final Delivery")).toBe("Final Delivery");
+    expect(extractFamilyName("Potential Master")).toBe("Edit");
   });
 
   it("does not treat a leading 'Final' as a version word", () => {
@@ -37,7 +39,7 @@ describe("getVersionSortKey", () => {
 describe("extractVersionSuffix", () => {
   it("labels trailing suffixes and returns null with none", () => {
     expect(extractVersionSuffix("AV Script V1 + Loom")).toBe("V1 + Loom");
-    expect(extractVersionSuffix("Final Delivery")).toBe("Final Delivery");
+    expect(extractVersionSuffix("Final Delivery")).toBeNull();
     expect(extractVersionSuffix("Competitive Analysis")).toBeNull();
   });
 });

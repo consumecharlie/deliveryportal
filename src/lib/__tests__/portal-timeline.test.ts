@@ -70,17 +70,20 @@ describe("buildTimeline", () => {
     expect(t.projects[0].deliverables[0].latest.id).toBe("fix");
   });
 
-  it("stacks the same deliverable family as history", () => {
+  it("stacks the same deliverable family as history, the handoff apart", () => {
     const t = buildTimeline([
       d({ id: "v1", deliverableType: "Edit V1", sentAt: new Date("2026-06-01") }),
       d({ id: "v2", deliverableType: "Edit V2", sentAt: new Date("2026-06-08") }),
+      d({ id: "m", deliverableType: "Potential Master", sentAt: new Date("2026-06-12") }),
       d({ id: "f", deliverableType: "Final Delivery", sentAt: new Date("2026-06-15") }),
     ], {});
     const g = t.projects[0].deliverables;
-    expect(g).toHaveLength(1);
-    expect(g[0].family).toBe("Edit");
-    expect(g[0].latest.id).toBe("f");
-    expect(g[0].history.map((x) => x.id)).toEqual(["v2", "v1"]);
+    // The Edit runs V1, V2, Master; the Final Delivery handoff is its own thing.
+    expect(g.map((x) => x.family)).toEqual(["Final Delivery", "Edit"]);
+    const edit = g.find((x) => x.family === "Edit")!;
+    expect(edit.latest.id).toBe("m");
+    expect(edit.history.map((x) => x.id)).toEqual(["v2", "v1"]);
+    expect(g.find((x) => x.family === "Final Delivery")!.history).toEqual([]);
   });
 
   it("keeps ad-hoc deliveries with no list id apart by project name", () => {

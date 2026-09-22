@@ -13,6 +13,7 @@ import {
   deliverableIdentityTokens,
   countsLine,
   extractLinkTexts,
+  extractLinkContexts,
   normalizeUrl,
   linkKind,
   linkHint,
@@ -128,10 +129,12 @@ describe("variantStem / deliverableKey", () => {
   it("keys by parent (plus stem) or by family without a parent", () => {
     const P19 = { parentTaskId: "P19", parentTaskName: "LOC19: Intuit" };
     const P1 = { parentTaskId: "P1", parentTaskName: "Post-Production - (1) 90s Product Demo (16:9)" };
-    expect(deliverableKey({ ...P19, shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:video");
-    expect(deliverableKey({ ...P19, shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:snippets");
-    expect(deliverableKey({ ...P1, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("P1");
-    expect(deliverableKey({ ...P1, shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery" })).toBe("P1");
+    expect(deliverableKey({ ...P19, shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:Edit:video");
+    expect(deliverableKey({ ...P19, shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1" })).toBe("P19:Edit:snippets");
+    expect(deliverableKey({ ...P1, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("P1:Edit");
+    // The Master is the Edit's last version; the handoff is its own deliverable.
+    expect(deliverableKey({ ...P1, shareTaskName: "Share Potential Master with Client", deliverableType: "Potential Master" })).toBe("P1:Edit");
+    expect(deliverableKey({ ...P1, shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery" })).toBe("P1:Final Delivery");
     expect(deliverableKey({ parentTaskId: null, parentTaskName: null, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2" })).toBe("family:Edit");
     expect(deliverableKey({ parentTaskId: null, parentTaskName: null, shareTaskName: null, deliverableType: "Potential Master" })).toBe("family:Edit");
   });
@@ -419,5 +422,74 @@ describe("feedbackTaskTitle", () => {
   it("never returns an empty string", () => {
     expect(feedbackTaskTitle("Confirm Approval", null, "")).toBe("Confirm Approval");
     expect(feedbackTaskTitle("", null, "")).toBe("");
+  });
+});
+
+describe("extractLinkContexts", () => {
+  const ctx = (md: string) => extractLinkContexts(md);
+
+  it("keeps the order the links were written in", () => {
+    const md = [
+      "Hi Whitney,",
+      "",
+      "- Watch the walkthrough here: [Loom](https://loom.com/s/1)",
+      "- The animatic is [here](https://drive.google.com/d/1)",
+      "- Leave notes in [Edit V1](https://app.frame.io/r/1)",
+    ].join("\n");
+    const out = ctx(md);
+    expect(out.get(normalizeUrl("https://loom.com/s/1"))?.order).toBe(0);
+    expect(out.get(normalizeUrl("https://drive.google.com/d/1"))?.order).toBe(1);
+    expect(out.get(normalizeUrl("https://app.frame.io/r/1"))?.order).toBe(2);
+  });
+
+  it("takes the list item that carries the link as the instruction", () => {
+    const md = "- Please consolidate feedback from all internal stakeholders and submit directly in [Edit V1](https://app.frame.io/r/1).";
+    expect(ctx(md).get(normalizeUrl("https://app.frame.io/r/1"))).toMatchObject({
+      text: "Edit V1",
+      instruction: "Please consolidate feedback from all internal stakeholders and submit directly in Edit V1.",
+    });
+  });
+
+  it("narrows prose to the sentence the link sits in", () => {
+    const md = "The cut is locked. Leave your notes in [Frame](https://app.frame.io/r/1) by Friday. Thanks!";
+    expect(ctx(md).get(normalizeUrl("https://app.frame.io/r/1"))?.instruction).toBe(
+      "Leave your notes in Frame by Friday."
+    );
+  });
+
+  it("has no instruction when the link stands alone", () => {
+    const bare = ctx("- [Final Post Script](https://docs.google.com/document/d/1)");
+    expect(bare.get(normalizeUrl("https://docs.google.com/document/d/1"))).toMatchObject({
+      text: "Final Post Script",
+      instruction: null,
+    });
+    expect(ctx("https://app.frame.io/r/1").get(normalizeUrl("https://app.frame.io/r/1"))?.instruction).toBeNull();
+    expect(ctx("**[Loom](https://loom.com/s/1)**").get(normalizeUrl("https://loom.com/s/1"))?.instruction).toBeNull();
+  });
+
+  it("reads Slack link syntax and strips formatting from the instruction", () => {
+    const md = "Please *review* the <https://app.frame.io/r/1|latest cut> and reply here.";
+    expect(ctx(md).get(normalizeUrl("https://app.frame.io/r/1"))).toMatchObject({
+      text: "latest cut",
+      instruction: "Please review the latest cut and reply here.",
+    });
+  });
+
+  it("the first mention of a URL wins and a bare URL still gets its sentence", () => {
+    const md = [
+      "Review it in [Frame](https://app.frame.io/r/1) today.",
+      "",
+      "Reminder: [Frame again](https://app.frame.io/r/1).",
+    ].join("\n");
+    const out = ctx(md);
+    expect(out.get(normalizeUrl("https://app.frame.io/r/1"))).toMatchObject({ text: "Frame", order: 0 });
+    const bare = ctx("Send your notes to https://app.frame.io/r/1 when you can.");
+    expect(bare.get(normalizeUrl("https://app.frame.io/r/1"))?.instruction).toBe(
+      "Send your notes to https://app.frame.io/r/1 when you can."
+    );
+  });
+
+  it("an empty message has no contexts", () => {
+    expect(ctx("").size).toBe(0);
   });
 });

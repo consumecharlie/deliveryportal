@@ -62,12 +62,31 @@ export interface PortalLink {
   /** Short host hint shown under or beside the label, e.g. "Google Doc", "Frame.io", "Audio file". */
   hint: string;
   kind: LinkKind;
+  /**
+   * Position in a guided review, 0 first. The order the links appear in the
+   * message we sent, because whoever wrote it put the walkthrough before the
+   * animatic before the review link on purpose; when the message named none of
+   * them, a kind ladder: watch, then look, then read, then notes.
+   */
+  order: number;
+  /**
+   * What the message asks the client to do with this link, as plain text:
+   * "Please consolidate feedback from all internal stakeholders and submit
+   * directly in Edit V1." Null when the link was not mentioned in prose.
+   */
+  instruction: string | null;
 }
 
 export interface PortalVersion {
   deliveryId: string;
-  /** e.g. "Edit V2" (deliverable type of that send). */
+  /** The deliverable type of that send, e.g. "Edit V2", "AV Script V1 + Loom". */
   label: string;
+  /**
+   * Where this send sits in the deliverable's timeline: "V1", "V2", "MASTER"
+   * (Potential Master, the last cut before the handoff) or "FINAL". Empty for
+   * a deliverable whose type carries no version at all.
+   */
+  tag: string;
   /** 1-based position in the deliverable's version list, oldest = 1. */
   versionNumber: number;
   sentAtMs: number;
@@ -77,11 +96,18 @@ export interface PortalVersion {
 }
 
 export interface PortalDeliverable {
-  /** Stable key: parent task id, or a family key when no parent is known. */
+  /** Stable key: parent task id and family, or a family key when no parent is known. */
   key: string;
-  /** Primary title, e.g. "LOC19: Intuit" or, without a parent, the type family. */
+  /**
+   * The thing being revised, never a version of it: "LOC19: Intuit" from the
+   * parent task, else the type's family ("Edit", "Post Script").
+   */
   title: string;
-  /** Secondary line, e.g. "Video Edit01" or "Edit V2". Null when the title says it all. */
+  /**
+   * Second line naming which one, when the title does not already say it:
+   * "Video", "Snippets", "(3) 15s Spinoff (4:5)". Null when it would only
+   * restate the title or the version.
+   */
   variant: string | null;
   latest: PortalVersion;
   /** Earlier versions, newest first. */

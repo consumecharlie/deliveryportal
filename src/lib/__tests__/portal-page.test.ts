@@ -170,10 +170,10 @@ describe("buildPortalPage: projects and deliverables", () => {
   });
 
   it("keys deliverables by parent task plus variant, newest first, with resends replacing originals", () => {
-    expect(loc.deliverables.map((d) => d.key)).toEqual(["P21:video", "P19:snippets", "P19:video"]);
+    expect(loc.deliverables.map((d) => d.key)).toEqual(["P21:Edit:video", "P19:Edit:snippets", "P19:Edit:video"]);
     const video = loc.deliverables[2];
     expect(video.title).toBe("LOC19: Intuit");
-    expect(video.variant).toBe("Video Edit02");
+    expect(video.variant).toBe("Video");
     expect(video.latest.deliveryId).toBe("v2");
     expect(video.latest.label).toBe("Edit V2");
     expect(video.history.map((v) => v.deliveryId)).toEqual(["v1b"]);
@@ -183,8 +183,10 @@ describe("buildPortalPage: projects and deliverables", () => {
   it("strips the department prefix from the parent name and keeps the variant", () => {
     const ep21 = loc.deliverables[0];
     expect(ep21.title).toBe("Leaders of Code - Ep #21");
-    expect(ep21.variant).toBe("Video Edit01");
-    expect(loc.deliverables[1]).toMatchObject({ title: "LOC19: Intuit", variant: "Snippets Edit01" });
+    // The version lives in the tag now, so the second line only names which one.
+    expect(ep21.variant).toBe("Video");
+    expect(ep21.latest.tag).toBe("V1");
+    expect(loc.deliverables[1]).toMatchObject({ title: "LOC19: Intuit", variant: "Snippets" });
   });
 
   it("numbers versions oldest first, latest = history.length + 1", () => {
@@ -217,10 +219,11 @@ describe("buildPortalPage: projects and deliverables", () => {
     ];
     const p = build({ rows, live: {}, confirmations: new Map() });
     expect(p.projects[0].deliverables[0].latest.links).toEqual([
-      { url: DOC, label: "Final Post Script", hint: "Google Doc", kind: "google-doc" },
-      { url: MP3, label: "Audio File Final", hint: "Google Drive", kind: "google-drive" },
-      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
-      { url: "https://example.com/brief", label: "Brief", hint: "Link", kind: "web" },
+      { url: DOC, label: "Final Post Script", hint: "Google Doc", kind: "google-doc", order: 0, instruction: null },
+      { url: MP3, label: "Audio File Final", hint: "Google Drive", kind: "google-drive", order: 1, instruction: null },
+      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame", order: 2, instruction: null },
+      // Never named in the message, so it sorts after the ones that were.
+      { url: "https://example.com/brief", label: "Brief", hint: "Link", kind: "web", order: 3, instruction: null },
     ]);
     // No paired feedback task: nothing is being asked for, though the type
     // still decides the wording ("Final" asks for approval).
@@ -231,19 +234,21 @@ describe("buildPortalPage: projects and deliverables", () => {
     const ep21 = loc.deliverables[0];
     expect(ep21.latest.body).toBe("Hi Whitney, here it is");
     expect(ep21.latest.links).toEqual([
-      { url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" },
-      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
+      { url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom", order: 0, instruction: null },
+      { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame", order: 1, instruction: null },
     ]);
     expect(ep21.latest.sentAtMs).toBe(Date.parse("2026-07-30T14:00:00Z"));
   });
 
-  it("without an informative parent the share task label is the title and there is no variant", () => {
+  it("without an informative parent the share task names the deliverable, and the tag says where it sits", () => {
     const adhoc = page.projects.find((p) => p.name === "One-off")!;
     expect(adhoc.listId).toBe("");
-    expect(adhoc.deliverables[0]).toMatchObject({ key: "family:Edit", title: "Potential Master", variant: null });
-    expect(adhoc.deliverables[0].latest.label).toBe("Potential Master");
+    // "Potential Master" is the Edit's last version, so the row is an Edit.
+    expect(adhoc.deliverables[0]).toMatchObject({ key: "family:Edit", title: "Edit", variant: null });
+    expect(adhoc.deliverables[0].latest).toMatchObject({ label: "Potential Master", tag: "MASTER" });
     const callrail = page.projects.find((p) => p.listId === "L2")!;
-    expect(callrail.deliverables[0]).toMatchObject({ key: "family:Post AV:script", title: "Post Script AV V1", variant: null });
+    expect(callrail.deliverables[0]).toMatchObject({ key: "family:Post AV:script", title: "Post Script AV", variant: null });
+    expect(callrail.deliverables[0].latest.tag).toBe("V1");
   });
 
   it("versions under a phase-only parent stack as one deliverable titled by the latest share task", () => {
@@ -260,10 +265,15 @@ describe("buildPortalPage: projects and deliverables", () => {
     });
     const w = p.projects.find((x) => x.listId === "L7")!;
     expect(w.deliverables.map((d) => [d.title, d.variant, d.history.length])).toEqual([
-      ["Post Script AV V1", null, 0],
-      ["Final Post Script", null, 2],
+      ["Post Script AV", null, 0],
+      ["Post Script", null, 2],
     ]);
-    expect(w.deliverables[1].history.map((v) => v.label)).toEqual(["Post Script V2", "Post Script V1"]);
+    // One Post Script, three positions in its timeline.
+    expect(w.deliverables[1].latest.tag).toBe("FINAL");
+    expect(w.deliverables[1].history.map((v) => [v.label, v.tag])).toEqual([
+      ["Post Script V2", "V2"],
+      ["Post Script V1", "V1"],
+    ]);
   });
 });
 
@@ -568,13 +578,13 @@ describe("buildPortalPage: attention and focus", () => {
       deliveryId: "e21",
       feedbackTaskId: null,
       deliverableTitle: "Leaders of Code - Ep #21",
-      variant: "Video Edit01",
+      variant: "Video",
       projectName: "Leaders of Code Podcast",
       projectListId: "L1",
       review: expect.objectContaining({ state: "awaiting" }),
-      primaryLink: { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" },
+      primaryLink: { url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame", order: 1, instruction: null },
     });
-    expect(page.attention[1].primaryLink).toEqual({ url: FRAME.url, label: "Frame.io", hint: "Frame.io", kind: "frame" });
+    expect(page.attention[1].primaryLink).toMatchObject({ url: FRAME.url, label: "Frame.io", kind: "frame" });
   });
 
   it("orders real deadlines by date, then estimates oldest first", () => {
@@ -619,8 +629,8 @@ describe("buildPortalPage: attention and focus", () => {
     });
     const page = build({ rows, live: { L9: l9 }, confirmations: new Map() });
     const byId = Object.fromEntries(page.attention.map((a) => [a.deliveryId, a.primaryLink]));
-    expect(byId.x).toEqual({ url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" });
-    expect(byId.y).toEqual({ url: DRIVE.url, label: "Google Drive", hint: "Google Drive", kind: "google-drive" });
+    expect(byId.x).toMatchObject({ url: LOOM.url, label: "Loom", hint: "Loom", kind: "loom" });
+    expect(byId.y).toMatchObject({ url: DRIVE.url, label: "Google Drive", hint: "Google Drive", kind: "google-drive" });
     expect(byId.z).toBeNull();
   });
 
@@ -1111,5 +1121,162 @@ describe("ClickUp decides what the client owes us", () => {
     expect(page.projects[0].milestones.map((m) => m.state)).toEqual(["in-review"]);
     // And it is an action item, since nothing was delivered through the portal.
     expect(page.attention.map((a) => a.feedbackTaskId)).toEqual(["FW2"]);
+  });
+});
+
+describe("the deliverable is the thing; V1, Master and Final are positions in its timeline", () => {
+  const base = { confirmations: new Map<string, ConfirmationRow>(), live: {}, nowMs: NOW };
+  const send = (over: Partial<PortalPageRow> & { id: string }) =>
+    row({ projectListId: "LT", projectName: "Wiggam Law Virtual Testimonial", ...over });
+
+  it("titles are version free, and the tag carries the position", () => {
+    const page = build({
+      ...base,
+      rows: [
+        send({ id: "p1", taskId: "S1", parentTaskId: null, parentTaskName: "Post-Production", shareTaskName: "Share Post Script V1 with Client", deliverableType: "Post Script V1", sentAt: new Date("2026-08-20T14:00:00Z") }),
+        send({ id: "p2", taskId: "S2", parentTaskId: null, parentTaskName: "Post-Production", shareTaskName: "Share Final Post Script with Client", deliverableType: "Post Script Final", sentAt: new Date("2026-08-27T14:00:00Z") }),
+      ],
+    });
+    const d = page.projects[0].deliverables;
+    expect(d).toHaveLength(1);
+    expect(d[0].title).toBe("Post Script");
+    expect(d[0].variant).toBeNull();
+    // Newest first, and each version says where it sits.
+    expect(d[0].latest).toMatchObject({ tag: "FINAL", label: "Post Script Final", versionNumber: 2 });
+    expect(d[0].history.map((v) => v.tag)).toEqual(["V1"]);
+  });
+
+  it("an Edit runs V1, V2, Master, and the Final Delivery handoff is its own row", () => {
+    const parent = { parentTaskId: "PE", parentTaskName: "(1) 60s Video (16:9)" };
+    const page = build({
+      ...base,
+      rows: [
+        send({ id: "e1", taskId: "SE1", ...parent, shareTaskName: "Share Edit V1 with Client", deliverableType: "Edit V1", sentAt: new Date("2026-08-01T14:00:00Z") }),
+        send({ id: "e2", taskId: "SE2", ...parent, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2", sentAt: new Date("2026-08-08T14:00:00Z") }),
+        send({ id: "e3", taskId: "SE3", ...parent, shareTaskName: "Share Potential Master with Client", deliverableType: "Potential Master", sentAt: new Date("2026-08-15T14:00:00Z") }),
+        send({ id: "e4", taskId: "SE4", ...parent, shareTaskName: "Share Final Deliverables with Client", deliverableType: "Final Delivery", sentAt: new Date("2026-08-22T14:00:00Z") }),
+      ],
+    });
+    // One parent holding two deliverables, so each row says which it is.
+    const byTitle = Object.fromEntries(page.projects[0].deliverables.map((d) => [`${d.title}|${d.variant ?? ""}`, d]));
+    expect(Object.keys(byTitle).sort()).toEqual([
+      "(1) 60s Video (16:9)|Edit",
+      "(1) 60s Video (16:9)|Final Delivery",
+    ]);
+    const edit = byTitle["(1) 60s Video (16:9)|Edit"];
+    const handoff = byTitle["(1) 60s Video (16:9)|Final Delivery"];
+    expect(edit.latest.tag).toBe("MASTER");
+    expect(edit.history.map((v) => v.tag)).toEqual(["V2", "V1"]);
+    // The handoff is a package, not another cut: one row, no version stack.
+    expect(handoff.history).toEqual([]);
+    expect(handoff.latest.tag).toBe("FINAL");
+  });
+
+  it("the qualified Animated family stacks together", () => {
+    const parent = { parentTaskId: "PA", parentTaskName: "(1) 60s Video (16:9)" };
+    const page = build({
+      ...base,
+      rows: [
+        send({ id: "a1", taskId: "SA1", ...parent, shareTaskName: "Share Edit V1 with Client", deliverableType: "Edit V1 - Animated", sentAt: new Date("2026-08-01T14:00:00Z") }),
+        send({ id: "a2", taskId: "SA2", ...parent, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2 - Animated", sentAt: new Date("2026-08-08T14:00:00Z") }),
+        send({ id: "a3", taskId: "SA3", ...parent, shareTaskName: "Share Potential Master with Client", deliverableType: "Potential Master - Animated", sentAt: new Date("2026-08-15T14:00:00Z") }),
+      ],
+    });
+    expect(page.projects[0].deliverables).toHaveLength(1);
+    expect(page.projects[0].deliverables[0].latest.tag).toBe("MASTER");
+    expect(page.projects[0].deliverables[0].history.map((v) => v.tag)).toEqual(["V2", "V1"]);
+  });
+
+  it("a variant survives only when it names something the version does not", () => {
+    const P = { parentTaskId: "P19", parentTaskName: "LOC19: Intuit" };
+    const page = build({
+      ...base,
+      rows: [
+        send({ id: "v", taskId: "SV", ...P, shareTaskName: "Share Video Edit01 with Client", deliverableType: "Edit V1", sentAt: new Date("2026-08-01T14:00:00Z") }),
+        send({ id: "s", taskId: "SS", ...P, shareTaskName: "Share Snippets Edit01 with Client", deliverableType: "Edit V1", sentAt: new Date("2026-08-02T14:00:00Z") }),
+        send({ id: "p", taskId: "SP", ...P, shareTaskName: "Share Edit V2 with Client", deliverableType: "Edit V2", sentAt: new Date("2026-08-03T14:00:00Z") }),
+      ],
+    });
+    const variants = page.projects[0].deliverables.map((d) => [d.title, d.variant]);
+    expect(variants).toContainEqual(["LOC19: Intuit", "Video"]);
+    expect(variants).toContainEqual(["LOC19: Intuit", "Snippets"]);
+    // "Edit V2" restates the version and the family, so no second line.
+    expect(variants).toContainEqual(["LOC19: Intuit", null]);
+  });
+
+  it("an unversioned type has no tag at all", () => {
+    const page = build({
+      ...base,
+      rows: [send({ id: "u", taskId: "SU", parentTaskId: null, parentTaskName: null, shareTaskName: "Share Production Schedule with Client", deliverableType: "Production Schedule", sentAt: new Date("2026-08-01T14:00:00Z") })],
+    });
+    expect(page.projects[0].deliverables[0]).toMatchObject({ title: "Production Schedule", variant: null });
+    expect(page.projects[0].deliverables[0].latest.tag).toBe("");
+  });
+});
+
+describe("links carry the order and the instruction from the message", () => {
+  const LOOM_URL = "https://loom.com/s/1";
+  const DRIVE_URL = "https://drive.google.com/d/1";
+  const FRAME_URL = "https://app.frame.io/r/1";
+
+  it("keeps the order the message used and the sentence around each link", () => {
+    const body = [
+      "Hi Whitney,",
+      "",
+      "- Start with the [walkthrough](" + LOOM_URL + ") for context.",
+      "- The [animatic](" + DRIVE_URL + ") shows the timing.",
+      "- Please consolidate feedback from all internal stakeholders and submit directly in [Edit V1](" + FRAME_URL + ").",
+    ].join("\n");
+    const page = build({
+      confirmations: new Map(),
+      live: {},
+      rows: [
+        row({
+          id: "L",
+          taskId: "SL",
+          projectListId: "LL",
+          projectName: "P",
+          emailContent: body,
+          // Stored in a different order than the message uses.
+          links: [
+            { url: FRAME_URL, label: "frameReviewLink", variableName: "frameReviewLink" },
+            { url: DRIVE_URL, label: "googleDeliverableLink", variableName: "googleDeliverableLink" },
+            { url: LOOM_URL, label: "loomReviewLink", variableName: "loomReviewLink" },
+          ],
+        }),
+      ],
+    });
+    const links = page.projects[0].deliverables[0].latest.links;
+    expect(links.map((l) => l.url)).toEqual([LOOM_URL, DRIVE_URL, FRAME_URL]);
+    expect(links.map((l) => l.order)).toEqual([0, 1, 2]);
+    expect(links[2].instruction).toBe(
+      "Please consolidate feedback from all internal stakeholders and submit directly in Edit V1."
+    );
+    expect(links[0].instruction).toBe("Start with the walkthrough for context.");
+  });
+
+  it("falls back to watch, then look, then read, then notes when the message names no links", () => {
+    const page = build({
+      confirmations: new Map(),
+      live: {},
+      rows: [
+        row({
+          id: "K",
+          taskId: "SK",
+          projectListId: "LK",
+          projectName: "P",
+          emailContent: "Everything is attached.",
+          links: [
+            { url: "https://example.com/notes", label: "Notes", variableName: null },
+            { url: "https://docs.google.com/document/d/1", label: "googleDeliverableLink", variableName: "googleDeliverableLink" },
+            { url: FRAME_URL, label: "frameReviewLink", variableName: "frameReviewLink" },
+          ],
+        }),
+      ],
+    });
+    const links = page.projects[0].deliverables[0].latest.links;
+    expect(links.map((l) => l.kind)).toEqual(["frame", "google-doc", "web"]);
+    expect(links.map((l) => l.order)).toEqual([0, 1, 2]);
+    expect(links.every((l) => l.instruction === null)).toBe(true);
   });
 });

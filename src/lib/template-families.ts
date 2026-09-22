@@ -7,7 +7,11 @@
  *
  * Some deliverable types have explicit family overrides because their
  * names don't follow the simple suffix-stripping pattern. For example,
- * "Potential Master" and "Final Delivery" both belong to the "Edit" family.
+ * "Potential Master" belongs to the "Edit" family: it is the last cut before
+ * the handoff. The handoff itself ("Final Delivery") is NOT an Edit: that send
+ * is the package of masters, subtitle versions and SRT files rather than
+ * another cut to review, so it stands on its own. See `deliverable-version.ts`,
+ * which the client portal uses for the same question.
  */
 
 import type { DeliverySnippetTemplate } from "@/lib/types";
@@ -28,7 +32,6 @@ const FAMILY_OVERRIDES: Record<string, FamilyOverride> = {
   "Edit V2":         { family: "Edit", label: "V2",               order: 1 },
   "Edit V3":         { family: "Edit", label: "V3",               order: 2 },
   "Potential Master":{ family: "Edit", label: "Potential Master",  order: 3 },
-  "Final Delivery":  { family: "Edit", label: "Final Delivery",   order: 4 },
 
   // ── Edit - Animated family ───────────────────────────────────
   "Edit V1 - Animated":          { family: "Edit - Animated", label: "V1",               order: 0 },
@@ -39,7 +42,6 @@ const FAMILY_OVERRIDES: Record<string, FamilyOverride> = {
   "Edit V1 - Batch":             { family: "Edit - Batch", label: "V1",                order: 0 },
   "Edit V2 - Batch":             { family: "Edit - Batch", label: "V2",                order: 1 },
   "Potential Masters - Batch":   { family: "Edit - Batch", label: "Potential Master",   order: 2 },
-  "Final Delivery - Batch":      { family: "Edit - Batch", label: "Final Delivery",    order: 3 },
 
   // ── Spinoffs family ──────────────────────────────────────────
   "Spinoff Edit V1":          { family: "Spinoffs",  label: "Edit V1",           order: 0 },
@@ -51,11 +53,9 @@ const FAMILY_OVERRIDES: Record<string, FamilyOverride> = {
   "Spinoff Edit V1 - Batch":           { family: "Spinoffs - Batch", label: "Edit V1",           order: 0 },
   "Spinoff Edit V2 - Batch":           { family: "Spinoffs - Batch", label: "Edit V2",           order: 1 },
   "Spinoff Potential Masters - Batch":  { family: "Spinoffs - Batch", label: "Potential Master",  order: 2 },
-  "Spinoff Final Delivery - Batch":     { family: "Spinoffs - Batch", label: "Final Delivery",    order: 3 },
 
   // ── Reformats family ───────────────────────────────────────
   "Reformats":                 { family: "Reformats", label: "Reformats",              order: 0 },
-  "Final Delivery - Reformats": { family: "Reformats", label: "Final Delivery",         order: 1 },
 
   // ── Additional Deliverables family ─────────────────────────
   "Baked Subs":                 { family: "Additional Deliverables", label: "Baked Subs",                order: 0 },

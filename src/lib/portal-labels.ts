@@ -5,7 +5,7 @@
  * that names the real deliverable ("Post-Production - Leaders of Code - Ep
  * #21"). These helpers turn those internal names into what a client reads.
  */
-import { extractFamilyName } from "@/lib/template-families";
+import { deliverableFamily } from "@/lib/deliverable-version";
 import type { LinkKind } from "@/lib/portal-page-model";
 
 const DEPARTMENT_PREFIX = /^(?:post-production|pre-production|pre-pro|design|production)\s*[-|:]\s*/i;
@@ -72,7 +72,7 @@ export function variantLabel(shareTaskName: string | null, deliverableType: stri
   if (!stripped) return null;
   const lower = stripped.toLowerCase();
   if (lower === collapse(deliverableType).toLowerCase()) return null;
-  if (lower === collapse(extractFamilyName(deliverableType)).toLowerCase()) return null;
+  if (lower === collapse(deliverableFamily(deliverableType)).toLowerCase()) return null;
   return stripped;
 }
 
@@ -93,7 +93,7 @@ function words(s: string): string[] {
 export function variantStem(shareTaskName: string | null, deliverableType: string): string {
   const variant = variantLabel(shareTaskName, deliverableType);
   if (!variant) return "";
-  const typeWords = new Set([...words(deliverableType), ...words(extractFamilyName(deliverableType))]);
+  const typeWords = new Set([...words(deliverableType), ...words(deliverableFamily(deliverableType))]);
   return words(variant)
     .filter((w) => !typeWords.has(w) && !VERSION_TOKEN.test(w))
     .join(" ");
@@ -145,6 +145,11 @@ export function stripVersionTokens(label: string): string {
  * Grouping key for a delivery: the parent task when it names a deliverable,
  * else the type family; either refined by the variant stem when the share
  * task name carries one, so two deliverables under one parent stay apart.
+ *
+ * The family is always part of the key, so versions of one thing stack while
+ * different things under one parent stay apart: an Edit's V1, V2 and Master
+ * are one row, and the Final Delivery handoff sent under the same parent is
+ * its own.
  */
 export function deliverableKey(row: {
   parentTaskId: string | null;
@@ -152,10 +157,11 @@ export function deliverableKey(row: {
   shareTaskName: string | null;
   deliverableType: string;
 }): string {
+  const family = deliverableFamily(row.deliverableType);
   const base =
     row.parentTaskId && !isPhaseOnlyParent(row.parentTaskName)
-      ? row.parentTaskId
-      : `family:${extractFamilyName(row.deliverableType)}`;
+      ? `${row.parentTaskId}:${family}`
+      : `family:${family}`;
   const stem = variantStem(row.shareTaskName, row.deliverableType);
   return stem ? `${base}:${stem}` : base;
 }
@@ -171,6 +177,27 @@ export function countsLine(counts: { inProgress: number; completed: number }): s
   }
   if (counts.completed > 0) parts.push(`${counts.completed} completed`);
   return parts.join(", ");
+}
+
+/**
+ * Which deliverable the share task names, with version words removed:
+ * "Share Video Edit01 with Client" -> "Video", "Share Final Deliverables with
+ * Client" -> null. The version lives in the version tag, so a second line that
+ * only restates it adds nothing.
+ */
+export function variantIdentity(shareTaskName: string | null, deliverableType: string): string | null {
+  const variant = variantLabel(shareTaskName, deliverableType);
+  if (!variant) return null;
+  const kept = collapse(
+    variant
+      .split(" ")
+      .filter((w) => {
+        const bare = w.replace(/[^a-z0-9]/gi, "").toLowerCase();
+        return bare && !VERSION_MARKER.test(bare) && !GENERIC_WORDS.has(bare);
+      })
+      .join(" ")
+  );
+  return kept || null;
 }
 
 /** Label under a roadmap pellet: the variant when it exists, else the type. */
@@ -215,6 +242,118 @@ export function extractLinkTexts(markdown: string): Map<string, string> {
   };
   for (const m of markdown.matchAll(/(?<!!)\[([^\]]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) put(m[2], m[1]);
   for (const m of markdown.matchAll(/<((?:https?:\/\/|mailto:)[^|>\s]+)\|([^>]+)>/g)) put(m[1], m[2]);
+  return out;
+}
+
+/** Where a link sits in the message, and what the message asks the client to do with it. */
+export interface LinkContext {
+  /** Anchor text as written ("Edit V1", "latest cut"), or the bare URL. */
+  text: string;
+  /** Position in the message, first mention first. */
+  order: number;
+  /**
+   * The list item or sentence carrying the link, as plain text: "Please
+   * consolidate feedback from all internal stakeholders and submit directly in
+   * Edit V1." Null when the link stands on its own with nothing asked of it.
+   */
+  instruction: string | null;
+}
+
+const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
+const BLOCK_MARKER = /^\s*(?:#+|>)\s*/;
+
+/** Markdown and Slack markup flattened to the words a person reads. */
+function plainText(md: string): string {
+  return collapse(
+    md
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\)/g, "$1")
+      .replace(/<(?:https?:\/\/|mailto:)[^|>\s]+\|([^>]+)>/g, "$1")
+      .replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/g, "$1")
+      .replace(LIST_MARKER, "")
+      .replace(BLOCK_MARKER, "")
+      .replace(/[*_`]+/g, "")
+  );
+}
+
+/** The sentence of `line` that contains `anchor`, or the whole line. */
+function sentenceAround(line: string, anchor: string): string {
+  const at = anchor ? line.indexOf(anchor) : -1;
+  if (at < 0) return line;
+  const bounds: Array<[number, number]> = [];
+  let start = 0;
+  for (const m of line.matchAll(/[.!?](?:\s+|$)/g)) {
+    bounds.push([start, m.index + m[0].length]);
+    start = m.index + m[0].length;
+  }
+  if (start < line.length) bounds.push([start, line.length]);
+  for (const [from, to] of bounds) {
+    if (at >= from && at < to) return line.slice(from, to).trim();
+  }
+  return line;
+}
+
+/** True when the text says nothing beyond the link's own label. */
+function saysNothing(text: string, anchor: string): boolean {
+  const rest = anchor ? text.split(anchor).join(" ") : text;
+  return !/[a-z0-9]/i.test(rest);
+}
+
+/**
+ * Every link in a message body with its position and the instruction around
+ * it. Whoever wrote the message put the Loom before the animatic before the
+ * review link on purpose, so that order is worth keeping, and the sentence
+ * they wrote around a link is what the client is being asked to do.
+ */
+export function extractLinkContexts(markdown: string): Map<string, LinkContext> {
+  const out = new Map<string, LinkContext>();
+  const body = markdown ?? "";
+  if (!body.trim()) return out;
+
+  interface Hit {
+    url: string;
+    text: string;
+    at: number;
+  }
+  const hits: Hit[] = [];
+  for (const m of body.matchAll(/(?<!!)\[([^\]]+)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) {
+    hits.push({ url: m[2], text: cleanAnchor(m[1]), at: m.index });
+  }
+  for (const m of body.matchAll(/<((?:https?:\/\/|mailto:)[^|>\s]+)\|([^>]+)>/g)) {
+    hits.push({ url: m[1], text: cleanAnchor(m[2]), at: m.index });
+  }
+  // Bare URLs, minus the ones already captured inside a markup form.
+  for (const m of body.matchAll(/(?:https?:\/\/|mailto:)[^\s<>()\[\]"']+/g)) {
+    const at = m.index;
+    if (hits.some((h) => at >= h.at && at < h.at + 512 && body.slice(h.at, h.at + 512).includes(m[0]))) continue;
+    hits.push({ url: m[0], text: m[0], at });
+  }
+  hits.sort((a, b) => a.at - b.at);
+
+  // Line starts, so a hit can be traced back to the line that carries it.
+  const lines = body.split("\n");
+  const starts: number[] = [];
+  let cursor = 0;
+  for (const line of lines) {
+    starts.push(cursor);
+    cursor += line.length + 1;
+  }
+
+  let order = 0;
+  for (const hit of hits) {
+    const key = normalizeUrl(hit.url);
+    if (!key || out.has(key)) continue;
+    let index = 0;
+    while (index + 1 < starts.length && starts[index + 1] <= hit.at) index++;
+    const line = plainText(lines[index] ?? "");
+    const isListItem = LIST_MARKER.test(lines[index] ?? "");
+    const around = isListItem ? line : sentenceAround(line, hit.text);
+    out.set(key, {
+      text: hit.text,
+      order: order++,
+      instruction: around && !saysNothing(around, hit.text) ? around : null,
+    });
+  }
   return out;
 }
 

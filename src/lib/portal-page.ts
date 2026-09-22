@@ -12,17 +12,18 @@ import {
   type TimelineLink,
   type MentionNames,
 } from "@/lib/portal-timeline";
-import { extractFamilyName } from "@/lib/template-families";
+import { parseDeliverableVersion } from "@/lib/deliverable-version";
 import {
   deliverableTitle,
   variantLabel,
+  variantIdentity,
   milestoneLabel,
   linkLabel,
   deliverableKey,
   informativeParentName,
   stripVersionTokens,
   countsLine,
-  extractLinkTexts,
+  extractLinkContexts,
   normalizeUrl,
   linkKind,
   linkHint,
@@ -46,6 +47,7 @@ import {
   type LiveMilestone,
 } from "@/lib/portal-live";
 import type { DiscoveredProject } from "@/lib/portal-projects";
+import type { LinkContext } from "@/lib/portal-labels";
 import type {
   PortalPageModel,
   PortalProject,
@@ -55,6 +57,7 @@ import type {
   PortalMilestone,
   PortalAttentionItem,
   ReviewState,
+  LinkKind,
 } from "@/lib/portal-page-model";
 
 /** A Delivery row as the page builder needs it (timeline fields plus identity). */
@@ -154,26 +157,82 @@ function sameText(a: string | null | undefined, b: string | null | undefined): b
 }
 
 /**
+ * Watch it, then look at it, then read it, then go and write somewhere: the
+ * order a guided review wants when the message itself named no links.
+ */
+const KIND_RANK: Record<LinkKind, number> = {
+  loom: 0,
+  frame: 0,
+  vimeo: 0,
+  youtube: 0,
+  video: 0,
+  "google-slides": 1,
+  pdf: 1,
+  "google-doc": 2,
+  "google-sheet": 2,
+  audio: 2,
+  "google-drive": 3,
+  box: 3,
+  dropbox: 3,
+  web: 4,
+};
+
+/**
  * A delivery link as a button: labelled by the anchor text it had in the
  * message we sent (project name prefix removed), else by the host hint, else
- * by the template variable; typed by host/path.
+ * by the template variable; typed by host/path. `order` and `instruction`
+ * come from where the link sat in that message.
  */
-export function toLink(l: TimelineLink, anchorTexts: Map<string, string>, projectName: string): PortalLink {
+export function toLink(
+  l: TimelineLink,
+  contexts: Map<string, LinkContext>,
+  projectName: string
+): PortalLink {
   const kind = linkKind(l.url);
   const hint = linkHint(kind);
-  const fromMessage = cleanLinkText(anchorTexts.get(normalizeUrl(l.url)), projectName, hint);
+  const context = contexts.get(normalizeUrl(l.url));
+  const fromMessage = cleanLinkText(context?.text, projectName, hint);
   const fallback = kind !== "web" ? hint : linkLabel(l.variableName, l.label) || hint;
-  return { url: l.url, label: fromMessage ?? fallback, hint, kind };
+  return {
+    url: l.url,
+    label: fromMessage ?? fallback,
+    hint,
+    kind,
+    order: context?.order ?? -1,
+    instruction: context?.instruction ?? null,
+  };
+}
+
+/**
+ * The links of one send, in review order: the order the message used, then
+ * the ones it never named by kind. `order` ends up dense, so the array and
+ * the field agree.
+ */
+function orderedLinks(
+  row: PortalPageRow,
+  contexts: Map<string, LinkContext>
+): PortalLink[] {
+  const links = row.links.map((l, i) => ({ link: toLink(l, contexts, row.projectName), i }));
+  links.sort((a, b) => {
+    const named = (x: (typeof links)[number]) => (x.link.order >= 0 ? 0 : 1);
+    return (
+      named(a) - named(b) ||
+      (named(a) === 0 ? a.link.order - b.link.order : KIND_RANK[a.link.kind] - KIND_RANK[b.link.kind]) ||
+      a.i - b.i
+    );
+  });
+  return links.map(({ link }, order) => ({ ...link, order }));
 }
 
 function toVersion(row: PortalPageRow, versionNumber: number, names: MentionNames): PortalVersion {
-  const anchorTexts = extractLinkTexts(row.emailContent || row.slackContent || "");
+  const contexts = extractLinkContexts(row.emailContent || row.slackContent || "");
   return {
     deliveryId: row.id,
     label: row.deliverableType,
+    tag: parseDeliverableVersion(row.deliverableType).tag,
     versionNumber,
     sentAtMs: row.sentAt.getTime(),
-    links: row.links.map((l) => toLink(l, anchorTexts, row.projectName)),
+    links: orderedLinks(row, contexts),
     body: clientBody(row, names),
   };
 }
@@ -289,7 +348,9 @@ function buildDeliverable(
   names: MentionNames,
   primaryLinks: Map<string, PortalLink | null>,
   /** Collects the Feedback Deadline tasks a deliverable already speaks for. */
-  pairedTaskIds: Set<string>
+  pairedTaskIds: Set<string>,
+  /** True when another row under the same parent would otherwise read the same. */
+  nameTheFamily: boolean
 ): PortalDeliverable {
   const latest = draft.versions[0];
   const total = draft.versions.length;
@@ -300,24 +361,29 @@ function buildDeliverable(
     primary ? versions[0].links.find((l) => l.url === primary.url) ?? null : null
   );
 
-  // A parent that names the deliverable ("LOC19: Intuit") is the title and
-  // the share task's variant is the second line. A missing or phase-only
-  // parent ("Post-Production") says nothing, so the share task label itself
-  // is the title and the version info alone fills the second line.
+  // The title is the thing being revised, never a version of it: the parent
+  // task when it names a deliverable ("LOC19: Intuit"), else the type's family
+  // ("Post Script", "Edit"). The second line names which one when the title
+  // does not already say it ("Video", "Snippets"), and never repeats the
+  // version, which the version tag carries.
+  const family = parseDeliverableVersion(latest.deliverableType).family;
+  const identity = variantIdentity(latest.shareTaskName, latest.deliverableType);
   const parentTitle = informativeParentName(latest.parentTaskName);
   let title: string;
   let variant: string | null;
   if (parentTitle) {
-    title = deliverableTitle(latest.parentTaskName, extractFamilyName(latest.deliverableType));
-    variant = variantLabel(latest.shareTaskName, latest.deliverableType);
-    // With several versions the type of the latest one is worth a second line
-    // ("Edit V2") even when the share task name adds nothing.
-    if (!variant && draft.versions.length > 1) variant = latest.deliverableType;
-    if (variant && sameText(variant, title)) variant = null;
+    title = deliverableTitle(latest.parentTaskName, family);
+    // The share task's own name when it tells the rows apart, else the
+    // deliverable it is ("Edit", "Final Delivery").
+    variant = nameTheFamily ? family : identity;
   } else {
-    title = milestoneLabel(latest.shareTaskName, latest.deliverableType);
+    // Nothing above it names the deliverable, so the share task's own name
+    // does ("Share Post Script AV V1 with Client" -> "Post Script AV"), and
+    // the type's family is the fallback.
+    title = identity || family || milestoneLabel(latest.shareTaskName, latest.deliverableType);
     variant = null;
   }
+  if (variant && sameText(variant, title)) variant = null;
 
   // An archived project never needs review.
   const task = pairFeedbackTask(live, {
@@ -551,9 +617,26 @@ function buildProject(
   const live = listId ? input.live[listId] : undefined;
 
   const pairedTaskIds = new Set<string>();
-  const deliverables = groupDeliverables(rows).map((d) =>
-    buildDeliverable(d, live, input, names, primaryLinks, pairedTaskIds)
-  );
+  const drafts = groupDeliverables(rows);
+  // Two rows under one parent must not read alike. That happens when a parent
+  // holds several deliverables whose share tasks name them the same way (or do
+  // not name them at all), as a parent holding both the Edit and the Final
+  // Delivery handoff does; those rows say which deliverable they are instead.
+  const seenPerParent = new Map<string, Map<string, number>>();
+  for (const d of drafts) {
+    const first = d.versions[0];
+    if (!first.parentTaskId || !informativeParentName(first.parentTaskName)) continue;
+    const counts = seenPerParent.get(first.parentTaskId) ?? new Map<string, number>();
+    const line = variantIdentity(first.shareTaskName, first.deliverableType) ?? "";
+    counts.set(line, (counts.get(line) ?? 0) + 1);
+    seenPerParent.set(first.parentTaskId, counts);
+  }
+  const deliverables = drafts.map((d) => {
+    const first = d.versions[0];
+    const line = variantIdentity(first.shareTaskName, first.deliverableType) ?? "";
+    const shared = (first.parentTaskId ? seenPerParent.get(first.parentTaskId)?.get(line) : 0) ?? 0;
+    return buildDeliverable(d, live, input, names, primaryLinks, pairedTaskIds, shared > 1);
+  });
   const reviewByDeliveryId = new Map(deliverables.map((d) => [d.latest.deliveryId, d.review.state]));
   const milestones = live
     ? buildMilestones(live.milestones, live, allRowsByTaskId, reviewByDeliveryId, [name, fullName])
