@@ -8,6 +8,10 @@ const MARGIN = 12;
 const GAP = 10;
 const WIDTH = 460;
 const BEAK_W = 22;
+/** The tallest the panel goes when there is room for it. */
+const MAX_VH = 0.6;
+/** Less room than this either side and an anchored panel is not worth it. */
+const MIN_H = 220;
 /** Below this the desktop itself stacks, and an anchored popover reads badly. */
 const SHEET_MAX = 899;
 
@@ -15,8 +19,12 @@ interface Placement {
   left: number;
   top: number;
   width: number;
+  /** The height to cap the panel at: never more room than the side has. */
+  height: number;
   flipped: boolean;
   beakX: number;
+  /** False when neither side has enough room to be worth anchoring. */
+  fits: boolean;
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -24,24 +32,38 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * Prefer below the control, flip above when there is no room, and clamp
- * horizontally so the popover never leaves the frame. The beak keeps
- * pointing at the control through either.
+ * Prefer below the control, flip above when that side has more room, and
+ * clamp so the panel is always wholly inside the viewport. When neither side
+ * fits the preferred height the panel shrinks to the room it actually has and
+ * the message scrolls inside; below a usable minimum the caller shows the
+ * centred sheet instead. The beak keeps pointing at the control throughout.
  */
-export function place(anchor: DOMRect, height: number, vw: number, vh: number): Placement {
+export function place(anchor: DOMRect, natural: number, vw: number, vh: number): Placement {
   const width = Math.min(WIDTH, vw - MARGIN * 2);
   const left = clamp(anchor.left + anchor.width / 2 - width / 2, MARGIN, Math.max(MARGIN, vw - MARGIN - width));
-  const below = anchor.bottom + GAP;
-  const above = anchor.top - GAP - height;
-  const fitsBelow = below + height <= vh - MARGIN;
-  const flipped = !fitsBelow && above >= MARGIN;
-  const top = fitsBelow ? below : flipped ? above : clamp(vh - MARGIN - height, MARGIN, Math.max(MARGIN, vh - MARGIN - height));
+  const preferred = Math.min(natural, Math.round(vh * MAX_VH));
+  const roomBelow = vh - MARGIN - (anchor.bottom + GAP);
+  const roomAbove = anchor.top - GAP - MARGIN;
+
+  let flipped: boolean;
+  if (roomBelow >= preferred) flipped = false;
+  else if (roomAbove >= preferred) flipped = true;
+  else flipped = roomAbove > roomBelow;
+
+  const room = Math.max(0, flipped ? roomAbove : roomBelow);
+  const height = Math.min(preferred, room);
+  const wanted = flipped ? anchor.top - GAP - height : anchor.bottom + GAP;
+  // The belt and braces: whatever the side gave us, stay inside the frame.
+  const top = clamp(wanted, MARGIN, Math.max(MARGIN, vh - MARGIN - height));
+
   return {
     left,
     top,
     width,
+    height,
     flipped,
     beakX: clamp(anchor.left + anchor.width / 2 - left, BEAK_W / 2 + 4, width - BEAK_W / 2 - 4),
+    fits: room >= MIN_H,
   };
 }
 
@@ -62,6 +84,8 @@ interface Props {
  */
 export function MessagePopover({ open, anchor, title, onClose, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const [sheet, setSheet] = useState(false);
@@ -76,9 +100,24 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
 
   const reposition = useCallback(() => {
     const el = panelRef.current;
-    if (!el || !anchor) return;
-    // Measure the panel's natural height before placing it.
-    setPlacement(place(anchor.getBoundingClientRect(), el.offsetHeight, window.innerWidth, window.innerHeight));
+    const body = bodyRef.current;
+    if (!el || !body || !anchor) return;
+    // The content's own height, not the capped panel's: measuring the panel
+    // would feed its cap back in and it could never grow again.
+    const natural = (barRef.current?.offsetHeight ?? 0) + body.scrollHeight + 4;
+    const next = place(anchor.getBoundingClientRect(), natural, window.innerWidth, window.innerHeight);
+    setPlacement((cur) =>
+      cur &&
+      cur.left === next.left &&
+      cur.top === next.top &&
+      cur.width === next.width &&
+      cur.height === next.height &&
+      cur.flipped === next.flipped &&
+      cur.beakX === next.beakX &&
+      cur.fits === next.fits
+        ? cur
+        : next
+    );
   }, [anchor]);
 
   // Place before paint, so the popover never shows in the wrong spot.
@@ -106,8 +145,12 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
     };
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onMove);
+    if (panelRef.current) ro?.observe(panelRef.current);
+    if (bodyRef.current) ro?.observe(bodyRef.current);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      ro?.disconnect();
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
     };
@@ -135,12 +178,14 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
     };
   }, [open, anchor, onClose]);
 
+  const asSheet = sheet || (placement !== null && !placement.fits);
+
   // Focus moves in on open and back to the control on close. It waits for the
   // placement, because until then the panel is still hidden and cannot take it.
   const focused = useRef(false);
   const wasOpen = useRef(false);
   useEffect(() => {
-    const ready = open && (sheet || placement !== null);
+    const ready = open && (asSheet || placement !== null);
     if (ready && !focused.current) {
       closeRef.current?.focus();
       focused.current = true;
@@ -154,16 +199,17 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
       focused.current = false;
     }
     wasOpen.current = open;
-  }, [open, sheet, placement, anchor]);
+  }, [open, asSheet, placement, anchor]);
 
   if (!open || typeof document === "undefined") return null;
 
-  const style: React.CSSProperties = sheet
+  const style: React.CSSProperties = asSheet
     ? {}
     : {
         left: placement?.left ?? 0,
         top: placement?.top ?? 0,
         width: placement?.width ?? WIDTH,
+        maxHeight: placement?.height,
         visibility: placement ? "visible" : "hidden",
       };
 
@@ -172,25 +218,25 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
       ref={panelRef}
       className={[
         "portal-pop",
-        sheet ? "portal-pop-sheet" : "portal-pop-anchored",
-        placement?.flipped ? "portal-pop-flipped" : "",
+        asSheet ? "portal-pop-sheet" : "portal-pop-anchored",
+        !asSheet && placement?.flipped ? "portal-pop-flipped" : "",
         reduced ? "" : "portal-pop-in",
       ]
         .filter(Boolean)
         .join(" ")}
       style={style}
       role="dialog"
-      aria-modal={sheet}
+      aria-modal={asSheet}
       aria-label={title}
     >
-      {!sheet && placement && (
+      {!asSheet && placement && (
         <svg className="portal-pop-beak" width={BEAK_W} height="12" viewBox="0 0 22 12" style={{ left: placement.beakX - BEAK_W / 2 }} aria-hidden="true">
           <path d="M1 11.5 11 1.6 21 11.5" fill="#fafffd" stroke="#151919" strokeWidth="2" strokeLinejoin="round" />
           {/* Breaks the popover's own border under the beak, so the two join. */}
           <rect x="2.6" y="10.2" width="16.8" height="3" fill="#fafffd" />
         </svg>
       )}
-      <div className="portal-pop-bar">
+      <div ref={barRef} className="portal-pop-bar">
         <button ref={closeRef} type="button" className="portal-pop-x" onClick={onClose} aria-label={`Close ${title}`}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" aria-hidden="true">
             <path d="M3 3l6 6M9 3l-6 6" />
@@ -198,12 +244,14 @@ export function MessagePopover({ open, anchor, title, onClose, children }: Props
         </button>
         <span className="portal-pop-title">{title}</span>
       </div>
-      <div className="portal-pop-body">{children}</div>
+      <div ref={bodyRef} className="portal-pop-body">
+        {children}
+      </div>
     </div>
   );
 
   return createPortal(
-    sheet ? (
+    asSheet ? (
       <div className="portal-pop-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
         {body}
       </div>

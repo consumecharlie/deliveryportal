@@ -1830,6 +1830,7 @@ a.portal-rail-link:hover .portal-rail-label {
     0 10px 24px -12px rgba(0, 0, 0, 0.4);
   font-family: var(--font-montserrat), "Montserrat", system-ui, sans-serif;
 }
+/* The cap is placed per popover: never taller than the room that side has. */
 .portal-pop-anchored { max-height: 60vh; }
 @keyframes portal-pop-in {
   from { opacity: 0; transform: scale(0.98); }
