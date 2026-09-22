@@ -1087,14 +1087,13 @@
   font-size: 14px;
   color: #151919;
 }
-.portal-action-swatch {
-  width: 11px;
-  height: 11px;
-  flex: none;
-  background: var(--urgency);
-  border: 1px solid #151919;
+.portal-action-status .portal-pill-icon {
+  width: 15px;
+  height: 15px;
+  color: #151919;
+  --pill-bg: #fafffd;
 }
-.portal-action-estimate .portal-action-swatch { border-style: dashed; }
+.portal-action-estimate .portal-action-status .portal-pill-icon { color: #4d5959; }
 .portal-action-dot { color: #8fa6a1; }
 .portal-action-count { color: #4d5959; }
 .portal-action-past .portal-action-count { color: #151919; font-weight: 600; }
@@ -1412,6 +1411,7 @@
 .portal-pill {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
@@ -1421,12 +1421,14 @@
   white-space: nowrap;
   color: #151919;
 }
-.portal-pill-needed { background: rgba(219, 239, 0, 0.35); color: #151919; }
-.portal-pill-due-today { background: #dbef00; color: #151919; }
-.portal-pill-overdue { background: #151919; color: #dbef00; }
-.portal-pill-received { background: #c5ffd8; color: #24422e; }
-.portal-pill-approved { background: #6ac387; color: #151919; }
-.portal-pill-delivered { background: #e5eee8; color: #4d5959; }
+/* --pill-bg lets a filled icon knock its mark out of the pill. */
+.portal-pill-needed { background: rgba(219, 239, 0, 0.35); color: #151919; --pill-bg: #f2f7dd; }
+.portal-pill-due-today { background: #dbef00; color: #151919; --pill-bg: #dbef00; }
+.portal-pill-overdue { background: #151919; color: #dbef00; --pill-bg: #151919; }
+.portal-pill-received { background: #c5ffd8; color: #24422e; --pill-bg: #c5ffd8; }
+.portal-pill-approved { background: #6ac387; color: #151919; --pill-bg: #6ac387; }
+.portal-pill-delivered { background: #e5eee8; color: #4d5959; --pill-bg: #e5eee8; }
+.portal-pill-icon { flex: none; }
 .portal-due-note {
   display: block;
   margin-top: 4px;
@@ -1469,6 +1471,21 @@
 .portal-tabs-edge {
   stroke: #151919;
   stroke-width: 2;
+}
+/* Dragging to reorder: transforms only, and off under reduced motion. */
+.portal-tab-shape,
+.portal-tab {
+  transition: transform 130ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.portal-tab-shape-dragging,
+.portal-tab-dragging {
+  transition: none;
+}
+.portal-tab-dragging { z-index: 4; cursor: grabbing; }
+.portal-tab-shape-dragging { filter: drop-shadow(0 2px 3px rgba(21, 25, 25, 0.28)); }
+@media (prefers-reduced-motion: reduce) {
+  .portal-tab-shape,
+  .portal-tab { transition: none; }
 }
 .portal-tab {
   position: relative;
@@ -1717,7 +1734,7 @@ a.portal-rail-link:hover .portal-rail-label {
   margin-top: 20px;
   border-top: 1px solid #bbd2cf;
   display: grid;
-  grid-template-columns: minmax(200px, 2.2fr) 90px minmax(220px, max-content) 170px 100px;
+  grid-template-columns: minmax(180px, 2.2fr) max-content 90px minmax(200px, max-content) 170px max-content;
   column-gap: 16px;
 }
 .portal-thead,
@@ -1749,6 +1766,7 @@ a.portal-rail-link:hover .portal-rail-label {
 .portal-row { padding: 14px 0; }
 .portal-td { min-width: 0; font-size: 14px; }
 .portal-td-label { display: none; }
+.portal-td-versions { min-width: 0; }
 .portal-td-toggle { text-align: right; }
 .portal-links {
   display: flex;
@@ -2187,7 +2205,7 @@ textarea.portal-input { resize: vertical; }
    cells below that (phones, and narrow windows). */
 @container portal-body (max-width: 903px) {
   .portal-table {
-    grid-template-columns: minmax(200px, 2fr) 80px minmax(180px, max-content) 150px 90px;
+    grid-template-columns: minmax(150px, 2fr) max-content 80px minmax(170px, max-content) 150px max-content;
     column-gap: 12px;
   }
 }
@@ -2202,6 +2220,7 @@ textarea.portal-input { resize: vertical; }
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "title title"
+      "versions versions"
       "shared status"
       "links links"
       "toggle toggle";
@@ -2209,6 +2228,8 @@ textarea.portal-input { resize: vertical; }
     padding: 16px 0;
   }
   .portal-td-title { grid-area: title; }
+  .portal-td-versions:has(.portal-vchip) { grid-area: versions; display: flex; align-items: center; gap: 8px; }
+  .portal-td-versions:not(:has(.portal-vchip)) { display: none; }
   .portal-td-shared { grid-area: shared; color: #4d5959; }
   .portal-td-label { display: inline; color: #6f7f7f; margin-right: 6px; }
   .portal-td-status {

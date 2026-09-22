@@ -52,20 +52,21 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
       ))}
       <div className="portal-row">
         <div className="portal-td portal-td-title">
-          <span className="portal-row-title">
-            {d.title}
-            <VersionMenu
-              versions={versions.map((v) => ({ id: v.deliveryId, number: versionNumber(d, v), label: v.label, sentAtMs: v.sentAtMs }))}
-              selectedId={current.deliveryId}
-              onSelect={select}
-            />
-          </span>
+          <span className="portal-row-title">{d.title}</span>
           {d.variant && <span className="portal-row-variant">{d.variant}</span>}
           {!isLatest && (
             <span className="portal-viewing">
               Viewing v{currentNumber} of {versions.length}, sent {shortDate(current.sentAtMs)}
             </span>
           )}
+        </div>
+        <div className="portal-td portal-td-versions">
+          <span className="portal-td-label">Version history</span>
+          <VersionMenu
+            versions={versions.map((v) => ({ id: v.deliveryId, number: versionNumber(d, v), label: v.label, sentAtMs: v.sentAtMs }))}
+            selectedId={current.deliveryId}
+            onSelect={select}
+          />
         </div>
         <div className="portal-td portal-td-shared">
           <span className="portal-td-label">Shared</span>
@@ -87,7 +88,7 @@ function Row({ token, d, defaultOpen }: { token: string; d: PortalDeliverable; d
             onClick={toggle}
           >
             <span className={`portal-chevron${open ? " portal-chevron-open" : ""}`} aria-hidden="true" />
-            Details
+            View delivery message
           </button>
         </div>
       </div>
@@ -139,6 +140,7 @@ export function DeliverablesTable({ token, deliverables, defaultOpen = false, ha
     <div className="portal-table">
       <div className="portal-thead" aria-hidden="true">
         <span className="portal-th portal-td-title">Deliverable</span>
+        <span className="portal-th portal-td-versions">Version history</span>
         <span className="portal-th portal-td-shared">Shared</span>
         <span className="portal-th portal-td-links">Links</span>
         <span className="portal-th portal-td-status">Status</span>

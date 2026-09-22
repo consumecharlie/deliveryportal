@@ -53,9 +53,9 @@ export const baselineY = STRIP_H - INSET;
  * blend the slant into the top edge along the slant's own direction, so there
  * is no kink and no stub to hide.
  */
-export function tabPath(slot: TabSlot, height: number): string {
+export function tabPath(slot: TabSlot, height: number, bottomY: number = baselineY): string {
   const { x0, x1 } = slot;
-  const yBase = baselineY;
+  const yBase = bottomY;
   const yTop = yBase - height;
   // Never let the slants or the corners eat more than the tab has room for.
   const halfW = (x1 - x0) / 2;
@@ -86,9 +86,9 @@ function round(n: number): number {
  * The outline as points, for tests and probes that need to measure where ink
  * is allowed to be. Same arithmetic as `tabPath`, with the curves sampled.
  */
-export function tabOutline(slot: TabSlot, height: number, samples = 12): [number, number][] {
+export function tabOutline(slot: TabSlot, height: number, samples = 12, bottomY: number = baselineY): [number, number][] {
   const { x0, x1 } = slot;
-  const yBase = baselineY;
+  const yBase = bottomY;
   const yTop = yBase - height;
   const halfW = (x1 - x0) / 2;
   const slant = Math.max(0, Math.min(SLANT, halfW));
@@ -114,4 +114,31 @@ export function tabOutline(slot: TabSlot, height: number, samples = 12): [number
 function quad(t: number, a: [number, number], c: [number, number], b: [number, number]): [number, number] {
   const m = 1 - t;
   return [m * m * a[0] + 2 * m * t * c[0] + t * t * b[0], m * m * a[1] + 2 * m * t * c[1] + t * t * b[1]];
+}
+
+/**
+ * The active tab runs a pixel lower than the others so its fill meets the
+ * panel with no seam, and it is drawn last over the broken baseline: tab and
+ * body read as one shape, the way the Mac OS 9 originals do.
+ */
+export const ACTIVE_BOTTOM = STRIP_H;
+
+export function activeTabPath(slot: TabSlot): string {
+  return tabPath(slot, ACTIVE_H + (ACTIVE_BOTTOM - baselineY), ACTIVE_BOTTOM);
+}
+
+export function activeTabOutline(slot: TabSlot, samples = 12): [number, number][] {
+  return tabOutline(slot, ACTIVE_H + (ACTIVE_BOTTOM - baselineY), samples, ACTIVE_BOTTOM);
+}
+
+/**
+ * The panel edge, broken across the active tab's span so nothing draws a
+ * divider between the tab and the body under it.
+ */
+export function baselineSegments(totalW: number, active: TabSlot | null): [number, number][] {
+  if (!active) return [[0, totalW]];
+  const segments: [number, number][] = [];
+  if (active.x0 > 0) segments.push([0, active.x0]);
+  if (active.x1 < totalW) segments.push([active.x1, totalW]);
+  return segments;
 }

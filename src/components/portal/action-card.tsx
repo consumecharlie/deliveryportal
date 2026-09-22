@@ -5,6 +5,7 @@ import type { PortalAttentionItem } from "@/lib/portal-page-model";
 import { ConfirmButton, confirmButtonKey } from "./confirm-button";
 import { ViewLink } from "./view-link";
 import { reviewMode } from "./link-meta";
+import { StatusIcon } from "./status-icon";
 import {
   actionTitle,
   countdownText,
@@ -133,7 +134,7 @@ export function ActionCard({ token, item }: Props) {
           </h3>
           <p className="portal-action-project">{item.projectName}</p>
           <p className="portal-action-status" aria-hidden="true" suppressHydrationWarning>
-            <span className="portal-action-swatch" />
+            <StatusIcon state={review.state} mode={mode} />
             <strong>{ask}</strong>
             {input && (
               <>

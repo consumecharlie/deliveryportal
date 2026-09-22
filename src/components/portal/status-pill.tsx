@@ -1,5 +1,6 @@
 import type { ReviewState } from "@/lib/portal-page-model";
 import { reviewMode, type ReviewMode } from "./link-meta";
+import { StatusIcon } from "./status-icon";
 
 interface Props {
   state: ReviewState;
@@ -63,5 +64,10 @@ export function StatusPill({ state, mode, names = [] }: Props) {
               ? "portal-pill-approved"
               : "portal-pill-received"
             : "portal-pill-delivered";
-  return <span className={`portal-pill ${cls}`}>{pillText(state, m)}</span>;
+  return (
+    <span className={`portal-pill ${cls}`}>
+      <StatusIcon state={state} mode={m} />
+      {pillText(state, m)}
+    </span>
+  );
 }

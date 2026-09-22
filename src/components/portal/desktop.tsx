@@ -364,6 +364,13 @@ export function Desktop({ token, model, sandbox = false }: Props) {
   function activateTab(listId: string) {
     commit((s) => ({ ...s, activeTab: listId }));
   }
+  /** A drag or a keyboard move rewrites the tab order, which persists with the rest. */
+  const reorderTabs = useCallback(
+    (order: string[]) => {
+      commit((s) => ({ ...s, tabs: order }));
+    },
+    [commit]
+  );
   /** Close a tab; the neighbor takes over; closing the last tab closes the viewer. */
   function closeTab(listId: string) {
     if (focusMode) {
@@ -560,6 +567,7 @@ export function Desktop({ token, model, sandbox = false }: Props) {
             activeTab={activeTab}
             onActivateTab={activateTab}
             onCloseTab={closeTab}
+            onReorderTabs={reorderTabs}
             defaultOpenRows={focusMode}
             stacked={!wide}
           />
