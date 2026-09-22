@@ -86,3 +86,36 @@ describe("place", () => {
     expect(p.left).toBe(12);
   });
 });
+
+describe("place with the control outside the viewport", () => {
+  const vh = 800;
+  const cap = vh - 24;
+
+  it("does not read the room as bigger than the screen when the control is above it", () => {
+    // The row is scrolled off the top: its rect is negative.
+    const p = place(rect(600, -120), 872, 1440, vh);
+    expect(p.height).toBeLessThanOrEqual(cap);
+    expect(p.top).toBeGreaterThanOrEqual(12);
+    expect(p.top + p.height).toBeLessThanOrEqual(vh - 12);
+  });
+
+  it("nor when the control is below it", () => {
+    const p = place(rect(600, vh + 60), 872, 1440, vh);
+    expect(p.height).toBeLessThanOrEqual(cap);
+    expect(p.top).toBeGreaterThanOrEqual(12);
+    expect(p.top + p.height).toBeLessThanOrEqual(vh - 12);
+  });
+
+  it("never exceeds the viewport less its margins, anywhere, at any height", () => {
+    for (const viewport of [800, 900, 1200]) {
+      for (let y = -400; y <= viewport + 400; y += 17) {
+        for (const natural of [200, 872, 2500]) {
+          const p = place(rect(600, y), natural, 1440, viewport);
+          expect(p.height, `y=${y} vh=${viewport} natural=${natural}`).toBeLessThanOrEqual(viewport - 24);
+          expect(p.top, `y=${y} vh=${viewport}`).toBeGreaterThanOrEqual(12);
+          expect(p.top + p.height, `y=${y} vh=${viewport}`).toBeLessThanOrEqual(viewport - 12);
+        }
+      }
+    }
+  });
+});

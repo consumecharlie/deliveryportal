@@ -43,16 +43,24 @@ export function place(anchor: DOMRect, natural: number, vw: number, vh: number):
   const left = clamp(anchor.left + anchor.width / 2 - width / 2, MARGIN, Math.max(MARGIN, vw - MARGIN - width));
   // No arbitrary cap: the message should be read whole wherever it fits.
   const preferred = Math.ceil(natural);
-  const roomBelow = vh - MARGIN - (anchor.bottom + GAP);
-  const roomAbove = anchor.top - GAP - MARGIN;
+  // The frame the panel has to live in, whatever the control is doing.
+  const maxHeight = Math.max(0, vh - MARGIN * 2);
+  // A control scrolled off either edge has a rect outside the viewport, so
+  // pin the edges before measuring: otherwise the room reads as bigger than
+  // the screen and the cap never bites.
+  const startBelow = clamp(anchor.bottom + GAP, MARGIN, vh - MARGIN);
+  const endAbove = clamp(anchor.top - GAP, MARGIN, vh - MARGIN);
+  const roomBelow = Math.max(0, vh - MARGIN - startBelow);
+  const roomAbove = Math.max(0, endAbove - MARGIN);
 
   let flipped: boolean;
   if (roomBelow >= preferred) flipped = false;
   else if (roomAbove >= preferred) flipped = true;
   else flipped = roomAbove > roomBelow;
 
-  const room = Math.max(0, flipped ? roomAbove : roomBelow);
-  const height = Math.min(preferred, room);
+  const room = flipped ? roomAbove : roomBelow;
+  // Fitting the message whole is the preference, never the override.
+  const height = Math.min(preferred, room, maxHeight);
   const wanted = flipped ? anchor.top - GAP - height : anchor.bottom + GAP;
   // The belt and braces: whatever the side gave us, stay inside the frame.
   const top = clamp(wanted, MARGIN, Math.max(MARGIN, vh - MARGIN - height));
