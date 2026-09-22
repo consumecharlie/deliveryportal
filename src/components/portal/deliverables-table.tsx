@@ -10,7 +10,8 @@ import { LinkButtons } from "./link-button";
 import { ViewLink } from "./view-link";
 import { VersionMenu } from "./version-menu";
 import { MessagePopover } from "./message-popover";
-import { allVersions, pickPrimaryLink, reviewMode, versionNumber } from "./link-meta";
+import { ReviewPopover } from "./review-popover";
+import { allVersions, orderedLinks, pickPrimaryLink, reviewMode, versionNumber, versionTagOf } from "./link-meta";
 import { shortDate } from "./format";
 
 interface Props {
@@ -24,6 +25,8 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
   // The popover anchors to this element, so it has to be state, not a ref:
   // it must be set by the time the popover renders.
   const [button, setButton] = useState<HTMLButtonElement | null>(null);
+  const [reviewButton, setReviewButton] = useState<HTMLButtonElement | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const versions = useMemo(() => allVersions(d), [d]);
   const [selectedId, setSelectedId] = useState(d.latest.deliveryId);
   const current = versions.find((v) => v.deliveryId === selectedId) ?? d.latest;
@@ -35,7 +38,10 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
   const actionable = review.state === "awaiting" || review.state === "due-today" || review.state === "overdue";
   const showConfirm = actionable || (review.state === "confirmed" && review.canUndo);
   const dueNote = pillNote(review.state, reviewMode(review, d.title, d.variant, d.latest.label), review.label);
+  const links = orderedLinks(current.links);
   const primaryLink = pickPrimaryLink(current.links);
+  /** One link goes straight there; more than one is worth guiding through. */
+  const guided = links.length > 1;
 
   function toggle() {
     if (!open) sendPortalView(token, current.deliveryId);
@@ -55,21 +61,21 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
       ))}
       <div className="portal-row">
         <div className="portal-td portal-td-title">
-          <span className="portal-row-title">{d.title}</span>
+          <span className="portal-row-title">
+            {d.title}
+            {/* The version control belongs with the name it versions. */}
+            <VersionMenu
+              versions={versions.map((v) => ({ id: v.deliveryId, number: versionNumber(d, v), label: v.label, sentAtMs: v.sentAtMs, tag: versionTagOf(d, v) }))}
+              selectedId={current.deliveryId}
+              onSelect={select}
+            />
+          </span>
           {d.variant && <span className="portal-row-variant">{d.variant}</span>}
           {!isLatest && (
             <span className="portal-viewing">
-              Viewing v{currentNumber} of {versions.length}, sent {shortDate(current.sentAtMs)}
+              Viewing {versionTagOf(d, current)} of {versions.length}, sent {shortDate(current.sentAtMs)}
             </span>
           )}
-        </div>
-        <div className="portal-td portal-td-versions">
-          <span className="portal-td-label">Version history</span>
-          <VersionMenu
-            versions={versions.map((v) => ({ id: v.deliveryId, number: versionNumber(d, v), label: v.label, sentAtMs: v.sentAtMs }))}
-            selectedId={current.deliveryId}
-            onSelect={select}
-          />
         </div>
         <div className="portal-td portal-td-shared">
           <span className="portal-td-label">Shared</span>
@@ -78,14 +84,12 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
         <div className="portal-td portal-td-links">
           <LinkButtons token={token} deliveryId={current.deliveryId} links={current.links} />
         </div>
-        <div className="portal-td portal-td-status">
-          <StatusPill state={review.state} mode={review.mode} names={[d.title, d.variant, d.latest.label]} label={review.label} />
-          {dueNote && <span className="portal-due-note">{dueNote}</span>}
-        </div>
-        <div className="portal-td portal-td-toggle">
+        <div className="portal-td portal-td-state">
+          <div className="portal-state-line">
+            <StatusPill state={review.state} mode={review.mode} names={[d.title, d.variant, d.latest.label]} label={review.label} />
+            {dueNote && <span className="portal-due-note">{dueNote}</span>}
+          </div>
           <div className="portal-row-actions">
-            {/* Confirming first as the quiet button, reviewing as the green
-                one: the same order and weighting as the review card. */}
             {actionable && (
               <div className="portal-row-labelled">
                 <ConfirmButton
@@ -97,28 +101,46 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
                   deliveryId={d.latest.deliveryId}
                   initialConfirmed={false}
                   canUndo={review.canUndo}
-                  variant="secondary"
+                  appearance="quiet"
                 />
-                {primaryLink && (
-                  <ViewLink
-                    token={token}
-                    deliveryId={current.deliveryId}
-                    href={primaryLink.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cm-btn cm-btn--sm"
-                  >
-                    Click to review
-                  </ViewLink>
-                )}
+                {primaryLink &&
+                  (guided ? (
+                    <button
+                      ref={setReviewButton}
+                      type="button"
+                      className="portal-btn portal-btn-sm portal-quietbtn"
+                      aria-haspopup="dialog"
+                      aria-expanded={guideOpen}
+                      onClick={() => setGuideOpen((o) => !o)}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M2 3.2h4.2a1.6 1.6 0 0 1 1.6 1.6v6.4a1.3 1.3 0 0 0-1.3-1.3H2Z" />
+                        <path d="M12 3.2H7.8a1.6 1.6 0 0 0-1.6 1.6v6.4a1.3 1.3 0 0 1 1.3-1.3H12Z" />
+                      </svg>
+                      <span className="portal-linkbtn-label">Click to review</span>
+                    </button>
+                  ) : (
+                    <ViewLink
+                      token={token}
+                      deliveryId={current.deliveryId}
+                      href={primaryLink.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="portal-btn portal-btn-sm portal-quietbtn"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M5.6 8.4a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-1 1" />
+                        <path d="M8.4 5.6a2.5 2.5 0 0 0-3.5 0l-2 2a2.5 2.5 0 0 0 3.5 3.5l1-1" />
+                      </svg>
+                      <span className="portal-linkbtn-label">Click to review</span>
+                    </ViewLink>
+                  ))}
               </div>
             )}
-            {/* Reading the message we already sent is a reference action, so
-                it keeps its place on every row without taking a label. */}
             <button
               ref={setButton}
               type="button"
-              className="portal-btn portal-btn-secondary portal-btn-sm portal-msg-btn"
+              className="portal-btn portal-btn-sm portal-quietbtn portal-msg-btn"
               aria-expanded={open}
               aria-haspopup="dialog"
               aria-controls={open ? panelId : undefined}
@@ -134,6 +156,17 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
           </div>
         </div>
       </div>
+
+      <ReviewPopover
+        open={guideOpen}
+        anchor={reviewButton}
+        onClose={() => setGuideOpen(false)}
+        token={token}
+        deliveryId={current.deliveryId}
+        title={`Review ${d.title}`}
+        links={links}
+        confirm={showConfirm ? { deliveryId: d.latest.deliveryId, initialConfirmed: review.state === "confirmed", canUndo: review.canUndo } : null}
+      />
 
       <MessagePopover open={open} anchor={button} title={d.title} onClose={() => onToggle(null)}>
         <div id={panelId} className="portal-pop-content">
@@ -157,7 +190,7 @@ function Row({ token, d, open, onToggle }: { token: string; d: PortalDeliverable
                 deliveryId={d.latest.deliveryId}
                 initialConfirmed={review.state === "confirmed"}
                 canUndo={review.canUndo}
-                variant="secondary"
+                appearance="quiet"
               />
             </div>
           )}
@@ -183,11 +216,9 @@ export function DeliverablesTable({ token, deliverables, hasPlan = false }: Prop
     <div className="portal-table">
       <div className="portal-thead" aria-hidden="true">
         <span className="portal-th portal-td-title">Deliverable</span>
-        <span className="portal-th portal-td-versions">Version history</span>
         <span className="portal-th portal-td-shared">Shared</span>
         <span className="portal-th portal-td-links">Links</span>
-        <span className="portal-th portal-td-status">Status</span>
-        <span className="portal-th portal-td-toggle" />
+        <span className="portal-th portal-td-state">Status</span>
       </div>
       <ul className="portal-tbody">
         {deliverables.map((d) => (

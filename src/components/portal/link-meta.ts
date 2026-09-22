@@ -1,4 +1,5 @@
 import type { LinkKind, PortalDeliverable, PortalLink, PortalVersion } from "@/lib/portal-page-model";
+import { versionTag } from "./format";
 
 /**
  * Read the page model's newer fields (link kind and hint, version numbers,
@@ -91,4 +92,26 @@ export function pickPrimaryLink(links: PortalLink[]): PortalLink | null {
     links[0] ??
     null
   );
+}
+
+/**
+ * The version's own tag once the model carries it ("V1", "MASTER", "FINAL"),
+ * falling back to the label-derived tag until it lands.
+ */
+export function versionTagOf(d: PortalDeliverable, v: PortalVersion): string {
+  const tagged = (v as { tag?: string }).tag;
+  return tagged ?? versionTag(v.label, versionNumber(d, v));
+}
+
+/** Links in the order we mean them to be worked through. */
+export function orderedLinks(links: PortalLink[]): PortalLink[] {
+  return links
+    .map((link, i) => ({ link, at: (link as { order?: number }).order ?? i, i }))
+    .sort((a, b) => a.at - b.at || a.i - b.i)
+    .map(({ link }) => link);
+}
+
+/** What to do with this link, when we said so. */
+export function linkInstruction(link: PortalLink): string | null {
+  return (link as { instruction?: string | null }).instruction ?? null;
 }

@@ -9,6 +9,8 @@ export interface VersionOption {
   number: number;
   label: string;
   sentAtMs: number;
+  /** The version's own tag from the model, when it carries one. */
+  tag?: string;
 }
 
 interface Props {
@@ -25,6 +27,17 @@ interface Props {
  * the chip and clamped to the viewport; Escape closes, arrows move, Enter
  * selects, an outside mousedown closes. Renders nothing for one version.
  */
+/** Stacked sheets: the same quiet line art as the link icons. */
+function VersionGlyph() {
+  return (
+    <svg className="portal-vchip-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M7 1.8 12.4 4.6 7 7.4 1.6 4.6 7 1.8Z" />
+      <path d="M1.6 7.4 7 10.2l5.4-2.8" />
+      <path d="M1.6 10.2 7 13l5.4-2.8" />
+    </svg>
+  );
+}
+
 export function VersionMenu({ versions, selectedId, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -34,7 +47,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
   const menuId = useId();
   const enabled = versions.length > 1;
   const selected = versions.find((v) => v.id === selectedId) ?? versions[0];
-  const tagOf = (v: VersionOption) => versionTag(v.label, v.number);
+  const tagOf = (v: VersionOption) => v.tag ?? versionTag(v.label, v.number);
 
   function close(refocus = false) {
     setOpen(false);
@@ -96,6 +109,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
     // table: the same chip, muted, with nothing to open.
     return (
       <span className="portal-vchip portal-vchip-static" aria-disabled="true">
+        <VersionGlyph />
         <span className="portal-vchip-label">{tagOf(selected)}</span>
       </span>
     );
@@ -147,6 +161,7 @@ export function VersionMenu({ versions, selectedId, onSelect }: Props) {
           }
         }}
       >
+        <VersionGlyph />
         <span className="portal-vchip-label">{tagOf(selected)}</span>
         <svg className="portal-vchip-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
           <path d="M2.5 4.5l3.5 3.5 3.5-3.5" />

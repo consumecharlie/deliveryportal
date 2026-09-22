@@ -1267,40 +1267,40 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 26px;
   margin: 0 0 0 8px;
-  padding: 0 10px;
-  border: 1.5px solid #151919;
-  border-radius: 6px;
+  padding: 0 8px;
+  border: 1px solid #bbd2cf;
+  border-radius: 8px;
   background: #fff;
   color: #151919;
-  font-family: var(--font-pixel), monospace;
   font-size: 12px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   vertical-align: middle;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.12s ease;
 }
-.portal-vchip-label { padding-top: 1px; }
+.portal-vchip-icon { color: #4d5959; }
+.portal-vchip-label { letter-spacing: 0.02em; }
 .portal-vchip-chev {
   display: block;
   flex: none;
   transition: transform 0.16s ease;
 }
 .portal-vchip:hover,
-.portal-vchip[aria-expanded="true"] { background: #e5eee8; }
+.portal-vchip[aria-expanded="true"] { background: #eef5f1; border-color: #a6c2bd; }
 .portal-vchip[aria-expanded="true"] .portal-vchip-chev { transform: rotate(180deg); }
 .portal-vchip:focus-visible { outline: 2px solid #6ac387; outline-offset: 2px; }
 /* A lone version: the same chip, muted, with nothing to open. */
 .portal-vchip-static {
-  border-color: #bbd2cf;
+  border-color: #d7e4df;
   background: transparent;
   color: #6f7f7f;
   cursor: default;
 }
+.portal-vchip-static .portal-vchip-icon { color: #9db3ae; }
 
 /* Capsule context menu (ported from the MOGRT Library .cmx system) */
 .cmx-menu {
@@ -1741,7 +1741,7 @@ a.portal-rail-link:hover .portal-rail-label {
   margin-top: 20px;
   border-top: 1px solid #bbd2cf;
   display: grid;
-  grid-template-columns: minmax(180px, 2.2fr) max-content 90px minmax(200px, max-content) 170px minmax(170px, auto);
+  grid-template-columns: minmax(220px, 2.2fr) 90px minmax(200px, max-content) minmax(230px, auto);
   column-gap: 16px;
 }
 .portal-thead,
@@ -1774,7 +1774,20 @@ a.portal-rail-link:hover .portal-rail-label {
 .portal-td { min-width: 0; font-size: 14px; }
 .portal-td-label { display: none; }
 .portal-td-versions { min-width: 0; }
-.portal-td-toggle { text-align: right; }
+/* State and action in one column: no empty lane down a settled row. */
+.portal-td-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.portal-state-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
 /* The row's controls: they wrap inside the cell rather than widening the table. */
 .portal-row-actions {
   display: flex;
@@ -1953,6 +1966,93 @@ a.portal-rail-link:hover .portal-rail-label {
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
+/* Guided review: every link as a numbered step, with what to do with it. */
+.portal-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.portal-guide-lede {
+  margin: 0;
+  font-size: 13px;
+  color: #6f7f7f;
+}
+.portal-guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.portal-guide-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.portal-guide-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.portal-guide-tick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.portal-guide-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #bbd2cf;
+  border-radius: 50%;
+  background: #fff;
+  color: #4d5959;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.portal-guide-tick input:focus-visible + .portal-guide-num { outline: 2px solid #6ac387; outline-offset: 2px; }
+.portal-guide-step-done .portal-guide-num {
+  background: #6ac387;
+  border-color: #6ac387;
+  color: #11271a;
+}
+/* A ticked step keeps its place but stops asking for attention. */
+.portal-guide-step-done .portal-guide-say { color: #6f7f7f; text-decoration: line-through; }
+.portal-guide-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.portal-guide-say {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #151919;
+}
+.portal-guide-say-plain { color: #4d5959; }
+.portal-guide-close {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #bbd2cf;
+}
+.portal-guide-done-say {
+  margin: 0;
+  font-size: 13px;
+  color: #4d5959;
+}
+
 /* Below the stacked breakpoint the same content is a centred sheet. */
 .portal-pop-scrim {
   position: fixed;
@@ -2056,6 +2156,41 @@ a.portal-rail-link:hover .portal-rail-label {
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
+/* One control vocabulary for the table: a hairline rounded rectangle with an
+   icon, a label and an optional second line. The offset-shadow pixel buttons
+   stay where they are the hero: the action card, the menu bar and the dock. */
+.portal-quietbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  border: 1px solid #bbd2cf;
+  color: #151919;
+  text-decoration: none;
+}
+.portal-quietbtn:hover:not(:disabled) { background: #eef5f1; border-color: #a6c2bd; }
+.portal-quietbtn svg { flex: none; color: #4d5959; }
+/* The affirmative action keeps a green fill so it still reads as the yes. */
+.portal-quietbtn-go {
+  background: #c5ffd8;
+  border-color: #6ac387;
+  color: #14301f;
+}
+.portal-quietbtn-go svg { color: #1f6b3d; }
+.portal-quietbtn-go:hover:not(:disabled) { background: #b2f7ca; border-color: #4fae6d; }
+@keyframes portal-nudge {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(-2px); }
+  60% { transform: translateY(0); }
+}
+.portal-quietbtn-nudge {
+  animation: portal-nudge 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 2;
+  border-color: #2f8f55;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-quietbtn-nudge { animation: none; }
+}
+
 /* Link buttons: kind icon, label, host hint on a second line */
 .portal-linkbtn {
   align-items: center;
@@ -2366,7 +2501,7 @@ textarea.portal-input { resize: vertical; }
    cells below that (phones, and narrow windows). */
 @container portal-body (max-width: 903px) {
   .portal-table {
-    grid-template-columns: minmax(150px, 2fr) max-content 80px minmax(170px, max-content) 150px minmax(150px, auto);
+    grid-template-columns: minmax(180px, 2fr) 80px minmax(170px, max-content) minmax(200px, auto);
     column-gap: 12px;
   }
 }
@@ -2381,29 +2516,18 @@ textarea.portal-input { resize: vertical; }
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "title title"
-      "versions versions"
-      "shared status"
-      "links links"
-      "toggle toggle";
+      "shared state"
+      "links links";
     row-gap: 10px;
     padding: 16px 0;
   }
   .portal-td-title { grid-area: title; }
-  .portal-td-versions:has(.portal-vchip) { grid-area: versions; display: flex; align-items: center; gap: 8px; }
-  .portal-td-versions:not(:has(.portal-vchip)) { display: none; }
   .portal-td-shared { grid-area: shared; color: #4d5959; }
   .portal-td-label { display: inline; color: #6f7f7f; margin-right: 6px; }
-  .portal-td-status {
-    grid-area: status;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-  }
+  .portal-td-state { grid-area: state; }
   .portal-due-note { margin: 0; text-align: right; }
   .portal-td-links { grid-area: links; }
-  .portal-td-toggle { grid-area: toggle; text-align: left; }
-  .portal-row-actions { justify-content: flex-start; }
+  .portal-row-actions { justify-content: flex-end; }
   .portal-details { padding: 16px; }
 }
 

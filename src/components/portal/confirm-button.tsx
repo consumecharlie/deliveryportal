@@ -18,6 +18,15 @@ interface Props {
   canUndo: boolean;
   /** The review card makes reviewing primary, so confirming sits quieter. */
   variant?: "primary" | "secondary";
+  /**
+   * "pixel" is the offset-shadow hero button, which belongs to the action
+   * card. Everything in the table and the popovers uses "quiet": the same
+   * hairline rectangle as the link buttons, filled green so the affirmative
+   * action still reads.
+   */
+  appearance?: "pixel" | "quiet";
+  /** Draw attention once a guided review is finished. */
+  nudge?: boolean;
 }
 
 /**
@@ -45,7 +54,16 @@ const UNDO_WARNING =
  * The undo prompt is a native <dialog> opened with showModal(): focus moves
  * into it, stays trapped, and Escape closes it.
  */
-export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfirmed, canUndo, variant = "primary" }: Props) {
+export function ConfirmButton({
+  token,
+  deliveryId,
+  feedbackTaskId,
+  initialConfirmed,
+  canUndo,
+  variant = "primary",
+  appearance = "pixel",
+  nudge = false,
+}: Props) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [confirmed, setConfirmed] = useState(initialConfirmed);
@@ -115,6 +133,18 @@ export function ConfirmButton({ token, deliveryId, feedbackTaskId, initialConfir
             </button>
           )}
         </div>
+      ) : appearance === "quiet" ? (
+          <button
+            type="button"
+            className={`portal-btn portal-btn-sm portal-quietbtn portal-quietbtn-go${nudge ? " portal-quietbtn-nudge" : ""}`}
+            onClick={() => post("confirm")}
+            disabled={busy}
+          >
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+              <path d="M2.8 7.4 5.6 10.2 11.2 4" />
+            </svg>
+        <span className="portal-linkbtn-label">{busy ? "Saving" : "All feedback is in"}</span>
+      </button>
       ) : (
         <Button type="button" size="sm" variant={variant} onClick={() => post("confirm")} disabled={busy}>
           {busy ? "Saving" : "All feedback is in"}
