@@ -132,6 +132,95 @@ describe("selectFeedbackByParent", () => {
   });
 });
 
+describe("pairFeedbackTask: family and version, not raw type strings", () => {
+  const fd = (
+    over: Partial<import("@/lib/portal-live").LiveFeedbackTask> & { taskId: string }
+  ): import("@/lib/portal-live").LiveFeedbackTask => {
+    const isOpen = over.isOpen ?? true;
+    return {
+      name: over.taskId,
+      dueMs: null,
+      isOpen,
+      status: isOpen ? "waiting on client" : "complete",
+      awaitingClient: isOpen,
+      parentTaskId: null,
+      deliverableType: "Edit V1",
+      ...over,
+    };
+  };
+
+  it("the live shape: a parentless task whose type carries a qualifier still pairs", () => {
+    // 2026 Internal Explainer: the feedback task has no parent at all and is
+    // typed "Edit V1 - Animated"; the delivery is "Edit V1" under a parent.
+    const orphan = fd({
+      taskId: "86ak3u8en",
+      name: "Confirm Edit Round 1 Feedback Received",
+      deliverableType: "Edit V1 - Animated",
+      dueMs: 5000,
+    });
+    const live = { feedback: { "Edit V1 - Animated": orphan }, feedbackByParent: {} };
+    expect(
+      pairFeedbackTask(live, {
+        parentTaskId: "PFull",
+        deliverableType: "Edit V1",
+        shareTaskName: "Share Edit V1 & Soundstripe Playlist with Client",
+        sentAtMs: 1000,
+      })?.taskId
+    ).toBe("86ak3u8en");
+  });
+
+  it("matches on family and tag, so Master and Final never answer for V1", () => {
+    const v1 = fd({ taskId: "F-v1", deliverableType: "Edit V1", dueMs: 5000 });
+    const master = fd({ taskId: "F-master", deliverableType: "Potential Master", dueMs: 6000 });
+    const live = { feedback: { "Edit V1": v1, "Potential Master": master }, feedbackByParent: {} };
+    const pair = (deliverableType: string) =>
+      pairFeedbackTask(live, { parentTaskId: null, deliverableType, sentAtMs: 1000 })?.taskId ?? null;
+    expect(pair("Edit V1 - Animated")).toBe("F-v1");
+    expect(pair("Potential Masters - Batch")).toBe("F-master");
+    expect(pair("Edit V2")).toBeNull();
+    // A different family never answers, however close the words look.
+    expect(pair("Spinoff Edit V1")).toBeNull();
+  });
+
+  it("inside the family tier a parentless task answers first, since nothing else can claim it", () => {
+    const owned = fd({ taskId: "F-owned", deliverableType: "Edit V1 - Batch", parentTaskId: "POther", dueMs: 4000 });
+    const orphan = fd({ taskId: "F-orphan", deliverableType: "Edit V1 - Animated", dueMs: 9000 });
+    const live = {
+      feedback: { "Edit V1 - Batch": owned, "Edit V1 - Animated": orphan },
+      feedbackByParent: { POther: [owned] },
+    };
+    // No raw type matches, so the family tier decides, and it takes the task
+    // no other deliverable owns even though the other one is due sooner.
+    expect(pairFeedbackTask(live, { parentTaskId: "PMine", deliverableType: "Edit V1", sentAtMs: 1000 })?.taskId).toBe("F-orphan");
+    // With no orphan around, the owned task is still better than nothing.
+    const onlyOwned = { feedback: { "Edit V1 - Batch": owned }, feedbackByParent: { POther: [owned] } };
+    expect(pairFeedbackTask(onlyOwned, { parentTaskId: "PMine", deliverableType: "Edit V1", sentAtMs: 1000 })?.taskId).toBe("F-owned");
+  });
+
+  it("an exact raw type still wins over the family tier", () => {
+    const exact = fd({ taskId: "F-exact", deliverableType: "Edit V1", parentTaskId: "POther", dueMs: 4000 });
+    const orphan = fd({ taskId: "F-orphan", deliverableType: "Edit V1 - Animated", dueMs: 9000 });
+    const live = {
+      feedback: { "Edit V1": exact, "Edit V1 - Animated": orphan },
+      feedbackByParent: { POther: [exact] },
+    };
+    expect(pairFeedbackTask(live, { parentTaskId: "PMine", deliverableType: "Edit V1", sentAtMs: 1000 })?.taskId).toBe("F-exact");
+  });
+
+  it("the parent still decides first", () => {
+    const mine = fd({ taskId: "F-mine", deliverableType: "LoC Edit V1", parentTaskId: "PMine", dueMs: 9000 });
+    const orphan = fd({ taskId: "F-orphan", deliverableType: "Edit V1", dueMs: 4000 });
+    const live = { feedback: { "Edit V1": orphan }, feedbackByParent: { PMine: [mine] } };
+    expect(pairFeedbackTask(live, { parentTaskId: "PMine", deliverableType: "Edit V1", sentAtMs: 1000 })?.taskId).toBe("F-mine");
+  });
+
+  it("an unversioned type pairs by family alone", () => {
+    const schedule = fd({ taskId: "F-sched", deliverableType: "Production Schedule", dueMs: 5000 });
+    const live = { feedback: { "Production Schedule": schedule }, feedbackByParent: {} };
+    expect(pairFeedbackTask(live, { parentTaskId: null, deliverableType: "Production Schedule", sentAtMs: 1000 })?.taskId).toBe("F-sched");
+  });
+});
+
 describe("pairFeedbackTask", () => {
   const fd = (
     over: Partial<import("@/lib/portal-live").LiveFeedbackTask> & { taskId: string }

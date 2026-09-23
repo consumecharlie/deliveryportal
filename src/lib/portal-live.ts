@@ -23,6 +23,7 @@ import {
   extractCustomFieldValue,
 } from "@/lib/clickup";
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
+import { parseDeliverableVersion } from "@/lib/deliverable-version";
 import {
   stripVersionTokens,
   versionMarkers,
@@ -229,8 +230,14 @@ export interface PairingDelivery {
  * parent: 1. same type; 2. same type minus version markers; 3. most identity
  * tokens shared between the share task's variant and the feedback task name
  * ("Video" vs "Snippets"); 4. the only feedback task there is; 5. shared
- * version markers between the two types ("V2"), else an open task. Then the
- * list-wide type lookup.
+ * version markers between the two types ("V2"), else an open task.
+ *
+ * Then, list-wide: 6. the same raw type; 7. the same deliverable and the same
+ * position in its timeline, through `parseDeliverableVersion`. Tier 7 is what
+ * catches a feedback task with no parent at all, which every parent tier skips,
+ * and a type whose qualifier the delivery does not carry: "Edit V1 - Animated"
+ * and "Edit V1" are the same Edit at V1. A parentless task answers first there,
+ * since no other deliverable can claim it.
  */
 export function pairFeedbackTask(
   live: Pick<LivePayload, "feedback" | "feedbackByParent"> | undefined,
@@ -278,7 +285,23 @@ export function pairFeedbackTask(
       if (open) return open;
     }
   }
-  return live.feedback[delivery.deliverableType] ?? null;
+  // 6. List-wide, the same raw type.
+  const byType = live.feedback[delivery.deliverableType];
+  if (byType) return byType;
+
+  // 7. List-wide, the same deliverable at the same position in its timeline.
+  const want = parseDeliverableVersion(delivery.deliverableType);
+  if (!want.family) return null;
+  const matches = allFeedbackTasks(live).filter((t) => {
+    const got = parseDeliverableVersion(t.deliverableType);
+    return sameType(got.family, want.family) && got.tag === want.tag;
+  });
+  return (
+    pickForDelivery(
+      matches.filter((t) => !t.parentTaskId),
+      sentAtMs
+    ) ?? pickForDelivery(matches, sentAtMs)
+  );
 }
 
 /**
