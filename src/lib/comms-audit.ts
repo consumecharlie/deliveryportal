@@ -1,4 +1,5 @@
 export interface AuditContact {
+  taskId?: string;
   name: string;
   email: string;
   role: string; // "Primary" | "Standard" | "Log"
@@ -27,6 +28,7 @@ export type AuditIssueType =
   | "no_primary_contact"
   | "multiple_primary_contacts"
   | "contact_missing_email"
+  | "contact_missing_name"
   | "no_slack_channel"
   | "bot_not_in_channel"
   | "contact_missing_slack_user_id"
@@ -39,9 +41,15 @@ export interface AuditIssue {
   message: string;
   /** Contact name(s) the issue is about, when per-contact. */
   detail?: string;
+  /** ClickUp task of the contact the issue is about, when known. */
+  taskId?: string;
 }
 
 const NON_LOG = (c: AuditContact) => c.role !== "Log";
+
+/** How a contact is named in audit messages: first name, else email, else a generic label. */
+const contactLabel = (c: AuditContact) =>
+  c.name?.trim() || c.email?.trim() || "A contact";
 
 export function isSlackClient(contacts: AuditContact[]): boolean {
   // A Slack handle OR a Slack user ID marks a Slack client — the user ID is
@@ -69,7 +77,20 @@ export function auditProject(cfg: ProjectCommsConfig): AuditIssue[] {
         type: "multiple_primary_contacts",
         severity: "warning",
         message: `${primaries.length} Primary contacts; all will be addressed.`,
-        detail: primaries.map((c) => c.name).join(", "),
+        detail: primaries.map(contactLabel).join(", "),
+      });
+    }
+  }
+  // The greeting is built from first names; a blank one used to fall back to
+  // the task name and greet the client as "Project Contact".
+  for (const c of contacts) {
+    if (!c.name?.trim()) {
+      issues.push({
+        type: "contact_missing_name",
+        severity: "blocker",
+        message: `${contactLabel(c)} has no Contact First Name, so they are left out of the greeting.`,
+        detail: contactLabel(c),
+        taskId: c.taskId,
       });
     }
   }
@@ -99,15 +120,16 @@ export function auditProject(cfg: ProjectCommsConfig): AuditIssue[] {
         issues.push({
           type: "contact_missing_slack_user_id",
           severity: "blocker",
-          message: `${c.name} has a Slack handle but no Slack user ID.`,
-          detail: c.name,
+          message: `${contactLabel(c)} has a Slack handle but no Slack user ID.`,
+          detail: contactLabel(c),
+          taskId: c.taskId,
         });
       }
     }
   } else {
     for (const c of contacts) {
       if (!c.email?.trim()) {
-        issues.push({ type: "contact_missing_email", severity: "blocker", message: `${c.name} has no email address.`, detail: c.name });
+        issues.push({ type: "contact_missing_email", severity: "blocker", message: `${contactLabel(c)} has no email address.`, detail: contactLabel(c), taskId: c.taskId });
       }
     }
   }

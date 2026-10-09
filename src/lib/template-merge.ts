@@ -7,6 +7,7 @@
 
 import type { MergedContent, ProjectContact } from "./types";
 import { collapseListItemGaps } from "./markdown-normalize";
+import { cleanContactName } from "./contact-name";
 
 interface MergeVariables {
   contacts: ProjectContact[];
@@ -42,7 +43,8 @@ function formatContactsEmail(contacts: ProjectContact[]): string {
   const names = contacts
     .sort((a, b) => (a.role === "Primary" ? -1 : b.role === "Primary" ? 1 : 0))
     .filter((c) => c.role !== "Log")
-    .map((c) => c.name);
+    .map((c) => cleanContactName(c.name))
+    .filter(Boolean);
 
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
@@ -61,8 +63,9 @@ export function formatContactsSlack(contacts: ProjectContact[]): string {
     .map((c) => {
       if (c.slackUserId) return `<@${c.slackUserId}>`;
       if (c.slackHandle) return `@${c.slackHandle}`;
-      return c.name;
-    });
+      return cleanContactName(c.name);
+    })
+    .filter(Boolean);
 
   if (mentions.length === 0) return "";
   if (mentions.length === 1) return mentions[0];
@@ -496,7 +499,7 @@ export function mergeTemplate(
   template = collapseListItemGaps(template);
   // Derive primary contact info for individual contact variables
   const primaryContact = variables.contacts.find((c) => c.role === "Primary") ?? variables.contacts[0];
-  const contactName = primaryContact?.name ?? "";
+  const contactName = cleanContactName(primaryContact?.name);
   const contactFirstName = contactName.split(/\s+/)[0] ?? "";
 
   // Build the replacements dictionary
@@ -1055,7 +1058,7 @@ export function mergeCombinedTemplate(input: {
   const av = input.addonVariables;
 
   const primaryContact = pv.contacts.find((c) => c.role === "Primary") ?? pv.contacts[0];
-  const contactName = primaryContact?.name ?? "";
+  const contactName = cleanContactName(primaryContact?.name);
   const contactFirstName = contactName.split(/\s+/)[0] ?? "";
 
   // Shared (non-namespaced) replacements + primary's per-project values.

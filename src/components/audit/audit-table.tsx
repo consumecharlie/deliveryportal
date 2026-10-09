@@ -36,6 +36,7 @@ interface AuditIssue {
   severity: "blocker" | "warning";
   message: string;
   detail?: string;
+  taskId?: string;
 }
 
 interface ProjectAudit {
@@ -61,6 +62,7 @@ interface AuditResponse {
 type Health = "blocker" | "warning" | "healthy" | "error";
 
 function clickupLinkFor(issue: AuditIssue, row: ProjectAudit): string {
+  if (issue.taskId) return `https://app.clickup.com/t/${issue.taskId}`;
   if (issue.detail) {
     const c = row.contacts.find((c) => c.name === issue.detail);
     if (c) return `https://app.clickup.com/t/${c.taskId}`;
@@ -96,6 +98,7 @@ const ISSUE_ICON: Record<string, LucideIcon> = {
   no_primary_contact: UserX,
   multiple_primary_contacts: Users,
   contact_missing_email: Mail,
+  contact_missing_name: UserX,
   no_project_plan: MapIcon,
   no_template: FileText,
 };

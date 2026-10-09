@@ -1,4 +1,5 @@
 import { extractCustomFieldValue, extractCustomFieldUrl } from "@/lib/clickup";
+import { contactFirstName } from "@/lib/contact-name";
 import { CUSTOM_FIELDS, PROJECT_TASK_TYPES } from "@/lib/custom-field-ids";
 import type { ClickUpTask } from "@/lib/types";
 
@@ -37,7 +38,7 @@ export function resolveProjectComms(tasks: ClickUpTask[]): ResolvedProjectComms 
     if (taskTypeMatches(task, PROJECT_TASK_TYPES.PROJECT_CONTACT, "Project Contact")) {
       contacts.push({
         taskId: task.id,
-        name: extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ?? task.name,
+        name: contactFirstName(task.custom_fields),
         email: extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? "",
         role: extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_ROLE) ?? "Standard",
         slackHandle: extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.SLACK_HANDLE) ?? undefined,
