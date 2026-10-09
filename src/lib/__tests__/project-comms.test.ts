@@ -127,12 +127,12 @@ describe("resolveProjectComms", () => {
     expect(result.slackChannelId).toBeNull();
   });
 
-  it("falls back to task name / defaults when contact fields are absent", () => {
-    const tasks = [contactTask("c1", {}, "Fallback Person")];
+  it("never falls back to the task name (always \"Project Contact\") when fields are absent", () => {
+    const tasks = [contactTask("c1", {}, "Project Contact")];
 
     const result = resolveProjectComms(tasks);
 
-    expect(result.contacts[0].name).toBe("Fallback Person");
+    expect(result.contacts[0].name).toBe("");
     expect(result.contacts[0].email).toBe("");
     expect(result.contacts[0].role).toBe("Standard");
   });

@@ -5,6 +5,7 @@ import {
   getListTasks,
   extractCustomFieldValue,
 } from "@/lib/clickup";
+import { contactFirstName } from "@/lib/contact-name";
 import {
   CUSTOM_FIELDS,
   PROJECT_TASK_TYPES,
@@ -95,8 +96,7 @@ export async function GET(
             extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? ""
           ).toLowerCase().trim();
           currentPrimaryName = (
-            extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ??
-            task.name
+            contactFirstName(task.custom_fields)
           ).toLowerCase().trim();
         }
       }
@@ -175,8 +175,7 @@ export async function GET(
                   extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? ""
                 ).toLowerCase().trim();
                 primaryName = (
-                  extractCustomFieldValue(task.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ??
-                  task.name
+                  contactFirstName(task.custom_fields)
                 ).toLowerCase().trim();
               }
             }

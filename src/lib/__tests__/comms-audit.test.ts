@@ -97,3 +97,27 @@ describe("both modes", () => {
     expect(issue?.severity).toBe("blocker");
   });
 });
+
+describe("contact names", () => {
+  it("blocks a contact with no first name and points at its task", () => {
+    const cfg = base({
+      contacts: [
+        { name: "JC", email: "jc@acme.com", role: "Primary" },
+        { taskId: "86akm3jmb", name: "", email: "harrison@acme.com", role: "Standard" },
+      ],
+    });
+    const issue = auditProject(cfg).find((i) => i.type === "contact_missing_name");
+    expect(issue?.severity).toBe("blocker");
+    expect(issue?.taskId).toBe("86akm3jmb");
+    expect(issue?.message).toContain("harrison@acme.com");
+  });
+  it("does not flag Log contacts", () => {
+    const cfg = base({
+      contacts: [
+        { name: "Jane", email: "jane@acme.com", role: "Primary" },
+        { name: "", email: "log@acme.com", role: "Log" },
+      ],
+    });
+    expect(types(cfg)).not.toContain("contact_missing_name");
+  });
+});

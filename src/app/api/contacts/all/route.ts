@@ -5,6 +5,7 @@ import {
   getListTasks,
   extractCustomFieldValue,
 } from "@/lib/clickup";
+import { contactFirstName } from "@/lib/contact-name";
 import {
   CUSTOM_FIELDS,
   PROJECT_TASK_TYPES,
@@ -117,10 +118,7 @@ export async function GET(req: Request) {
             contacts.push({
               taskId: task.id,
               name:
-                extractCustomFieldValue(
-                  task.custom_fields,
-                  CUSTOM_FIELDS.CONTACT_FIRST_NAME
-                ) ?? task.name,
+                contactFirstName(task.custom_fields),
               email,
               role:
                 extractCustomFieldValue(

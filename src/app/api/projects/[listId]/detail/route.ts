@@ -5,6 +5,7 @@ import {
   extractCustomFieldValue,
   extractCustomFieldUrl,
 } from "@/lib/clickup";
+import { contactFirstName } from "@/lib/contact-name";
 import {
   CUSTOM_FIELDS,
   TEMPLATE_FIELDS,
@@ -77,8 +78,7 @@ export async function GET(
         contacts.push({
           taskId: sibling.id,
           name:
-            extractCustomFieldValue(sibling.custom_fields, CUSTOM_FIELDS.CONTACT_FIRST_NAME) ??
-            sibling.name,
+            contactFirstName(sibling.custom_fields),
           email:
             extractCustomFieldValue(sibling.custom_fields, CUSTOM_FIELDS.CONTACT_EMAIL) ?? "",
           role:
