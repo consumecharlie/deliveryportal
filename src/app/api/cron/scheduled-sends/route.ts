@@ -8,6 +8,8 @@ import {
   type ScheduledSendPayload,
 } from "@/lib/schedule-send";
 import { sendSlackDM } from "@/lib/slack-dm";
+import { withinBusinessHours } from "@/lib/business-hours";
+import { readSendHint, refreshSendHint, shouldQueryDrafts } from "@/lib/send-hint";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +159,16 @@ async function runCron(req: Request) {
       throw new Error("cannot derive baseUrl for internal call");
     }
 
+    // Off-hours: consult the Blob hint first and skip the DB when nothing is
+    // due, so the Neon compute can scale to zero overnight and on weekends.
+    // Business hours always query (keep-warm holds the DB awake anyway).
+    const now = new Date();
+    const businessHours = withinBusinessHours(now);
+    const hint = businessHours ? undefined : await readSendHint();
+    if (!shouldQueryDrafts({ now, hint, businessHours })) {
+      return NextResponse.json({ ok: true, skipped: true, nextDue: hint ?? null });
+    }
+
     const candidates = await prisma.draft.findMany({
       where: {
         OR: [{ scheduleStatus: "scheduled" }, { scheduleStatus: "firing" }],
@@ -174,6 +186,7 @@ async function runCron(req: Request) {
 
     const fireResult = await runFirePass(drafts, baseUrl);
     const staleCount = await runStalePass(drafts);
+    await refreshSendHint();
 
     return NextResponse.json({
       ok: true,

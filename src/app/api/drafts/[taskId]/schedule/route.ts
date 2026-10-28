@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import type { ScheduledSendPayload } from "@/lib/schedule-send";
+import { refreshSendHint } from "@/lib/send-hint";
 
 interface ScheduleBody {
   scheduledFor?: string;
@@ -69,6 +70,7 @@ export async function POST(
         scheduledPayload: payloadJson,
       },
     });
+    await refreshSendHint();
     return NextResponse.json({ ok: true, draft: updated });
   } catch (e) {
     console.error("Failed to schedule draft:", e);
@@ -95,6 +97,7 @@ export async function PATCH(
       data.scheduledPayload = parsed.payload as unknown as Prisma.InputJsonValue;
     }
     const updated = await prisma.draft.update({ where: { taskId }, data });
+    await refreshSendHint();
     return NextResponse.json({ ok: true, draft: updated });
   } catch (e) {
     if ((e as { code?: string })?.code === "P2025") {
@@ -119,6 +122,7 @@ export async function DELETE(
         scheduledPayload: Prisma.JsonNull,
       },
     });
+    await refreshSendHint();
     return NextResponse.json({ ok: true });
   } catch (e) {
     if ((e as { code?: string })?.code === "P2025") {

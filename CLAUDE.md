@@ -53,6 +53,10 @@ Mention chip styling uses `!important` to override Tailwind v4 CSS layers (see `
 7. Log delivery to PostgreSQL
 8. Delete draft
 
+### Scheduled sends and Neon idling
+
+`/api/cron/scheduled-sends` runs every 15 minutes. Off-hours (outside 8am to 7pm ET weekdays, `src/lib/business-hours.ts`) it first reads a hint from Vercel Blob (`src/lib/send-hint.ts`, pathname `cron/next-scheduled-send/<epoch ms>` or `.../none`) and skips the database unless a send is due, so Neon can scale to zero. No hint blob means "unknown" and the cron queries. Anything that schedules, reschedules or cancels a send (`/api/drafts/[taskId]/schedule`) and every cron run that touches the DB must call `refreshSendHint()`. Business hours always query, which also sweeps up any send a lost hint write would have delayed. Neon endpoint is 0.25 to 1 CU (set 2026-10-28); `keep-warm` holds it awake during business hours only.
+
 ### Template Variables
 
 Two patterns in delivery snippet templates:
