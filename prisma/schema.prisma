@@ -41,6 +41,10 @@ model Delivery {
   // still picking up corrected form-field values via re-merge.
   editedSnippet   String?        @db.Text
   editedSubject   String?
+  // Minimal-feedback scope option at send time ("Next Step" bullet) and the
+  // optional name of that step, so a resend reopens with the same choice.
+  minimalFeedbackNextStep Boolean @default(false)
+  nextStepName    String?
   /** Feedback Windows value at send time. Used by the client portal to compute
    *  a fallback deadline when no live Feedback Deadline task exists. */
   feedbackWindows String?

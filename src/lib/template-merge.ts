@@ -30,6 +30,12 @@ interface MergeVariables {
   rushedProject?: boolean;
   // Repeat client: strips "What You're Receiving" and "We Need Your Feedback" sections
   repeatClient?: boolean;
+  // Minimal feedback: adds a "Next Step" bullet after the feedback deadline
+  // saying light feedback moves the project straight to the next step.
+  minimalFeedbackNextStep?: boolean;
+  // What the next step is called (e.g. "Final Deliverables"). Blank falls back
+  // to generic wording.
+  nextStepName?: string;
   // Custom link labels — overrides the template's [Link Text | varName] defaults
   linkLabels?: Record<string, string>;
 }
@@ -408,6 +414,45 @@ function injectRushedNotice(
   return filtered.join("\n");
 }
 
+/** The client-facing "Next Step" bullet for the minimal-feedback option. */
+export function buildMinimalFeedbackBullet(nextStepName?: string): string {
+  const step = nextStepName?.trim().replace(/[.\s]+$/, "");
+  const destination = step || "the next step of the process";
+  return `- **Next Step:** If feedback is minimal, we'll incorporate it and move straight to ${destination}.`;
+}
+
+// Minimal-feedback option: add a "Next Step" bullet to the scope list, right
+// after the feedback (or approval) deadline bullet. Must run BEFORE the
+// rushed / flexible / timed transforms: those rewrite the deadline line, and
+// the rushed one expands it into a block this bullet should follow.
+function injectMinimalFeedbackNote(
+  content: string,
+  opts: { minimalFeedbackNextStep?: boolean; nextStepName?: string }
+): string {
+  if (!opts.minimalFeedbackNextStep) return content;
+  const bullet = buildMinimalFeedbackBullet(opts.nextStepName);
+  const lines = content.split("\n");
+  const isBullet = (line: string) => /^\s*[-•*]\s/.test(line);
+  const findBullet = (...needles: string[]) =>
+    lines.findIndex(
+      (line) =>
+        isBullet(line) && needles.some((n) => line.toLowerCase().includes(n))
+    );
+
+  // Preferred anchor is the deadline bullet; templates without one fall back
+  // to the window, then the revision rounds bullet.
+  let idx = findBullet("feedback deadline", "approval deadline");
+  if (idx < 0) idx = findBullet("feedback window", "approval window");
+  if (idx < 0) idx = findBullet("revision rounds");
+
+  if (idx >= 0) {
+    lines.splice(idx + 1, 0, bullet);
+    return lines.join("\n");
+  }
+  // No scope list at all: append as its own line at the end.
+  return `${content.replace(/\s+$/, "")}\n\n${bullet}`;
+}
+
 // When the feedback window is "Flexible", a hard "EOD <date>" deadline reads as
 // a contradiction. Reframe the deadline bullet as a soft target tied to the
 // project plan, keeping the date as guidance rather than a fixed cutoff.
@@ -558,10 +603,15 @@ export function mergeTemplate(
     rushedProject: variables.rushedProject,
     feedbackWindows: variables.feedbackWindows,
   };
+  const minimalOpts = {
+    minimalFeedbackNextStep: variables.minimalFeedbackNextStep,
+    nextStepName: variables.nextStepName,
+  };
 
   // Merge the email version
   let emailContent = performMerge(template, replacements, variables.linkLabels);
   emailContent = stripRepeatClientSections(emailContent, variables.repeatClient);
+  emailContent = injectMinimalFeedbackNote(emailContent, minimalOpts);
   emailContent = injectRushedNotice(emailContent, rushedOpts);
   emailContent = injectFlexibleFeedbackNotice(emailContent, flexibleOpts);
   emailContent = injectTimedFeedbackDeadline(emailContent, timedOpts);
@@ -575,6 +625,7 @@ export function mergeTemplate(
   };
   let slackContent = performMerge(template, slackReplacements, variables.linkLabels);
   slackContent = stripRepeatClientSections(slackContent, variables.repeatClient);
+  slackContent = injectMinimalFeedbackNote(slackContent, minimalOpts);
   slackContent = injectRushedNotice(slackContent, rushedOpts);
   slackContent = injectFlexibleFeedbackNotice(slackContent, flexibleOpts);
   slackContent = injectTimedFeedbackDeadline(slackContent, timedOpts);
@@ -1139,6 +1190,10 @@ export function mergeCombinedTemplate(input: {
     const replacements = { ...baseReplacements, contacts: contactsValue };
     let out = performMerge(combinedTemplate, replacements, linkLabels, projectNameFor);
     out = stripRepeatClientSections(out, pv.repeatClient);
+    out = injectMinimalFeedbackNote(out, {
+      minimalFeedbackNextStep: pv.minimalFeedbackNextStep,
+      nextStepName: pv.nextStepName,
+    });
     out = injectRushedNotice(out, rushedOpts);
     out = injectFlexibleFeedbackNotice(out, flexibleOpts);
     out = injectTimedFeedbackDeadline(out, timedOpts);

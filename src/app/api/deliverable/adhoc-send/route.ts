@@ -299,6 +299,10 @@ export async function POST(req: Request) {
             projectListId: listId || null,
             clientFolderId,
             feedbackWindows: formState.feedbackWindows || null,
+            minimalFeedbackNextStep: !!formState.minimalFeedbackNextStep,
+            nextStepName: formState.minimalFeedbackNextStep
+              ? formState.nextStepName?.trim() || null
+              : null,
           },
         });
         deliveryId = delivery.id;

@@ -401,6 +401,11 @@ export async function POST(
             // (possibly corrected) current field values.
             editedSnippet: formState.editedSnippet ?? null,
             editedSubject: formState.editedSubject ?? null,
+            // Minimal-feedback scope option, so a resend reopens with it set.
+            minimalFeedbackNextStep: !!formState.minimalFeedbackNextStep,
+            nextStepName: formState.minimalFeedbackNextStep
+              ? formState.nextStepName?.trim() || null
+              : null,
             // Audit link when this delivery corrects a prior one.
             replacesDeliveryId: body.resendOf ?? null,
           },

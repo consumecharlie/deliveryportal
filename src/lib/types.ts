@@ -165,6 +165,10 @@ export interface DeliveryFormState {
    *  persisted) still load. */
   rushedProject?: boolean;
   repeatClient?: boolean;
+  /** Minimal-feedback option: adds a "Next Step" bullet to the message, with
+   *  an optional name for that step. Optional for older drafts. */
+  minimalFeedbackNextStep?: boolean;
+  nextStepName?: string;
   /** Email vs Slack channel choice. Optional for the same backward-compat
    *  reason; falls back to auto-detection when absent. */
   deliveryMode?: "email" | "slack";

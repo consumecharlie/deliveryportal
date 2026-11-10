@@ -1,6 +1,7 @@
 "use client";
 
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 
 type Option = { value: string; label: string };
@@ -10,6 +11,10 @@ interface ScopeSectionProps {
   feedbackWindows: string;
   rushedProject: boolean;
   repeatClient: boolean;
+  /** Minimal-feedback option: adds a "Next Step" bullet to the message. */
+  minimalFeedbackNextStep: boolean;
+  /** Optional name for that next step (e.g. "Final Deliverables"). */
+  nextStepName: string;
   /** Options sourced live from ClickUp's field definitions. When provided they
    *  replace the fallbacks below, so adding a ClickUp option needs no code
    *  change. */
@@ -19,6 +24,8 @@ interface ScopeSectionProps {
   onFeedbackWindowsChange: (value: string) => void;
   onRushedProjectChange: (value: boolean) => void;
   onRepeatClientChange: (value: boolean) => void;
+  onMinimalFeedbackNextStepChange: (value: boolean) => void;
+  onNextStepNameChange: (value: string) => void;
   /** Feedback window / deadline conflict warning, rendered under the controls. */
   conflictWarning?: React.ReactNode;
 }
@@ -48,12 +55,16 @@ export function ScopeSection({
   feedbackWindows,
   rushedProject,
   repeatClient,
+  minimalFeedbackNextStep,
+  nextStepName,
   revisionOptions,
   feedbackWindowOptions,
   onRevisionRoundsChange,
   onFeedbackWindowsChange,
   onRushedProjectChange,
   onRepeatClientChange,
+  onMinimalFeedbackNextStepChange,
+  onNextStepNameChange,
   conflictWarning,
 }: ScopeSectionProps) {
   const revisionOpts = withCurrentValue(
@@ -123,6 +134,37 @@ export function ScopeSection({
             </span>
           </span>
         </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={minimalFeedbackNextStep}
+            onChange={(e) => onMinimalFeedbackNextStepChange(e.target.checked)}
+            className="h-4 w-4 rounded border-border accent-[#6AC387]"
+          />
+          <span className="text-sm flex items-center gap-1.5">
+            <span>⏭️</span> Minimal Feedback
+            <span className="text-xs text-muted-foreground font-normal">
+              — adds a note that light feedback moves us to the next step
+            </span>
+          </span>
+        </label>
+        {minimalFeedbackNextStep && (
+          <div className="pl-6">
+            <Label
+              htmlFor="next-step-name"
+              className="text-xs text-muted-foreground"
+            >
+              Next step (optional)
+            </Label>
+            <Input
+              id="next-step-name"
+              value={nextStepName}
+              onChange={(e) => onNextStepNameChange(e.target.value)}
+              placeholder="e.g. Final Deliverables"
+              className="mt-1 h-8 text-sm"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

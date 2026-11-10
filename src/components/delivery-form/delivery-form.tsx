@@ -77,6 +77,9 @@ export interface ResendFrom {
     emailSubject: string;
     editedSnippet: string | null;
     editedSubject: string | null;
+    /** Absent on deliveries fetched before the columns existed. */
+    minimalFeedbackNextStep?: boolean | null;
+    nextStepName?: string | null;
   };
   links: Array<{
     url: string;
@@ -145,6 +148,8 @@ export function DeliveryForm({
   const [versionNotes, setVersionNotes] = useState(taskDetail.versionNotes);
   const [rushedProject, setRushedProject] = useState(false);
   const [repeatClient, setRepeatClient] = useState(false);
+  const [minimalFeedbackNextStep, setMinimalFeedbackNextStep] = useState(false);
+  const [nextStepName, setNextStepName] = useState("");
   const [slackChannelId, setSlackChannelId] = useState(
     taskDetail.slackChannelId ?? ""
   );
@@ -346,6 +351,8 @@ export function DeliveryForm({
     setVersionNotes(taskDetail.versionNotes);
     setRushedProject(false);
     setRepeatClient(false);
+    setMinimalFeedbackNextStep(false);
+    setNextStepName("");
     setSlackChannelId(taskDetail.slackChannelId ?? "");
     setManualFeedbackDate(initialDeadlineInputs.date);
     setManualFeedbackTime(initialDeadlineInputs.time);
@@ -576,6 +583,8 @@ export function DeliveryForm({
       extraLinks,
       rushedProject,
       repeatClient,
+      minimalFeedbackNextStep,
+      nextStepName,
       linkLabels: Object.keys(linkLabels).length > 0 ? linkLabels : undefined,
     };
 
@@ -621,6 +630,8 @@ export function DeliveryForm({
     extraLinks,
     rushedProject,
     repeatClient,
+    minimalFeedbackNextStep,
+    nextStepName,
     linkLabels,
     addonProject,
     addonTaskDetail,
@@ -878,6 +889,8 @@ export function DeliveryForm({
     // exactly as left.
     rushedProject,
     repeatClient,
+    minimalFeedbackNextStep,
+    nextStepName,
     deliveryMode,
     manualFeedbackDate,
     manualFeedbackTime,
@@ -958,6 +971,10 @@ export function DeliveryForm({
         // `false` still restores (and absent keys on older drafts are skipped).
         if (typeof saved.rushedProject === "boolean") setRushedProject(saved.rushedProject);
         if (typeof saved.repeatClient === "boolean") setRepeatClient(saved.repeatClient);
+        if (typeof saved.minimalFeedbackNextStep === "boolean") {
+          setMinimalFeedbackNextStep(saved.minimalFeedbackNextStep);
+        }
+        if (saved.nextStepName) setNextStepName(saved.nextStepName);
         if (saved.deliveryMode) setDeliveryMode(saved.deliveryMode);
         // An empty saved date must not clobber a deadline we can now detect:
         // drafts are often saved before the ClickUp deadline task is tagged.
@@ -1025,6 +1042,10 @@ export function DeliveryForm({
     if (prior.slackChannel) setSlackChannelId(prior.slackChannel);
     if (prior.editedSnippet) setEditedSnippet(prior.editedSnippet);
     if (prior.editedSubject) setEditedSubject(prior.editedSubject);
+    if (prior.minimalFeedbackNextStep) {
+      setMinimalFeedbackNextStep(true);
+      if (prior.nextStepName) setNextStepName(prior.nextStepName);
+    }
 
     const standardByVar: Record<string, string> = {};
     const extras: Array<{ url: string; label: string }> = [];
@@ -1436,6 +1457,10 @@ export function DeliveryForm({
             onFeedbackWindowsChange={setFeedbackWindows}
             onRushedProjectChange={setRushedProject}
             onRepeatClientChange={setRepeatClient}
+            minimalFeedbackNextStep={minimalFeedbackNextStep}
+            nextStepName={nextStepName}
+            onMinimalFeedbackNextStepChange={setMinimalFeedbackNextStep}
+            onNextStepNameChange={setNextStepName}
             conflictWarning={
               showConflictWarning && conflictCopy ? (
                 <FeedbackConflictWarning
