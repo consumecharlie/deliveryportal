@@ -6,6 +6,7 @@
  * window in business days (Eastern), so a card is never blank.
  */
 import { windowBusinessDays } from "@/lib/feedback-conflict";
+import { etDateToDateOnlyMs } from "@/lib/feedback-deadline";
 import { addBusinessDays, holidaySet } from "@/lib/us-holidays";
 
 const TZ = "America/New_York";
@@ -23,9 +24,9 @@ export function easternDateString(ms: number): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-/** ClickUp's date-only sentinel: 08:00 UTC on that calendar date. */
+/** ClickUp's date-only sentinel: 4:00 AM Eastern on that calendar date. */
 export function dateOnlySentinelMs(date: string): number {
-  return Date.parse(`${date}T08:00:00Z`);
+  return etDateToDateOnlyMs(date);
 }
 
 /**

@@ -25,7 +25,7 @@ export interface FeedbackStatus {
   dueIsEstimate: boolean;
   /**
    * True when the deadline carries no time of day, so it is due end of day:
-   * a ClickUp date-only due date (the 08:00 UTC sentinel), or a deadline we
+   * a ClickUp date-only due date (the 4:00 AM Eastern sentinel), or a deadline we
    * computed from the feedback window rather than read from a task.
    */
   dueIsEndOfDay: boolean;

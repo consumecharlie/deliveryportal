@@ -207,8 +207,9 @@ export async function updateTaskStatus(
  * Move a task's due date.
  *
  * Live-validated 2026-09-02 against the v2 API:
- * - `dueDateTime: false` normalizes the timestamp to the 08:00 UTC date-only
- *   sentinel for whatever EASTERN calendar date it falls on, which is exactly
+ * - `dueDateTime: false` normalizes the timestamp to the date-only sentinel
+ *   (4:00 AM Eastern: 08:00 UTC in daylight time, 09:00 UTC in standard time)
+ *   for whatever EASTERN calendar date it falls on, which is exactly
  *   what `formatFeedbackDeadline()` reads back as "EOD".
  * - `dueDateTime: true` preserves an exact timestamp.
  * - Never pass naive UTC midnight: that is the previous evening in Eastern and

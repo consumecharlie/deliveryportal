@@ -3,6 +3,8 @@
  * client's day actually ends. Pure and separately testable: the component
  * only turns these into markup.
  */
+import { isDateOnlyMs } from "@/lib/feedback-deadline";
+
 const TZ = "America/New_York";
 
 /** The zone's offset from UTC at an instant, in ms, positive when ahead. */
@@ -55,13 +57,12 @@ export function easternDayDiff(from: number, to: number): number {
 }
 
 /**
- * A date-only deadline reaches us as the 08:00 UTC sentinel we write for an
- * Eastern date, which means end of day rather than eight in the morning.
+ * A date-only deadline reaches us as ClickUp's 4:00 AM Eastern sentinel,
+ * which means end of day rather than four in the morning.
  * Used until the model carries `dueIsEndOfDay` itself.
  */
 export function looksEndOfDay(dueMs: number): boolean {
-  const d = new Date(dueMs);
-  return d.getUTCHours() === 8 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+  return isDateOnlyMs(dueMs);
 }
 
 export interface DueInput {
@@ -176,7 +177,7 @@ export function reviewWindowProgress(input: {
   // The day we sent it is day one, not day zero.
   const elapsed = Math.min(total, Math.max(1, gone));
   // The deadline is the end of the Eastern day when no time was set, so a
-  // date-only window does not close at the 08:00 UTC sentinel.
+  // date-only window does not close at the 4:00 AM Eastern sentinel.
   const closed = input.nowMs > dueDeadline(input.dueMs, input.endOfDay);
   return {
     total,

@@ -1,23 +1,47 @@
 // Formats a ClickUp feedback-deadline due date for delivery snippets.
 //
 // ClickUp's v2 API (for our workspace/token) returns only the raw `due_date`
-// timestamp — never the `due_date_time` boolean — so we can't ask it whether a
-// time was actually set. Empirically, date-only due dates in this workspace are
-// stored at exactly 08:00:00 UTC (the "date-only sentinel"); anything else is a
-// real, intentionally-chosen time. We use that to decide whether to surface the
-// time. All display is in Eastern time (the office timezone).
+// timestamp, never the `due_date_time` boolean, so we can't ask it whether a
+// time was actually set. ClickUp stores a date-only due date at exactly
+// 4:00:00 AM EASTERN wall-clock time (the "date-only sentinel"); anything else
+// is a real, intentionally-chosen time. That is 08:00 UTC during daylight time
+// but 09:00 UTC during standard time, so the check must be made in Eastern,
+// never against a fixed UTC hour (a fixed 08:00 UTC check made every winter
+// date-only deadline read "by 4:00 AM ET"; live-confirmed 2026-11-12).
+// All display is in Eastern time (the office timezone).
 
 const TIME_ZONE = "America/New_York";
 
-// ClickUp stores a date-only due date at this fixed UTC time-of-day.
-const DATE_ONLY_UTC_HOUR = 8;
+// ClickUp stores a date-only due date at this Eastern wall-clock hour.
+const DATE_ONLY_ET_HOUR = 4;
+// What we used to write/compute for every date (correct only in daylight
+// time). Still recognised so older computed values keep reading as date-only.
+const LEGACY_DATE_ONLY_UTC_HOUR = 8;
+
+const etClock = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+/**
+ * True when a due-date timestamp carries no real time of day: it sits on the
+ * ClickUp date-only sentinel (4:00:00 AM Eastern, DST-aware) or on the legacy
+ * fixed 08:00:00 UTC value.
+ */
+export function isDateOnlyMs(ms: number): boolean {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return false;
+  if (d.getUTCMinutes() !== 0 || d.getUTCSeconds() !== 0) return false;
+  if (d.getUTCHours() === LEGACY_DATE_ONLY_UTC_HOUR) return true;
+  const hour = Number(etClock.formatToParts(d).find((p) => p.type === "hour")?.value);
+  return hour % 24 === DATE_ONLY_ET_HOUR;
+}
 
 function isDateOnly(d: Date): boolean {
-  return (
-    d.getUTCHours() === DATE_ONLY_UTC_HOUR &&
-    d.getUTCMinutes() === 0 &&
-    d.getUTCSeconds() === 0
-  );
+  return isDateOnlyMs(d.getTime());
 }
 
 export interface FormattedDeadline {
@@ -98,7 +122,7 @@ export function formatManualDeadline(
  * Convert a ClickUp due-date timestamp into the `{ date, time }` strings that
  * `<input type="date">` / `type="time">` expect, in Eastern time. Used to
  * prefill the manual deadline control from a detected deadline. Date-only
- * deadlines (the 08:00 UTC sentinel) return an empty time.
+ * deadlines (the 4:00 AM Eastern sentinel) return an empty time.
  */
 export function deadlineMsToInputs(
   dueDateMs: number | string | null | undefined
@@ -130,17 +154,22 @@ export function deadlineMsToInputs(
 }
 
 /**
- * The ClickUp date-only sentinel (08:00 UTC) for an Eastern calendar date.
+ * The ClickUp date-only sentinel (4:00 AM Eastern) for an Eastern calendar
+ * date: 08:00 UTC in daylight time, 09:00 UTC in standard time.
  *
- * Live-validated 2026-09-02: writing this with `due_date_time: false` round-trips
- * unchanged, and the task reads back as date-only so the message keeps saying
- * "EOD". Do NOT build the timestamp from naive UTC midnight — that is the
- * previous evening in Eastern and ClickUp files the task a day early.
+ * Writing this with `due_date_time: false` round-trips unchanged (daylight
+ * time live-validated 2026-09-02; the standard-time value matches what ClickUp
+ * itself stores, observed 2026-11-12), and the task reads back as date-only so
+ * the message keeps saying "EOD". Do NOT build the timestamp from naive UTC
+ * midnight: that is the previous evening in Eastern and ClickUp files the task
+ * a day early.
  */
 export function etDateToDateOnlyMs(dateStr: string): number {
   if (!dateStr) return NaN;
   const [y, m, d] = dateStr.split("-").map(Number);
-  return Date.UTC(y, m - 1, d, DATE_ONLY_UTC_HOUR, 0, 0);
+  // 4 AM never falls in a DST gap or overlap, so one offset lookup settles it.
+  const naive = Date.UTC(y, m - 1, d, DATE_ONLY_ET_HOUR, 0, 0);
+  return naive + etOffsetMs(naive);
 }
 
 /** How far behind UTC Eastern is at a given instant, in ms (DST-aware). */
